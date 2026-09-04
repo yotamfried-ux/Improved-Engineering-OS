@@ -15,4 +15,7 @@ export * from './isolation.ts';
 export * from './sandbox.ts';
 export * from './driver.ts';
 export * from './run-registry.ts';
+export * from './graders.ts';
+export * from './budget.ts';
+export * from './collect.ts';
 export * from './trial.ts';

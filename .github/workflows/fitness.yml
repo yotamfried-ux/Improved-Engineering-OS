@@ -1,0 +1,54 @@
+name: fitness
+
+# Architecture invariants F1-F12 (ADR-0004), run as their own required check so
+# a boundary violation is visible without reading a test log.
+#
+# The status summary is deliberately honest: at Stage 0 several rules have no
+# subject yet, and this job reports the split rather than a single green tick.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '24.20.0'
+  PNPM_VERSION: '11.25.0'
+
+concurrency:
+  group: fitness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fitness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install with a frozen lockfile
+        run: pnpm install --frozen-lockfile
+
+      - name: Architecture boundary analysis is non-empty
+        # dependency-cruiser degrades to "0 dependencies cruised" and exits 0
+        # when it cannot parse the TypeScript in use. That happened here under
+        # TypeScript 7 and silently disarmed four rules, so the corpus is
+        # asserted before the result is trusted.
+        run: node scripts/assert-corpus.mjs --dependency-graph
+
+      - name: Fitness rules
+        run: pnpm fitness
+
+      - name: Report the honest rule status
+        if: always()
+        run: node scripts/fitness-summary.mjs >> "$GITHUB_STEP_SUMMARY"

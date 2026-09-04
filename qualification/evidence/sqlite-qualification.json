@@ -32,7 +32,7 @@
           "id": 4,
           "name": "busy handling: two writers, timeout >= 5000 ms, no SQLITE_BUSY surfaced",
           "outcome": "pass",
-          "evidence": "second writer waited 1237 ms for the lock and then committed; no SQLITE_BUSY reached the caller"
+          "evidence": "second writer waited 1239 ms for the lock and then committed; no SQLITE_BUSY reached the caller"
         },
         {
           "id": 5,
@@ -95,7 +95,7 @@
           "id": 4,
           "name": "busy handling: two writers, timeout >= 5000 ms, no SQLITE_BUSY surfaced",
           "outcome": "pass",
-          "evidence": "second writer waited 1236 ms for the lock and then committed; no SQLITE_BUSY reached the caller"
+          "evidence": "second writer waited 1239 ms for the lock and then committed; no SQLITE_BUSY reached the caller"
         },
         {
           "id": 5,

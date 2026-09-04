@@ -1,0 +1,161 @@
+name: ci
+
+# Stage 0 CI (D18.3, R-12): Linux is primary, plus one Windows smoke job.
+# The full four-platform matrix becomes a gate at Stage 4, not here.
+#
+# Every job below fails closed. Two failure modes get explicit guards, because
+# both have already happened in this repository:
+#   - an analyzer that parses nothing and reports success (dependency-cruiser
+#     under an unsupported TypeScript version);
+#   - a runner that discovers zero tests and exits 0.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+# A pinned toolchain is the point; CI must not silently drift off it.
+env:
+  NODE_VERSION: '24.20.0'
+  PNPM_VERSION: '11.25.0'
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: linux (primary)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Toolchain matches the pins
+        # Fails closed if the runner drifts off the pinned toolchain, before any
+        # result produced on it could be mistaken for a result on the pinned one.
+        run: |
+          set -euo pipefail
+          node --version
+          pnpm --version
+          pnpm ieos-doctor
+
+      - name: Install with a frozen lockfile
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Contract schemas are up to date
+        run: pnpm contracts:check
+
+      - name: Formatting
+        run: pnpm format:check
+
+      - name: Tests
+        run: pnpm test
+
+      - name: Guard against a vacuous test run
+        # A runner that discovers nothing exits 0. This asserts a non-vacuous
+        # corpus, so "all tests passed" cannot mean "no tests ran".
+        run: node scripts/assert-corpus.mjs
+
+      - name: Emit the bootstrap snapshot digest
+        id: snapshot
+        run: |
+          set -euo pipefail
+          DIGEST="$(pnpm --silent snapshot:emit -- --digest-only)"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "linux snapshot digest: $DIGEST"
+
+      - name: Publish the Linux digest for cross-platform comparison
+        run: |
+          set -euo pipefail
+          mkdir -p digests
+          printf '%s' '${{ steps.snapshot.outputs.digest }}' > digests/linux.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-digest
+          path: digests/linux.txt
+          if-no-files-found: error
+
+  windows-smoke:
+    # D18.3: one Windows smoke job at Stage 0 -- path handling, CRLF, spawn --
+    # and specifically the D35 cross-platform digest contract.
+    name: windows smoke (D35 cross-platform digest)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    needs: linux
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Toolchain matches the pins
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --version
+          pnpm --version
+          pnpm ieos-doctor
+
+      - name: Install with a frozen lockfile
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # The smallest set that genuinely exercises the cross-platform contract:
+      # canonical hashing, deterministic identities, the file-manifest ordering
+      # rules, and the bootstrap snapshot. Path separators, CRLF checkout and
+      # UTF-16-vs-UTF-8 ordering all bite here if they are going to bite.
+      - name: Core determinism suite
+        run: pnpm vitest run --project core
+
+      - name: Bootstrap snapshot suite
+        run: pnpm vitest run --project snapshot-emit
+
+      - name: SQLite qualification (check 3 on win32)
+        # The half of the seven recorded checks that names Windows explicitly.
+        run: pnpm vitest run --project sqlite-qualification
+
+      - name: Guard against a vacuous test run
+        shell: bash
+        run: node scripts/assert-corpus.mjs --windows-smoke
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-digest
+          path: digests
+
+      - name: Compare the D35 digest with Linux
+        shell: bash
+        run: |
+          set -euo pipefail
+          WINDOWS="$(pnpm --silent snapshot:emit -- --digest-only)"
+          LINUX="$(cat digests/linux.txt)"
+          echo "linux:   $LINUX"
+          echo "windows: $WINDOWS"
+          if [ "$WINDOWS" != "$LINUX" ]; then
+            echo "::error::D35 cross-platform gate FAILED: the bootstrap snapshot digest differs between Linux and Windows."
+            exit 1
+          fi
+          echo "D35 cross-platform digest gate: identical on both platforms."
