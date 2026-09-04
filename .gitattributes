@@ -1,0 +1,3 @@
+# Preserve the supplied source documents byte-for-byte, including line endings.
+/docs/source/Improved-Engineering-OS_Architecture_Report.pdf -text
+/docs/source/Improved-Engineering-OS-Build-Guide-FROZEN-v1.4.1.md -text
