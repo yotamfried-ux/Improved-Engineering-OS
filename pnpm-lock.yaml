@@ -278,6 +278,16 @@ importers:
         specifier: 24.13.3
         version: 24.13.3
 
+  tools/snapshot-emit:
+    dependencies:
+      '@ieos/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
   tools/sqlite-qualification:
     dependencies:
       '@ieos/core':

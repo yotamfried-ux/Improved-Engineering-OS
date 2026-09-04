@@ -19,13 +19,15 @@
   "scripts": {
     "capabilities:check": "node tools/capability-seed/src/cli.ts --check",
     "capabilities:emit": "node tools/capability-seed/src/cli.ts",
-    "check": "pnpm ieos-doctor && pnpm typecheck && pnpm contracts:check && pnpm test",
+    "check": "pnpm ieos-doctor && pnpm typecheck && pnpm contracts:check && pnpm format:check && pnpm test && pnpm guard:corpus",
     "contracts:check": "node tools/contracts-gen/src/cli.ts --check",
     "contracts:emit": "node tools/contracts-gen/src/cli.ts --write",
     "fitness": "vitest run --project fitness",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "guard:corpus": "node scripts/assert-corpus.mjs && node scripts/assert-corpus.mjs --dependency-graph",
     "ieos-doctor": "node tools/harness/src/doctor-cli.ts",
+    "snapshot:emit": "node tools/snapshot-emit/src/cli.ts",
     "sqlite:qualify": "node tools/sqlite-qualification/src/cli.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"

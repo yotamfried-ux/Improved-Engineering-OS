@@ -10,6 +10,7 @@
 import type { z } from 'zod';
 
 import { assetSchema } from './asset.ts';
+import { claimSchema } from './claim.ts';
 import { solutionSetSchema } from './solution-set.ts';
 import { telemetryEnvelopeSchema, runTelemetryStateSchema } from './telemetry.ts';
 import { evidenceSchema } from './evidence.ts';
@@ -34,6 +35,7 @@ import {
 import type { Stability } from './lifecycle.ts';
 
 export * from './lifecycle.ts';
+export * from './claim.ts';
 export * from './asset.ts';
 export * from './solution-set.ts';
 export * from './telemetry.ts';
@@ -64,6 +66,7 @@ export interface ContractDescriptor {
  */
 export const CONTRACT_REGISTRY: readonly ContractDescriptor[] = [
   { name: 'asset', schema: assetSchema, stability: 'development', stub: false, ownedByStage: 0 },
+  { name: 'claim', schema: claimSchema, stability: 'development', stub: false, ownedByStage: 0 },
   {
     name: 'solution-set',
     schema: solutionSetSchema,

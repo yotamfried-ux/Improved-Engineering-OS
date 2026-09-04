@@ -52,6 +52,14 @@ export default defineConfig({
       },
       {
         test: {
+          name: 'snapshot-emit',
+          root: './tools/snapshot-emit',
+          include: ['test/**/*.test.ts'],
+          environment: 'node',
+        },
+      },
+      {
+        test: {
           name: 'fitness',
           root: './fitness',
           include: ['checks/**/*.test.ts'],
