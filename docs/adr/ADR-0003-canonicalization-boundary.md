@@ -1,13 +1,13 @@
 # ADR-0003 — Canonicalization and normalization boundary
 
-| Field                    | Value                              |
-| ------------------------ | ---------------------------------- |
-| Status                   | Accepted                           |
-| Date                     | 2026-09-04                         |
-| Stage                    | 0                                  |
-| Implements               | D35 (Hashing Contract), C-02, P-04 |
-| Addresses                | Research finding R2                |
-| Needs owner confirmation | **Yes** — deviation C-6            |
+| Field          | Value                                                                                                    |
+| -------------- | -------------------------------------------------------------------------------------------------------- |
+| Status         | Accepted                                                                                                 |
+| Date           | 2026-09-04                                                                                               |
+| Stage          | 0                                                                                                        |
+| Implements     | D35 (Hashing Contract), C-02, P-04                                                                       |
+| Addresses      | Research finding R2                                                                                      |
+| Owner decision | **APPROVED 2026-09-04.** Recorded as approved deviation C-6; the layering below is the accepted reading. |
 
 ## Context
 

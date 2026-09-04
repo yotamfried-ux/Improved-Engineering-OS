@@ -50,7 +50,6 @@ describe('version comparison (check 2 depends on it)', () => {
 const result: CandidateQualification = await qualify(await loadNodeSqlite());
 
 describe('node:sqlite against the seven recorded checks', () => {
-
   it('runs all seven checks, with none silently missing', () => {
     expect(result.checks.map((check) => check.id).sort((a, b) => a - b)).toEqual([
       1, 2, 3, 4, 5, 6, 7,
@@ -63,7 +62,9 @@ describe('node:sqlite against the seven recorded checks', () => {
   });
 
   it('meets the R3 minimum engine version', () => {
-    expect(compareVersions(result.engineVersion ?? '0', MINIMUM_ENGINE_VERSION)).toBeGreaterThanOrEqual(0);
+    expect(
+      compareVersions(result.engineVersion ?? '0', MINIMUM_ENGINE_VERSION),
+    ).toBeGreaterThanOrEqual(0);
   });
 
   it('passes every check on this platform', () => {
@@ -75,7 +76,9 @@ describe('node:sqlite against the seven recorded checks', () => {
 
   it('every check reports evidence, not just an outcome', () => {
     for (const check of result.checks) {
-      expect(check.evidence.length, `check ${String(check.id)} has no evidence`).toBeGreaterThan(20);
+      expect(check.evidence.length, `check ${String(check.id)} has no evidence`).toBeGreaterThan(
+        20,
+      );
     }
   });
 

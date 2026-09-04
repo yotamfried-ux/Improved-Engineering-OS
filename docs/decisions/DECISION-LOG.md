@@ -16,13 +16,24 @@ The research inventory is evidence, not authority.
 
 ## 1. Stage 0 architectural decisions (ADRs)
 
-| ADR                                                      | Subject                                                            | Status   |
-| -------------------------------------------------------- | ------------------------------------------------------------------ | -------- |
-| [ADR-0001](../adr/ADR-0001-architecture-baseline.md)     | Architecture baseline — accepts D1–D17 by reference                | Accepted |
-| [ADR-0002](../adr/ADR-0002-stage-0-toolchain.md)         | Stage 0 toolchain, runtime and dependency policy                   | Accepted |
-| [ADR-0003](../adr/ADR-0003-canonicalization-boundary.md) | Canonicalization / normalization boundary (D35, finding B)         | Accepted |
-| [ADR-0004](../adr/ADR-0004-module-boundaries.md)         | Module boundaries and fitness-rule enforcement (F1–F12)            | Accepted |
-| [ADR-0005](../adr/ADR-0005-evaluation-isolation.md)      | Agent evaluation isolation — contract before mechanism (finding E) | Accepted |
+| ADR                                                                    | Subject                                                                                | Status   |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | -------- |
+| [ADR-0001](../adr/ADR-0001-architecture-baseline.md)                   | Architecture baseline — accepts D1–D17 by reference                                    | Accepted |
+| [ADR-0002](../adr/ADR-0002-stage-0-toolchain.md)                       | Stage 0 toolchain, runtime and dependency policy                                       | Accepted |
+| [ADR-0003](../adr/ADR-0003-canonicalization-boundary.md)               | Canonicalization / normalization boundary (D35, finding B)                             | Accepted |
+| [ADR-0004](../adr/ADR-0004-module-boundaries.md)                       | Module boundaries and fitness-rule enforcement (F1–F12)                                | Accepted |
+| [ADR-0005](../adr/ADR-0005-evaluation-isolation.md)                    | Agent evaluation isolation — contract before mechanism (finding E)                     | Accepted |
+| [ADR-0006](../adr/ADR-0006-knowledge-identity-and-lifecycle.md)        | Knowledge identity, lifecycle, storage and taxonomy (D19, D20, D28)                    | Accepted |
+| [ADR-0007](../adr/ADR-0007-evidence-plane-trust-boundaries.md)         | Evidence Plane trust boundaries and telemetry integrity (D22, D23, D26, D30, D31, D36) | Accepted |
+| [ADR-0008](../adr/ADR-0008-evidence-scoring-and-champions.md)          | Evidence derivation, scoring integrity and the Champion (D24, D27, D32, D33, D34)      | Accepted |
+| [ADR-0009](../adr/ADR-0009-release-promotion-and-dependency-policy.md) | Release integrity, the promotion path, and dependency policy (D21, D25, D29, D35)      | Accepted |
+
+D19–D36 are grouped into four architectural records rather than eighteen
+separate ones. Several of these decisions answer one question together — D19,
+D20 and D28 are all "what is a canonical knowledge object and who may add one" —
+and splitting them would scatter a single architectural argument across three
+files. `fitness/checks/decision-coverage.test.ts` asserts every decision from
+D19 to D36 is covered by an ADR.
 
 ---
 
@@ -130,27 +141,27 @@ were executed on 2026-09-04 by `tools/sqlite-qualification`
 (`pnpm sqlite:qualify`), against both candidates. Evidence:
 `qualification/evidence/sqlite-qualification.json`.
 
-| # | Check | `node:sqlite` | `better-sqlite3` |
-|---|---|---|---|
-| 1 | `sqlite_version()` measured at runtime, never inferred from a package version | PASS — 3.53.4 | PASS — **3.53.4, measured through the binding itself** |
-| 2 | engine `>= 3.51.3` (the R3 WAL corruption fix) | PASS | PASS |
-| 3 | `pragma journal_mode` returns `wal` on a real file database, **Linux and Windows** | PASS on linux; **win32 UNEXECUTED** | PASS on linux; **win32 UNEXECUTED** |
-| 4 | busy handling: two writers, `timeout >= 5000 ms`, no `SQLITE_BUSY` reaches the caller | PASS — second writer waited 1238 ms, then committed | PASS — waited 1236 ms, then committed |
-| 5 | WAL truncation under a concurrent reader | PASS — wal 2 080 632 → 0 bytes, reader saw 500 rows throughout | PASS — identical |
-| 6 | `UNIQUE(event_id)` collision absorbed as a no-op | PASS — 1 row, first write preserved; control confirms a plain duplicate still raises | PASS — identical |
-| 7 | the same input builds a reproducible index (F8) | PASS — logical digest stable, and the raw file was byte-identical too | PASS — identical |
+| #   | Check                                                                                 | `node:sqlite`                                                                        | `better-sqlite3`                                       |
+| --- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| 1   | `sqlite_version()` measured at runtime, never inferred from a package version         | PASS — 3.53.4                                                                        | PASS — **3.53.4, measured through the binding itself** |
+| 2   | engine `>= 3.51.3` (the R3 WAL corruption fix)                                        | PASS                                                                                 | PASS                                                   |
+| 3   | `pragma journal_mode` returns `wal` on a real file database, **Linux and Windows**    | PASS on linux; **win32 UNEXECUTED**                                                  | PASS on linux; **win32 UNEXECUTED**                    |
+| 4   | busy handling: two writers, `timeout >= 5000 ms`, no `SQLITE_BUSY` reaches the caller | PASS — second writer waited 1238 ms, then committed                                  | PASS — waited 1236 ms, then committed                  |
+| 5   | WAL truncation under a concurrent reader                                              | PASS — wal 2 080 632 → 0 bytes, reader saw 500 rows throughout                       | PASS — identical                                       |
+| 6   | `UNIQUE(event_id)` collision absorbed as a no-op                                      | PASS — 1 row, first write preserved; control confirms a plain duplicate still raises | PASS — identical                                       |
+| 7   | the same input builds a reproducible index (F8)                                       | PASS — logical digest stable, and the raw file was byte-identical too                | PASS — identical                                       |
 
 **Measured candidate facts.**
 
-| | `node:sqlite` | `better-sqlite3` |
-|---|---|---|
-| Binding version | Node 24.20.0 (built in) | `13.0.3` |
-| Bundled engine | 3.53.4 | 3.53.4 |
-| Engine `source_id` | `2026-07-24 19:02:57 bf7c7f30…59bcc` | `2026-07-24 19:02:57 bf7c7f30…59bcc` (identical build) |
-| FTS5 | available | available |
-| Native addon | no | **yes** — install resolved a prebuild on linux-x64/Node 24; a Windows build or prebuild is unverified |
-| Experimental | **yes** — Node 24 still emits an `ExperimentalWarning` | no |
-| Extra dependency | none | one direct + `node-addon-api` |
+|                    | `node:sqlite`                                          | `better-sqlite3`                                                                                      |
+| ------------------ | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| Binding version    | Node 24.20.0 (built in)                                | `13.0.3`                                                                                              |
+| Bundled engine     | 3.53.4                                                 | 3.53.4                                                                                                |
+| Engine `source_id` | `2026-07-24 19:02:57 bf7c7f30…59bcc`                   | `2026-07-24 19:02:57 bf7c7f30…59bcc` (identical build)                                                |
+| FTS5               | available                                              | available                                                                                             |
+| Native addon       | no                                                     | **yes** — install resolved a prebuild on linux-x64/Node 24; a Windows build or prebuild is unverified |
+| Experimental       | **yes** — Node 24 still emits an `ExperimentalWarning` | no                                                                                                    |
+| Extra dependency   | none                                                   | one direct + `node-addon-api`                                                                         |
 
 **Outcome: no binding is selected.** Both pass all seven checks on Linux, and
 neither is qualified, because check 3 names Linux **and** Windows and no Windows
@@ -164,7 +175,7 @@ Nothing was weakened to reach a selection, and no selection was reached.
 the platform-sensitive half:
 
 - Finding C is discharged for `better-sqlite3`: its bundled engine was measured
-  *through the binding*, not substituted from Node's. Both bundle the same
+  _through the binding_, not substituted from Node's. Both bundle the same
   SQLite build.
 - The R3 concern is empirically closed on Linux for both candidates.
 - Check 7 produced a finding worth keeping: the database file happened to be
@@ -178,6 +189,13 @@ ABI). That is the Windows smoke job in `.github/workflows/`, which has never
 executed. Until then O-4 stays open, and the tie-break between an
 experimental-but-dependency-free built-in and a stable-but-native addon is a
 Stage 1/2 decision with the engine question already answered.
+
+## 4b. Owner decisions
+
+| Item                                   | Decision                                                                                                                                                                                                                                                            | Date       | Consequence                                                                                                                                                                                                                                                                                                                                                                                |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **C-1** — F1 wording vs. Zod in `core` | **Approved.** The F1a/F1b split stands; `packages/core` may depend on the explicitly approved Zod dependency required by D18.5, and on nothing else.                                                                                                                | 2026-09-04 | The exception is kept as narrow as the mechanism can express: `fitness/allowlist.yaml` holds exactly one entry, and a negative control proves the rule still fires for an unauthorised dependency. **C-1 remains recorded as an approved deviation below, not as F1's original wording having been satisfied** — guide §6.1 rule 8 requires a relaxed fitness rule to stay visible as one. |
+| **C-6** — normalization vs. RFC 8785   | **Approved.** Unicode NFC normalization and RFC 8785/JCS canonicalization are separate, ordered layers. JCS preserves JSON string contents and never normalizes. Where a domain contract needs NFC, it is applied explicitly _before_ canonicalization and hashing. | 2026-09-04 | Ordering is unambiguous in `ADR-0003` and enforced by tests: canonicalization of a decomposed string differs from the composed one, the UTF-16-vs-UTF-8 ordering fixture is retained, and no deterministic id can depend on an undocumented normalization boundary. **No longer awaiting confirmation.**                                                                                   |
 
 ## 5. Deviations from the frozen guide
 

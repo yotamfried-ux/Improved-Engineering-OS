@@ -1,12 +1,12 @@
 # ADR-0004 — Module boundaries and fitness-rule enforcement
 
-| Field                    | Value                                               |
-| ------------------------ | --------------------------------------------------- |
-| Status                   | Accepted                                            |
-| Date                     | 2026-09-04                                          |
-| Stage                    | 0                                                   |
-| Implements               | Guide §3 dependency direction, fitness rules F1–F12 |
-| Needs owner confirmation | **Yes** — deviation C-1 (F1 wording)                |
+| Field          | Value                                                                                                                                                                                    |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status         | Accepted                                                                                                                                                                                 |
+| Date           | 2026-09-04                                                                                                                                                                               |
+| Stage          | 0                                                                                                                                                                                        |
+| Implements     | Guide §3 dependency direction, fitness rules F1–F12                                                                                                                                      |
+| Owner decision | **APPROVED 2026-09-04.** Recorded as approved deviation C-1: `core` may import the approved Zod dependency and nothing else. The approval does not make F1's original wording satisfied. |
 
 ## Context
 
@@ -39,7 +39,10 @@ This preserves the architectural intent stated in the constitution — "Core mus
 not import Claude-specific or Codex-specific semantics" — while being
 implementable. It also _adds_ a guarantee F1's original wording never had: a
 behavioural no-I/O test (below). It is nonetheless a relaxation of frozen text,
-so guide §6.1 rule 8 applies and it is reported for owner confirmation.
+so guide §6.1 rule 8 applies. It was reported and the owner **approved it on
+2026-09-04**, with the exception kept as narrow as the allowlist can express:
+exactly one entry, `zod`. The approval is recorded as deviation C-1 and not as
+F1 having been met as originally written.
 
 ### Three enforcement mechanisms, chosen per rule
 

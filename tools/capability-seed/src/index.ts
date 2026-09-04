@@ -154,7 +154,10 @@ export function seedCapabilities(
     // "equal hash with different metadata yields related_to, not a merge" is the
     // same principle one level down).
     if (seen.has(id)) {
-      throw new CapabilitySeedError(`duplicate capability id ${JSON.stringify(id)}`, 'capabilities');
+      throw new CapabilitySeedError(
+        `duplicate capability id ${JSON.stringify(id)}`,
+        'capabilities',
+      );
     }
     seen.add(id);
 
@@ -239,7 +242,7 @@ export function renderCapabilitiesYaml(document: CapabilitySeedDocument): string
     `  note: >-`,
     ...wrap(document.seed.note, 92).map((line) => `    ${line}`),
     '',
-    '# The kind vocabulary, carried over from the source registry\'s source_classes.',
+    "# The kind vocabulary, carried over from the source registry's source_classes.",
     'kinds:',
   ];
 

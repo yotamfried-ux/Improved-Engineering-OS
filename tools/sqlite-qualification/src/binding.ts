@@ -85,9 +85,7 @@ export async function loadNodeSqlite(): Promise<SqliteCandidate> {
  * adopting the candidate before it has been qualified, which is the decision
  * this whole module exists to inform.
  */
-export async function loadBetterSqlite3(
-  moduleSpecifier?: string,
-): Promise<SqliteCandidate | null> {
+export async function loadBetterSqlite3(moduleSpecifier?: string): Promise<SqliteCandidate | null> {
   // Specifier built at runtime: `better-sqlite3` is deliberately NOT a
   // dependency of this repository, so a static import would be a type error
   // and, worse, would amount to adopting a candidate in order to qualify it.

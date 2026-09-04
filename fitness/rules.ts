@@ -40,9 +40,10 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
     status: 'enforced',
     mechanisms: ['source-scan', 'behavioural'],
     note:
-      'Split from F1 by ADR-0004 (deviation C-1): the literal wording cannot hold alongside ' +
-      'D18.5, which requires Zod inside core. The allowlist currently holds zod alone. ' +
-      'Needs owner confirmation.',
+      'Split from F1 by ADR-0004: the literal wording cannot hold alongside D18.5, which ' +
+      'requires Zod inside core. Owner-APPROVED on 2026-09-04 as deviation C-1; the allowlist ' +
+      'holds exactly one entry, zod. Approval does not make F1 as originally worded satisfied, ' +
+      'so C-1 stays recorded as a deviation.',
   },
   {
     id: 'F2',

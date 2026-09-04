@@ -59,9 +59,7 @@ source_classes:
 capabilities:
   "Weird.ID_with-Mixed.Case": {kind: validator}
 `;
-    expect(seedCapabilities(odd, PROVENANCE).capabilities[0]?.id).toBe(
-      'Weird.ID_with-Mixed.Case',
-    );
+    expect(seedCapabilities(odd, PROVENANCE).capabilities[0]?.id).toBe('Weird.ID_with-Mixed.Case');
   });
 
   it('carries the kind vocabulary over from source_classes', () => {
@@ -248,29 +246,27 @@ describe('the committed contracts/capabilities.yaml', () => {
 // Regeneration against the real source, where it is reachable
 // ---------------------------------------------------------------------------
 
-const legacyPath = process.env['IEOS_LEGACY_REGISTRY'] ?? '/home/user/engineering-os/core/capability-registry.yaml';
+const legacyPath =
+  process.env['IEOS_LEGACY_REGISTRY'] ?? '/home/user/engineering-os/core/capability-registry.yaml';
 const legacyAvailable = existsSync(legacyPath);
 
 describe('regeneration from the authoritative source', () => {
-  it.skipIf(!legacyAvailable)(
-    'reproduces the committed file byte for byte',
-    () => {
-      const sourceText = readFileSync(legacyPath, 'utf8');
-      const revision = execFileSync('git', ['-C', dirname(legacyPath), 'rev-parse', 'HEAD'], {
-        encoding: 'utf8',
-      }).trim();
+  it.skipIf(!legacyAvailable)('reproduces the committed file byte for byte', () => {
+    const sourceText = readFileSync(legacyPath, 'utf8');
+    const revision = execFileSync('git', ['-C', dirname(legacyPath), 'rev-parse', 'HEAD'], {
+      encoding: 'utf8',
+    }).trim();
 
-      const rendered = renderCapabilitiesYaml(
-        seedCapabilities(sourceText, {
-          repository: 'yotamfried-ux/Engineering-OS',
-          path: 'core/capability-registry.yaml',
-          revision,
-          source_digest: sha256Text(sourceText),
-        }),
-      );
-      expect(rendered).toBe(committed);
-    },
-  );
+    const rendered = renderCapabilitiesYaml(
+      seedCapabilities(sourceText, {
+        repository: 'yotamfried-ux/Engineering-OS',
+        path: 'core/capability-registry.yaml',
+        revision,
+        source_digest: sha256Text(sourceText),
+      }),
+    );
+    expect(rendered).toBe(committed);
+  });
 
   it.skipIf(!legacyAvailable)('matches the recorded source digest', () => {
     const sourceText = readFileSync(legacyPath, 'utf8');
