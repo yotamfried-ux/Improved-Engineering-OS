@@ -1,0 +1,38 @@
+# Capability taxonomy (D28).
+#
+# STATUS: STRUCTURALLY VALID, DELIBERATELY UNSEEDED.
+#
+# D28 seeds this file from the legacy Engineering-OS repository's
+# core/capability-registry.yaml. That repository is not reachable from the
+# session that created this file, so no capability id has been written here.
+#
+# Inventing a taxonomy would create exactly the unprovenanced canonical knowledge
+# the Architecture Constitution forbids: knowledge/ holds admitted material with
+# provenance, and "we made it up because the source was unavailable" is not
+# provenance. An honest empty file is the correct state.
+#
+# Tracked as open item O-5 in docs/plan/stage-0-plan.md and as remaining Stage 0
+# acceptance criterion B4.
+
+schema_version: '1'
+stability: development
+introduced_in: '0.1.0'
+deprecated_in: null
+replacement: null
+migration_path: null
+
+seed:
+  status: pending
+  source:
+    repository: yotamfried-ux/Engineering-OS
+    path: core/capability-registry.yaml
+    revision: null # recorded when the seed import actually runs
+  note: >-
+    Ids are kept verbatim from the source; enforcement fields are dropped (D28,
+    Appendix A). The registry's status/score/used_in fields become provenance
+    notes, never scores.
+
+# Growth rule (D28): capabilities are added only through a promotion PR. Before
+# Stage 10 that is the C-04 bootstrap path -- an import tool writes a local
+# bundle and the owner opens the PR; the tool never pushes.
+capabilities: []

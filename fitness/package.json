@@ -1,0 +1,14 @@
+{
+  "name": "@ieos/fitness",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Executable architectural invariants F1-F12 with honest per-rule enforcement status.",
+  "license": "UNLICENSED",
+  "exports": {
+    ".": "./rules.ts"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3"
+  }
+}

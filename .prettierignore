@@ -1,0 +1,9 @@
+node_modules/
+pnpm-lock.yaml
+docs/source/
+packages/core/test/fixtures/
+contracts/schemas/
+
+# Pre-existing documents. Reformatting them would bury a real change in table padding.
+docs/README.md
+docs/research/

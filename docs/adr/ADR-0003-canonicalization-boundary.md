@@ -1,13 +1,13 @@
 # ADR-0003 — Canonicalization and normalization boundary
 
-| Field | Value |
-|---|---|
-| Status | Accepted |
-| Date | 2026-09-04 |
-| Stage | 0 |
-| Implements | D35 (Hashing Contract), C-02, P-04 |
-| Addresses | Research finding R2 |
-| Needs owner confirmation | **Yes** — deviation C-6 |
+| Field                    | Value                              |
+| ------------------------ | ---------------------------------- |
+| Status                   | Accepted                           |
+| Date                     | 2026-09-04                         |
+| Stage                    | 0                                  |
+| Implements               | D35 (Hashing Contract), C-02, P-04 |
+| Addresses                | Research finding R2                |
+| Needs owner confirmation | **Yes** — deviation C-6            |
 
 ## Context
 
@@ -85,8 +85,8 @@ concatenated with bytes.
 JSON key order (UTF-16 code units) and manifest path order (UTF-8 bytes) are
 **different comparators**, in different functions, with a test fixture where they
 **disagree**: `U+FFFF` versus `U+10000`. In UTF-16 code units `U+10000`
-(`D800 DC00`) sorts *before* `U+FFFF`; in UTF-8 bytes (`F0 90 80 80` vs
-`EF BF BF`) it sorts *after*. A single shared comparator cannot pass both tests,
+(`D800 DC00`) sorts _before_ `U+FFFF`; in UTF-8 bytes (`F0 90 80 80` vs
+`EF BF BF`) it sorts _after_. A single shared comparator cannot pass both tests,
 so the fixture proves the separation rather than asserting it.
 
 ## Consequences
@@ -102,6 +102,6 @@ so the fixture proves the separation rather than asserting it.
   key-insertion-order invariance.
 - **This decision picks one reading of an ambiguous sentence in a frozen
   document.** It is deviation C-6 and is flagged for owner confirmation. If the
-  owner intends NFC *inside* JCS, `hashing.ts` changes in one place — but every
+  owner intends NFC _inside_ JCS, `hashing.ts` changes in one place — but every
   deterministic identifier in the project changes with it, so the confirmation is
   worth having before Stage 2 writes any durable id.

@@ -1,12 +1,12 @@
 # ADR-0005 — Agent evaluation isolation: contract before mechanism
 
-| Field | Value |
-|---|---|
-| Status | Accepted |
-| Date | 2026-09-04 |
-| Stage | 0 |
+| Field      | Value                                    |
+| ---------- | ---------------------------------------- |
+| Status     | Accepted                                 |
+| Date       | 2026-09-04                               |
+| Stage      | 0                                        |
 | Implements | D14, TD-16, Stage 0 harness deliverables |
-| Addresses | Research finding R5 |
+| Addresses  | Research finding R5                      |
 
 ## Context
 
@@ -84,7 +84,7 @@ those boundaries, and the harness says so in the report rather than in a comment
 
 - Stage 3 cannot accidentally be declared passing on unisolated trials: the
   eligibility flag is computed from probe results, so the harness must be taught
-  to *prove* a boundary before a trial that requires it can count.
+  to _prove_ a boundary before a trial that requires it can count.
 - Adding a real driver later changes no contract; it implements `AgentDriver`.
 - Graders (`deterministic`, `trace`, `model`) with positive, negative and mutation
   controls remain outstanding Stage 0 work (plan §7, B2). The grader hierarchy

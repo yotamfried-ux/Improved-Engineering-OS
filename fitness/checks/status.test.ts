@@ -1,0 +1,165 @@
+/**
+ * The declared enforcement status of each fitness rule must match reality.
+ *
+ * This is the test that stops "fitness green" from meaning less than it sounds.
+ * Four of F1-F12 have no subject at Stage 0 -- there is no launcher, no release
+ * resolution, no resolver, no simulation manifest. Reporting twelve green rules
+ * would be exactly the false completeness the constitution forbids and that D17
+ * names as a failure mode ("code complete counted as done").
+ *
+ * So each rule declares `enforced`, `partial` or `not-yet-enforceable`, and this
+ * file checks the declaration against what is actually on disk.
+ */
+
+import { describe, expect, it } from 'vitest';
+import { ENFORCED_RULES, FITNESS_RULES, summarize, type FitnessRule } from '../rules.ts';
+import { exists, loadYaml } from './scan.ts';
+
+const byId = new Map(FITNESS_RULES.map((rule) => [rule.id, rule]));
+const rule = (id: string): FitnessRule => {
+  const found = byId.get(id);
+  if (found === undefined) throw new Error(`no fitness rule ${id}`);
+  return found;
+};
+
+describe('the rule table is complete and coherent', () => {
+  it('covers F1 through F12', () => {
+    const ids = FITNESS_RULES.map((r) => r.id).sort();
+    expect(ids).toEqual(
+      ['F1a', 'F1b', 'F10', 'F11', 'F12', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9'].sort(),
+    );
+  });
+
+  it('gives every rule that is not fully enforced a stated reason', () => {
+    for (const r of FITNESS_RULES) {
+      if (r.status !== 'enforced') {
+        expect(r.note.length, `${r.id} must explain its status`).toBeGreaterThan(20);
+      }
+    }
+  });
+
+  it('gives every enforced rule at least one real mechanism', () => {
+    for (const r of ENFORCED_RULES) {
+      expect(r.mechanisms, `${r.id} claims enforcement`).not.toEqual(['none']);
+      expect(r.mechanisms.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('gives every not-yet-enforceable rule no active mechanism to mislead with', () => {
+    for (const r of FITNESS_RULES.filter((x) => x.status === 'not-yet-enforceable')) {
+      // F11 is the exception worth stating: its contract-level half IS enforced,
+      // which its note says, but the rule as written needs a resolver.
+      if (r.id === 'F11') continue;
+      expect(r.mechanisms).toEqual(['none']);
+    }
+  });
+});
+
+describe('declared status matches what is actually on disk', () => {
+  it('F5 is not-yet-enforceable because packages/launcher does not exist', () => {
+    expect(exists('packages/launcher')).toBe(false);
+    expect(rule('F5').status).toBe('not-yet-enforceable');
+  });
+
+  it('F7 is not-yet-enforceable because no release resolution exists', () => {
+    expect(exists('packages/releases')).toBe(false);
+    expect(rule('F7').status).toBe('not-yet-enforceable');
+  });
+
+  it('F11 is not-yet-enforceable because no resolver exists', () => {
+    expect(exists('packages/resolver')).toBe(false);
+    expect(rule('F11').status).toBe('not-yet-enforceable');
+  });
+
+  it('F10 is partial because no simulations/ directory exists', () => {
+    expect(exists('simulations')).toBe(false);
+    expect(rule('F10').status).toBe('partial');
+  });
+
+  it('F2 is partial because no packages/adapters exists', () => {
+    expect(exists('packages/adapters')).toBe(false);
+    expect(rule('F2').status).toBe('partial');
+  });
+
+  it('F4 is partial because no store-* package exists', () => {
+    expect(exists('packages/store-sqlite')).toBe(false);
+    expect(exists('packages/store-supabase')).toBe(false);
+    expect(rule('F4').status).toBe('partial');
+  });
+
+  it('F1a, F1b, F3, F6, F9 and F12 are enforced, and their subject exists', () => {
+    expect(exists('packages/core/src')).toBe(true);
+    expect(exists('packages/core/src/hashing.ts')).toBe(true);
+    for (const id of ['F1a', 'F1b', 'F3', 'F6', 'F9', 'F12']) {
+      expect(rule(id).status, `${id} claims to be enforced`).toBe('enforced');
+    }
+  });
+
+  it('a rule cannot claim enforcement while its subject is missing', () => {
+    // The inverse of the checks above, stated once as a general rule so a future
+    // status change has to survive it.
+    const subjects: Record<string, string> = {
+      F5: 'packages/launcher',
+      F7: 'packages/releases',
+      F11: 'packages/resolver',
+      F2: 'packages/adapters',
+    };
+    for (const [id, path] of Object.entries(subjects)) {
+      if (!exists(path)) {
+        expect(rule(id).status, `${id} has no subject at ${path}`).not.toBe('enforced');
+      }
+    }
+  });
+});
+
+describe('the allowlist and exclusions are real files with reasons', () => {
+  it('every allowlist entry states a reason', () => {
+    const allowlist = loadYaml<Record<string, unknown>>('fitness/allowlist.yaml');
+    const reasons: string[] = [];
+    const walk = (node: unknown): void => {
+      if (Array.isArray(node)) {
+        for (const item of node) walk(item);
+        return;
+      }
+      if (node !== null && typeof node === 'object') {
+        const record = node as Record<string, unknown>;
+        if (typeof record['reason'] === 'string') reasons.push(record['reason']);
+        else if ('path' in record || 'name' in record) {
+          throw new Error(`allowlist entry without a reason: ${JSON.stringify(record)}`);
+        }
+        for (const value of Object.values(record)) walk(value);
+      }
+    };
+    walk(allowlist);
+    expect(reasons.length).toBeGreaterThan(0);
+    for (const reason of reasons) expect(reason.trim().length).toBeGreaterThan(20);
+  });
+
+  it('F9 has no allowlist entries -- a secret-shaped value has no legitimate home', () => {
+    const allowlist = loadYaml<{ f9_secret_shaped_values: { paths: unknown[] } }>(
+      'fitness/allowlist.yaml',
+    );
+    expect(allowlist.f9_secret_shaped_values.paths).toEqual([]);
+  });
+
+  it('every exclusion states a reason', () => {
+    const exclusions =
+      loadYaml<Record<string, { path: string; reason?: string }[]>>('fitness/exclusions.yaml');
+    for (const [group, entries] of Object.entries(exclusions)) {
+      for (const entry of entries) {
+        expect(entry.reason, `${group}: ${entry.path} needs a reason`).toBeDefined();
+        expect((entry.reason ?? '').trim().length).toBeGreaterThan(20);
+      }
+    }
+  });
+});
+
+describe('the honest summary', () => {
+  it('reports the split rather than a single green tick', () => {
+    expect(summarize()).toBe('6 enforced, 4 partial, 3 not yet enforceable');
+  });
+
+  it('does not claim all thirteen rule entries are green', () => {
+    expect(ENFORCED_RULES.length).toBeLessThan(FITNESS_RULES.length);
+  });
+});

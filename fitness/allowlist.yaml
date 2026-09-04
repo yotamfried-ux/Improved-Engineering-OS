@@ -1,0 +1,51 @@
+# Legitimate occurrences of otherwise-forbidden patterns.
+#
+# Every entry names the rule it relaxes, the exact paths, and why. An entry
+# without a reason is not an allowlist entry, it is a hole.
+
+f1b_core_third_party_imports:
+  # F1b (ADR-0004, deviation C-1). packages/core may import these and nothing else.
+  # Node built-ins are permitted separately: they are not third-party packages, and
+  # the strictest tier of the same idea (F5) is worded as "only Node built-ins".
+  # The no-I/O behavioural test constrains WHICH built-ins core may actually use.
+  packages:
+    - name: zod
+      reason: >-
+        D18.5 makes Zod 4 the schema source of truth and Stage 0 deliverables place the
+        contracts inside packages/core. Adding a second entry here is a reviewable
+        decision, which is the point of the list.
+
+f12_hashing_sites:
+  # F12 (D35, C-02). Canonical structured hashing exists in exactly one place.
+  canonical:
+    - path: packages/core/src/hashing.ts
+      reason: The single canonical implementation. D35 names it explicitly.
+  permitted_exceptions:
+    # Pre-registered so a stray createHash( fails TODAY rather than after the
+    # directory that would excuse it appears.
+    - path: packages/launcher/**
+      status: not-yet-created
+      reason: >-
+        Raw artifact integrity over the bytes of a downloaded release (C-02). Hashes opaque
+        bytes, never a structured domain object, so it cannot mint an EOS identity, and it
+        keeps the launcher free of any core import (F5). Stage 4.
+    - path: supabase/functions/ingest/**
+      status: not-yet-created
+      reason: >-
+        Credential verification: SHA-256 of a random opaque installation token (D22, C-02).
+        Also opaque bytes; also never an identity. Stage 2.
+  test_only:
+    - path: packages/core/test/**
+      reason: Tests may compute digests to check the implementation against fixtures.
+
+f6_project_names:
+  # F6. Real project names are legitimate in provenance and in documentation.
+  paths:
+    - path: packages/core/test/contracts/fixtures.ts
+      reason: >-
+        Carries the legacy repository identity in a provenance fixture. Provenance that
+        cannot name its source is not provenance (D6, D16).
+
+f9_secret_shaped_values:
+  # F9. No entries. A secret-shaped value has no legitimate home in this repository.
+  paths: []

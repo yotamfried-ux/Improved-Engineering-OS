@@ -1,0 +1,54 @@
+# Paths outside the scope of the scoped source scans.
+#
+# The guide's F6 excludes docs/, root Markdown and qualification/ explicitly.
+# The rest are generated or vendored: neither is authored here, so scanning them
+# would report on someone else's bytes.
+
+scoped_scan_exclusions:
+  - path: docs/**
+    reason: Documentation, including the owner's source documents. Excluded by F6 itself.
+  - path: '*.md'
+    reason: Root Markdown. Excluded by F6 itself.
+  - path: qualification/**
+    reason: Harness-generated stage reports naming real target projects. Excluded by F6 itself.
+  - path: node_modules/**
+    reason: Third-party code, not authored here; its licences govern it, not this project's rules.
+  - path: contracts/schemas/**
+    reason: Generated from packages/core; the generator is what gets scanned.
+  - path: packages/core/test/fixtures/**
+    reason: >-
+      Vendored RFC 8785 conformance vectors, unmodified and under their own licence.
+      Scanning them would report on Apache-2.0 bytes this project does not author.
+  - path: '**/dist/**'
+    reason: Build output; it is regenerated from sources that are themselves scanned.
+
+rule_definition_exclusions:
+  # The files that DEFINE a scan necessarily contain the pattern it looks for,
+  # and each carries a deliberate known-bad control fixture. Scanning them would
+  # make every rule fail on its own definition.
+  - path: fitness/checks/**
+    reason: >-
+      Contains every forbidden pattern as a literal, by necessity. The controls in each
+      test are what prove these scans can still fire.
+
+f6_absolute_path_scope:
+  # F6's own wording scopes it to "runtime/configuration paths". Test fixtures
+  # legitimately use synthetic absolute paths -- proving that a sandbox grants no
+  # HOME requires naming a HOME.
+  #
+  # The project-NAME half of F6 keeps tests in scope: a real target-project name
+  # in a test is exactly what TD-19 warns about.
+  - path: '**/test/**'
+    applies_to: absolute-path scan only
+    reason: >-
+      Synthetic absolute paths in fixtures are not developer paths baked into a runtime
+      path. The project-name scan still covers these files.
+
+f12_canonical_serialization_scope:
+  - path: packages/core/src/**
+    applies_to: competing-canonical-serialization scan only
+    reason: >-
+      packages/core IS the canonical site (D35), so its own API names -- hashing.ts and
+      NonCanonicalizableValueError among them -- are the thing the rule protects, not a
+      competing implementation. The createHash scan still covers core and pins the
+      implementation to hashing.ts alone.

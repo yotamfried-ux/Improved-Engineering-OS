@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "task_hint": {
+      "type": "string",
+      "minLength": 1
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "beyond": {
+      "type": "string",
+      "enum": [
+        "solution_set",
+        "type",
+        "corpus"
+      ]
+    }
+  },
+  "required": [
+    "task_hint",
+    "project_id",
+    "run_id",
+    "reason",
+    "beyond"
+  ],
+  "additionalProperties": false
+}

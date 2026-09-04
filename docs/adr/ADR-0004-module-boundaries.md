@@ -1,12 +1,12 @@
 # ADR-0004 — Module boundaries and fitness-rule enforcement
 
-| Field | Value |
-|---|---|
-| Status | Accepted |
-| Date | 2026-09-04 |
-| Stage | 0 |
-| Implements | Guide §3 dependency direction, fitness rules F1–F12 |
-| Needs owner confirmation | **Yes** — deviation C-1 (F1 wording) |
+| Field                    | Value                                               |
+| ------------------------ | --------------------------------------------------- |
+| Status                   | Accepted                                            |
+| Date                     | 2026-09-04                                          |
+| Stage                    | 0                                                   |
+| Implements               | Guide §3 dependency direction, fitness rules F1–F12 |
+| Needs owner confirmation | **Yes** — deviation C-1 (F1 wording)                |
 
 ## Context
 
@@ -15,13 +15,13 @@ The guide fixes the package dependency direction (§3) and twelve fitness rules
 
 **First, F1 as written is unsatisfiable.** F1 says `packages/core` "imports
 nothing outside itself", while D18.5 requires Zod 4 as the schema source of truth
-*inside* `packages/core/src/contracts/`. The research inventory flags this and
+_inside_ `packages/core/src/contracts/`. The research inventory flags this and
 declines to relax the rule.
 
 **Second, a dependency graph cannot prove behaviour.** The research inventory is
 explicit: dependency-cruiser cannot establish "runtime never writes knowledge"
 (F3) or "Champion selection never reads the overlay" (F11). Rules about what code
-*does* need checks that run code.
+_does_ need checks that run code.
 
 ## Decision
 
@@ -37,7 +37,7 @@ explicit: dependency-cruiser cannot establish "runtime never writes knowledge"
 
 This preserves the architectural intent stated in the constitution — "Core must
 not import Claude-specific or Codex-specific semantics" — while being
-implementable. It also *adds* a guarantee F1's original wording never had: a
+implementable. It also _adds_ a guarantee F1's original wording never had: a
 behavioural no-I/O test (below). It is nonetheless a relaxation of frozen text,
 so guide §6.1 rule 8 applies and it is reported for owner confirmation.
 
@@ -68,20 +68,20 @@ as passing. **Reporting twelve green rules when four have no subject would be
 false completeness**, which the constitution forbids and D17 names as a failure
 mode. Stage 0 status:
 
-| Rule | Status | Note |
-|---|---|---|
-| F1a / F1b | `enforced` | with the C-1 refinement |
-| F2 | `partial` | no `adapters/` exists yet; the rule is armed for when one does |
-| F3 | `enforced` | no `knowledge/` write path and no push/branch call may exist in `packages/` or `tools/`; armed before `knowledge/` exists, which is the point |
-| F4 | `partial` | no `store-*` package exists yet; rule armed |
-| F5 | `not-yet-enforceable` | `packages/launcher` is Stage 4 |
-| F6 | `enforced` | scoped scan for real project names and absolute paths |
-| F7 | `not-yet-enforceable` | release resolution is Stage 4 |
-| F8 | `partial` | determinism is proven for hashing and schema emission; the knowledge index is Stage 1 |
-| F9 | `enforced` | secret-shaped value scan |
-| F10 | `not-yet-enforceable` | no simulation manifests exist yet |
-| F11 | `not-yet-enforceable` | no resolver exists; the *contract-level* half is enforced — `challenge_state` is unrepresentable in a canonical Solution Set |
-| F12 | `enforced` | single canonical hashing site; the two permitted exceptions are pre-registered as forbidden-until-their-stage |
+| Rule      | Status                | Note                                                                                                                                          |
+| --------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| F1a / F1b | `enforced`            | with the C-1 refinement                                                                                                                       |
+| F2        | `partial`             | no `adapters/` exists yet; the rule is armed for when one does                                                                                |
+| F3        | `enforced`            | no `knowledge/` write path and no push/branch call may exist in `packages/` or `tools/`; armed before `knowledge/` exists, which is the point |
+| F4        | `partial`             | no `store-*` package exists yet; rule armed                                                                                                   |
+| F5        | `not-yet-enforceable` | `packages/launcher` is Stage 4                                                                                                                |
+| F6        | `enforced`            | scoped scan for real project names and absolute paths                                                                                         |
+| F7        | `not-yet-enforceable` | release resolution is Stage 4                                                                                                                 |
+| F8        | `partial`             | determinism is proven for hashing and schema emission; the knowledge index is Stage 1                                                         |
+| F9        | `enforced`            | secret-shaped value scan                                                                                                                      |
+| F10       | `not-yet-enforceable` | no simulation manifests exist yet                                                                                                             |
+| F11       | `not-yet-enforceable` | no resolver exists; the _contract-level_ half is enforced — `challenge_state` is unrepresentable in a canonical Solution Set                  |
+| F12       | `enforced`            | single canonical hashing site; the two permitted exceptions are pre-registered as forbidden-until-their-stage                                 |
 
 ## Consequences
 

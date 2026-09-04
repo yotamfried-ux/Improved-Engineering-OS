@@ -1,11 +1,11 @@
 # ADR-0001 — Architecture baseline: D1–D17 accepted by reference
 
-| Field | Value |
-|---|---|
-| Status | Accepted |
-| Date | 2026-09-04 |
-| Stage | 0 |
-| Supersedes | — |
+| Field      | Value      |
+| ---------- | ---------- |
+| Status     | Accepted   |
+| Date       | 2026-09-04 |
+| Stage      | 0          |
+| Supersedes | —          |
 
 ## Context
 
@@ -57,7 +57,7 @@ must not be able to express a violation of, rather than as guidance:
 ## Consequences
 
 - Stage 0's contracts are designed so that violating (2), (3), (5) or (8) is a
-  *type error or a schema rejection*, not a code review finding. Concretely:
+  _type error or a schema rejection_, not a code review finding. Concretely:
   `origin_class` cannot be expressed in the telemetry envelope; staging lifecycle
   states cannot be expressed in a canonical asset; `challenge_state` cannot be
   expressed in a canonical Solution Set; and `champion_id` is non-null exactly

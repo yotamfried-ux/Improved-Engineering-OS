@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "observation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "recorded",
+        "duplicate"
+      ]
+    }
+  },
+  "required": [
+    "observation_id",
+    "status"
+  ],
+  "additionalProperties": false
+}

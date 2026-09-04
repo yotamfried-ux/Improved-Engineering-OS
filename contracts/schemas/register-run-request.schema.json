@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "origin_class": {
+      "type": "string",
+      "enum": [
+        "development",
+        "qualification",
+        "operational",
+        "holdout",
+        "external_attestation"
+      ]
+    },
+    "eval_set_version": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "holdout_state": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "active",
+            "retired"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "simulation_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "run_id",
+    "origin_class",
+    "eval_set_version",
+    "holdout_state",
+    "simulation_id"
+  ],
+  "additionalProperties": false
+}

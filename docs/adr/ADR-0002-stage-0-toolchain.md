@@ -1,12 +1,12 @@
 # ADR-0002 — Stage 0 toolchain, runtime and dependency policy
 
-| Field | Value |
-|---|---|
-| Status | Accepted |
-| Date | 2026-09-04 |
-| Stage | 0 |
-| Implements | D18, D29 |
-| Addresses | Research findings R1 (MCP package identity), R3 (WAL engine version), R4 (Node availability) |
+| Field      | Value                                                                                        |
+| ---------- | -------------------------------------------------------------------------------------------- |
+| Status     | Accepted                                                                                     |
+| Date       | 2026-09-04                                                                                   |
+| Stage      | 0                                                                                            |
+| Implements | D18, D29                                                                                     |
+| Addresses  | Research findings R1 (MCP package identity), R3 (WAL engine version), R4 (Node availability) |
 
 ## Context
 
@@ -32,7 +32,7 @@ policy. Three research findings show that parts of D18 cannot be adopted verbati
 against the official `SHASUMS256.txt` before use, so the runtime that produced
 every Stage 0 result is identified rather than assumed.
 
-**Node availability is checked, never inferred (R4).** `pnpm doctor` runs a
+**Node availability is checked, never inferred (R4).** `pnpm ieos-doctor` runs a
 `tools/harness` check that verifies the Node major and the pnpm version against
 the declared pins and fails with an actionable message naming what is missing and
 what is required. The presence of an AI coding tool is not treated as evidence
@@ -44,27 +44,41 @@ and CI installs with `--frozen-lockfile`. Versions, licences, the problem each
 solves and what was copied vs. studied are recorded in
 `docs/decisions/DECISION-LOG.md` §3.
 
-**Selected:** TypeScript `7.0.2`, `@types/node` `24.13.3` (matched to the *runtime*,
+**Selected:** TypeScript `6.0.3`, `@types/node` `24.13.3` (matched to the _runtime_,
 not `latest` — types ahead of the runtime would let `core` typecheck against APIs
 Node 24 does not have), Vitest `5.0.0`, fast-check `4.9.0`, Zod `4.5.4`, `yaml`
 `2.9.0`, dependency-cruiser `18.2.0`, Prettier `3.9.6`.
 
+**TypeScript is one major behind `latest`, deliberately.** dependency-cruiser
+18.2.0 declares support for `typescript >=2.0.0 <7.0.0`. Run against this
+repository under TypeScript 7.0.2 it reported _"1 modules, 0 dependencies
+cruised"_ and **exited zero**: the architecture-boundary check silently analysed
+nothing and called it a pass. Under TypeScript 6.0.3 the identical command
+cruises 51 modules and 137 dependencies. F1a, F2, F4 and F5 are load-bearing
+Stage 0 invariants; being on the newest compiler is not. So the compiler moved.
+
+This is the general rule the choice illustrates: **a checker that can degrade to
+silence constrains the versions of what it checks.** To stop it recurring,
+`fitness/checks/dependency-graph.test.ts` asserts the analysis is non-empty, so a
+future TypeScript bump past the supported range fails loudly instead of quietly
+disarming four fitness rules.
+
 **Deliberately absent:**
 
-- *A canonicalization library.* RFC 8785 is implemented in
+- _A canonicalization library._ RFC 8785 is implemented in
   `packages/core/src/hashing.ts` (ADR-0003).
-- *A ULID / base32 library.* Implemented in `core` so the clock and random source
+- _A ULID / base32 library._ Implemented in `core` so the clock and random source
   are injectable and identifier minting is deterministic under test.
-- *ESLint.* `typescript-eslint` support for TypeScript 7.0.2 is unverified, and no
+- _ESLint._ `typescript-eslint` support for TypeScript 7.0.2 is unverified, and no
   Stage 0 criterion depends on lint. Deviation C-3.
-- *Any MCP package.* Stage 0 builds no adapter. **R1 resolved for the record:**
+- _Any MCP package._ Stage 0 builds no adapter. **R1 resolved for the record:**
   the adoption target is `@modelcontextprotocol/server@2.0.0` and
   `@modelcontextprotocol/client@2.0.0`, not `@modelcontextprotocol/sdk`. Before
   adoption at Stage 1, the `LICENSE` and any `NOTICE` of the exact version must be
   read: upstream carries a transition notice (new code Apache-2.0, existing code
   MIT), so the registry's `license` field is not the whole obligation. MCP types
   may appear only under `packages/adapters/mcp`.
-- *Any SQLite binding.* **R3 resolved for the record:** Node 24.20.0 bundles
+- _Any SQLite binding._ **R3 resolved for the record:** Node 24.20.0 bundles
   SQLite **3.53.4** with FTS5 (measured, not inferred), which is above 3.51.3 and
   therefore contains the WAL fix. `better-sqlite3@13.0.3`'s bundled engine was
   **not** measured. The binding is selected at Stage 1/2 against the seven
@@ -80,7 +94,7 @@ cross-platform digest gate is unverified.
 ## Consequences
 
 - Contributors need Node 24 explicitly installed; `docs/setup.md` says so and
-  `pnpm doctor` enforces it.
+  `pnpm ieos-doctor` enforces it.
 - TypeScript 7.0.2 and Vitest 5.0.0 are recent majors. They were chosen on
   measured behaviour in this repository (typecheck and suite both pass), not on
   reputation; if either proves unstable the pin is a one-line change and the
