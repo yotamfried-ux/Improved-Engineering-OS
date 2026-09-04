@@ -27,3 +27,7 @@ Imported on 2026-09-04. SHA-256 is over the complete original file bytes, not a 
 | `Improved-Engineering-OS-Build-Guide-FROZEN-v1.4.1.md` | 124354 | `8f603dfc8fc69b0cdf02361a1e61cfdbd3f74efd6263cc84c789c1001a630d0d` |
 
 The PDF's final page says its original internal citation tokens were removed; the guide's TD-17 instruction to replace those tokens is historical context, not a reason to edit the supplied PDF. A current external-source inventory will be kept separately.
+
+## Research
+
+[Pre-implementation research inventory, 2026-09-04](research/2026-09-04-research-inventory.md) maps official documentation, company practices, and public repositories to the build stages, with source checks and reuse caveats. It supplements the sources; it does not change the frozen baseline or authorize implementation.
