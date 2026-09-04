@@ -1,0 +1,130 @@
+{
+  "results": [
+    {
+      "candidate": "node:sqlite",
+      "bindingVersion": "24.20.0",
+      "nativeAddon": false,
+      "experimental": true,
+      "engineVersion": "3.53.4",
+      "engineSourceId": "2026-07-24 19:02:57 bf7c7f30031888f4e796e429ab3978879485813aaca6f641c7b33e4e09459bcc",
+      "platform": "linux",
+      "nodeVersion": "24.20.0",
+      "checks": [
+        {
+          "id": 1,
+          "name": "engine version measured at runtime, not inferred from a package version",
+          "outcome": "pass",
+          "evidence": "node:sqlite reports sqlite_version() = 3.53.4, source_id = 2026-07-24 19:02:57 bf7c7f30031888f4e796e429ab3978879485813aaca6f641c7b33e4e09459bcc"
+        },
+        {
+          "id": 2,
+          "name": "engine >= 3.51.3 (R3 WAL corruption fix)",
+          "outcome": "pass",
+          "evidence": "3.53.4 vs required 3.51.3"
+        },
+        {
+          "id": 3,
+          "name": "journal_mode = wal on a real file database",
+          "outcome": "pass",
+          "evidence": "on linux: pragma returned \"wal\", read back \"wal\", -wal sidecar present: true. Required platforms: linux, win32; this run observed linux only."
+        },
+        {
+          "id": 4,
+          "name": "busy handling: two writers, timeout >= 5000 ms, no SQLITE_BUSY surfaced",
+          "outcome": "pass",
+          "evidence": "second writer waited 1237 ms for the lock and then committed; no SQLITE_BUSY reached the caller"
+        },
+        {
+          "id": 5,
+          "name": "WAL truncation under a concurrent reader",
+          "outcome": "pass",
+          "evidence": "wal bytes 2080632 -> 0; pragma wal_checkpoint(truncate) returned {\"busy\":0,\"log\":0,\"checkpointed\":0}; concurrent reader saw 500 rows before and 500 after"
+        },
+        {
+          "id": 6,
+          "name": "UNIQUE(event_id) collision absorbed as a no-op",
+          "outcome": "pass",
+          "evidence": "after a duplicate insert: 1 row(s), first write preserved (payload=a); control -- a plain duplicate insert still raises: true"
+        },
+        {
+          "id": 7,
+          "name": "the same input builds a reproducible index (F8)",
+          "outcome": "pass",
+          "evidence": "logical content digest stable: true (sha256:f64a785113eefc0b); raw database file byte-identical: true. "
+        }
+      ],
+      "allChecksPassedOnThisPlatform": true,
+      "platformsRequired": [
+        "linux",
+        "win32"
+      ],
+      "platformsObserved": [
+        "linux"
+      ],
+      "qualified": false
+    },
+    {
+      "candidate": "better-sqlite3",
+      "bindingVersion": "13.0.3",
+      "nativeAddon": true,
+      "experimental": false,
+      "engineVersion": "3.53.4",
+      "engineSourceId": "2026-07-24 19:02:57 bf7c7f30031888f4e796e429ab3978879485813aaca6f641c7b33e4e09459bcc",
+      "platform": "linux",
+      "nodeVersion": "24.20.0",
+      "checks": [
+        {
+          "id": 1,
+          "name": "engine version measured at runtime, not inferred from a package version",
+          "outcome": "pass",
+          "evidence": "better-sqlite3 reports sqlite_version() = 3.53.4, source_id = 2026-07-24 19:02:57 bf7c7f30031888f4e796e429ab3978879485813aaca6f641c7b33e4e09459bcc"
+        },
+        {
+          "id": 2,
+          "name": "engine >= 3.51.3 (R3 WAL corruption fix)",
+          "outcome": "pass",
+          "evidence": "3.53.4 vs required 3.51.3"
+        },
+        {
+          "id": 3,
+          "name": "journal_mode = wal on a real file database",
+          "outcome": "pass",
+          "evidence": "on linux: pragma returned \"wal\", read back \"wal\", -wal sidecar present: true. Required platforms: linux, win32; this run observed linux only."
+        },
+        {
+          "id": 4,
+          "name": "busy handling: two writers, timeout >= 5000 ms, no SQLITE_BUSY surfaced",
+          "outcome": "pass",
+          "evidence": "second writer waited 1236 ms for the lock and then committed; no SQLITE_BUSY reached the caller"
+        },
+        {
+          "id": 5,
+          "name": "WAL truncation under a concurrent reader",
+          "outcome": "pass",
+          "evidence": "wal bytes 2080632 -> 0; pragma wal_checkpoint(truncate) returned {\"busy\":0,\"log\":0,\"checkpointed\":0}; concurrent reader saw 500 rows before and 500 after"
+        },
+        {
+          "id": 6,
+          "name": "UNIQUE(event_id) collision absorbed as a no-op",
+          "outcome": "pass",
+          "evidence": "after a duplicate insert: 1 row(s), first write preserved (payload=a); control -- a plain duplicate insert still raises: true"
+        },
+        {
+          "id": 7,
+          "name": "the same input builds a reproducible index (F8)",
+          "outcome": "pass",
+          "evidence": "logical content digest stable: true (sha256:f64a785113eefc0b); raw database file byte-identical: true. "
+        }
+      ],
+      "allChecksPassedOnThisPlatform": true,
+      "platformsRequired": [
+        "linux",
+        "win32"
+      ],
+      "platformsObserved": [
+        "linux"
+      ],
+      "qualified": false
+    }
+  ]
+}

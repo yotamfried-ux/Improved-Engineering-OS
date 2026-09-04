@@ -1,0 +1,16 @@
+{
+  "name": "@ieos/capability-seed",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic D28 seed of contracts/capabilities.yaml from the legacy capability registry.",
+  "license": "UNLICENSED",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@ieos/core": "workspace:*",
+    "yaml": "2.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3"
+  }
+}

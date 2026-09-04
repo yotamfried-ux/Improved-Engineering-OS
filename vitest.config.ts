@@ -34,6 +34,24 @@ export default defineConfig({
       },
       {
         test: {
+          name: 'capability-seed',
+          root: './tools/capability-seed',
+          include: ['test/**/*.test.ts'],
+          environment: 'node',
+        },
+      },
+      {
+        test: {
+          name: 'sqlite-qualification',
+          root: './tools/sqlite-qualification',
+          include: ['test/**/*.test.ts'],
+          environment: 'node',
+          // Check 4 spawns a second writer process and waits out a real lock.
+          testTimeout: 60_000,
+        },
+      },
+      {
+        test: {
           name: 'fitness',
           root: './fitness',
           include: ['checks/**/*.test.ts'],

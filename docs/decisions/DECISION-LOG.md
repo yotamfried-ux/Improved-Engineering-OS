@@ -123,28 +123,61 @@ carry their own scope: **Linux x64 only.**
 | V-7 | `better-sqlite3` bundled SQLite version          | **NOT MEASURED**                                                        | —                                                            | The binding cannot be selected until this is measured on Node 24 **and** Windows.                                                                                               |
 | V-8 | dependency-cruiser 18.2.0 under TypeScript 7.0.2 | **degrades silently**: "1 modules, 0 dependencies cruised", exit code 0 | ran the cruiser against this repository under both compilers | TypeScript pinned to 6.0.3 (C-8). Under 6.0.3 the same command cruises 51 modules and 137 dependencies.                                                                         |
 
-### Deferred SQLite decision (finding C, open item O-4)
+### SQLite qualification (finding C, open item O-4) — MEASURED, NOT SELECTED
 
-No binding is selected. Selection at Stage 1/2 requires, as executable checks:
+The seven checks below are unchanged from when they were first recorded. They
+were executed on 2026-09-04 by `tools/sqlite-qualification`
+(`pnpm sqlite:qualify`), against both candidates. Evidence:
+`qualification/evidence/sqlite-qualification.json`.
 
-1. `select sqlite_version()` recorded at runtime by `ieos doctor` and in every
-   qualification report — never inferred from a package version.
-2. That version confirmed `>= 3.51.3` (or a documented backport).
-3. `pragma journal_mode` returning `wal` on a real file database, on Linux **and**
-   Windows.
-4. A busy-handling test: two writers, `timeout >= 5000 ms`, no `SQLITE_BUSY`
-   surfacing to the caller.
-5. A checkpoint test: WAL truncation under a concurrent reader.
-6. An idempotency test: `UNIQUE(event_id)` collision handled as a no-op, not an
-   error surfaced to the emitter.
-7. A reproducibility test: the same input tree builds a byte-identical index
-   twice (F8).
+| # | Check | `node:sqlite` | `better-sqlite3` |
+|---|---|---|---|
+| 1 | `sqlite_version()` measured at runtime, never inferred from a package version | PASS — 3.53.4 | PASS — **3.53.4, measured through the binding itself** |
+| 2 | engine `>= 3.51.3` (the R3 WAL corruption fix) | PASS | PASS |
+| 3 | `pragma journal_mode` returns `wal` on a real file database, **Linux and Windows** | PASS on linux; **win32 UNEXECUTED** | PASS on linux; **win32 UNEXECUTED** |
+| 4 | busy handling: two writers, `timeout >= 5000 ms`, no `SQLITE_BUSY` reaches the caller | PASS — second writer waited 1238 ms, then committed | PASS — waited 1236 ms, then committed |
+| 5 | WAL truncation under a concurrent reader | PASS — wal 2 080 632 → 0 bytes, reader saw 500 rows throughout | PASS — identical |
+| 6 | `UNIQUE(event_id)` collision absorbed as a no-op | PASS — 1 row, first write preserved; control confirms a plain duplicate still raises | PASS — identical |
+| 7 | the same input builds a reproducible index (F8) | PASS — logical digest stable, and the raw file was byte-identical too | PASS — identical |
 
-`node:sqlite` additionally requires checking whether it is still flagged
-experimental on the pinned Node version. `better-sqlite3` additionally requires a
-native-addon build check on Windows and on Node 24's ABI.
+**Measured candidate facts.**
 
----
+| | `node:sqlite` | `better-sqlite3` |
+|---|---|---|
+| Binding version | Node 24.20.0 (built in) | `13.0.3` |
+| Bundled engine | 3.53.4 | 3.53.4 |
+| Engine `source_id` | `2026-07-24 19:02:57 bf7c7f30…59bcc` | `2026-07-24 19:02:57 bf7c7f30…59bcc` (identical build) |
+| FTS5 | available | available |
+| Native addon | no | **yes** — install resolved a prebuild on linux-x64/Node 24; a Windows build or prebuild is unverified |
+| Experimental | **yes** — Node 24 still emits an `ExperimentalWarning` | no |
+| Extra dependency | none | one direct + `node-addon-api` |
+
+**Outcome: no binding is selected.** Both pass all seven checks on Linux, and
+neither is qualified, because check 3 names Linux **and** Windows and no Windows
+execution has been observed. `qualified` in the evidence file is computed
+conjunctively over required platforms, so it reads `false` for both — passing
+everything on one platform is not qualification when the criteria name two.
+
+Nothing was weakened to reach a selection, and no selection was reached.
+
+**What the measurement already settles**, so the Windows run only has to confirm
+the platform-sensitive half:
+
+- Finding C is discharged for `better-sqlite3`: its bundled engine was measured
+  *through the binding*, not substituted from Node's. Both bundle the same
+  SQLite build.
+- The R3 concern is empirically closed on Linux for both candidates.
+- Check 7 produced a finding worth keeping: the database file happened to be
+  byte-identical across two builds here, but that is not something to rely on.
+  `index_digest` must be taken over canonical structure per D35, never over
+  database pages.
+
+**Remaining to select:** run `pnpm sqlite:qualify` on Windows (check 3 for both,
+plus a `better-sqlite3` native build or prebuild check on Windows / the Node 24
+ABI). That is the Windows smoke job in `.github/workflows/`, which has never
+executed. Until then O-4 stays open, and the tie-break between an
+experimental-but-dependency-free built-in and a stable-but-native addon is a
+Stage 1/2 decision with the engine question already answered.
 
 ## 5. Deviations from the frozen guide
 

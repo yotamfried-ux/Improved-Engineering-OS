@@ -143,18 +143,31 @@ describe('vendored material carries its attribution', () => {
 });
 
 describe('the contract files are valid and honest about their state', () => {
-  it('capabilities.yaml parses and is explicitly unseeded rather than invented', () => {
+  it('capabilities.yaml is seeded from an exactly-identified source, never invented', () => {
     const capabilities = loadYaml<{
       schema_version: string;
-      seed: { status: string; source: { revision: string | null } };
-      capabilities: unknown[];
+      seed: {
+        status: string;
+        source: { repository: string; path: string; revision: string; source_digest: string };
+      };
+      kinds: { id: string }[];
+      capabilities: { id: string; kind: string }[];
     }>('contracts/capabilities.yaml');
 
     expect(capabilities.schema_version).toBe('1');
-    expect(capabilities.seed.status).toBe('pending');
-    // No capability id may be invented while the source is unreachable (O-5).
-    expect(capabilities.capabilities).toEqual([]);
-    expect(capabilities.seed.source.revision).toBeNull();
+    expect(capabilities.seed.status).toBe('seeded');
+
+    // The rule this replaces an emptiness check with: every id present must be
+    // traceable to an exact revision of a named source. That is what stops an
+    // invented taxonomy, not the absence of ids (D28, D6).
+    expect(capabilities.seed.source.repository.length).toBeGreaterThan(0);
+    expect(capabilities.seed.source.path).toBe('core/capability-registry.yaml');
+    expect(capabilities.seed.source.revision).toMatch(/^[0-9a-f]{40}$/u);
+    expect(capabilities.seed.source.source_digest).toMatch(/^sha256:[0-9a-f]{64}$/u);
+
+    // Non-vacuous: a seed that silently produced nothing would otherwise pass.
+    expect(capabilities.capabilities.length).toBeGreaterThan(0);
+    expect(capabilities.kinds.length).toBeGreaterThan(0);
   });
 
   it('telemetry-attributes.yaml declares sensitivity and a bound for every attribute', () => {
