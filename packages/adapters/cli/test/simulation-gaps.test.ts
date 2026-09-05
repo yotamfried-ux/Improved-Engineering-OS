@@ -1,5 +1,11 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -96,7 +102,11 @@ describe('doctor verifies the generated instructions users actually run agents w
     expect(before.stdout).toMatch(/ok\s+bootstrap:/u);
 
     const agents = join(target, 'AGENTS.md');
-    writeFileSync(agents, `# Human-owned instructions\n\n${readFileSync(agents, 'utf8')}`, 'utf8');
+    writeFileSync(
+      agents,
+      `# Human-owned instructions\n\n${readFileSync(agents, 'utf8')}`,
+      'utf8',
+    );
 
     const after = run('doctor', '--eos-root', REPO_ROOT, '--project', target);
     expect(after.code, after.stdout + after.stderr).toBe(0);
@@ -109,7 +119,11 @@ describe('doctor verifies the generated instructions users actually run agents w
 
     const agents = join(target, 'AGENTS.md');
     const original = readFileSync(agents, 'utf8');
-    writeFileSync(agents, original.replace('## Engineering OS', '## Engineering OS tampered'), 'utf8');
+    writeFileSync(
+      agents,
+      original.replace('## Engineering OS', '## Engineering OS tampered'),
+      'utf8',
+    );
 
     const result = run('doctor', '--eos-root', REPO_ROOT, '--project', target);
     expect(result.code).toBe(1);
