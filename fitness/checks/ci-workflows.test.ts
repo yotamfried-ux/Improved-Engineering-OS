@@ -157,6 +157,26 @@ describe('the workflows pin the same toolchain the repository does', () => {
   });
 });
 
+describe('CI steps do not destroy the evidence the suite reads', () => {
+  it('never runs sqlite:qualify without redirecting its output', () => {
+    // What this prevents, because it already happened: the Windows job ran
+    // `pnpm sqlite:qualify` with no --out, which writes to the committed
+    // two-candidate evidence file. That runner cannot resolve better-sqlite3,
+    // so the file became a one-candidate record, and three tests that read it
+    // failed on a file the job had destroyed underneath them. The report then
+    // reported an unusable platform, which pointed nowhere near the cause.
+    for (const wf of [ci, fitness]) {
+      for (const [jobName, job] of Object.entries(wf.jobs)) {
+        for (const step of job.steps ?? []) {
+          const run = step.run ?? '';
+          if (!/sqlite:qualify/u.test(run)) continue;
+          expect(run, `${jobName} runs sqlite:qualify without --out`).toMatch(/--out\s/u);
+        }
+      }
+    }
+  });
+});
+
 describe('a cross-platform claim has to name the evidence it rests on', () => {
   // This block used to assert the opposite: that the plan said Windows had
   // never been observed. That observation has since happened (GitHub Actions,

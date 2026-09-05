@@ -8,12 +8,30 @@
  */
 
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadBetterSqlite3, loadNodeSqlite, qualify } from './index.ts';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const outDir = join(repoRoot, 'qualification', 'evidence');
+
+/**
+ * Where to write the evidence.
+ *
+ * Defaults to the committed cross-candidate record, which is correct when this
+ * is run deliberately with both candidates resolvable. It must NOT be the
+ * default anywhere that only one candidate can load: a Windows CI runner cannot
+ * resolve `better-sqlite3`, so writing there would replace a two-candidate
+ * record with a one-candidate one -- and the suite that reads the committed
+ * file would then fail on a file this tool had just destroyed underneath it.
+ * That is exactly what happened before `--out` existed.
+ */
+function outputPath(argv: readonly string[]): string {
+  const index = argv.indexOf('--out');
+  const named = index >= 0 ? argv[index + 1] : undefined;
+  if (named === undefined) return join(outDir, 'sqlite-qualification.json');
+  return isAbsolute(named) ? named : join(repoRoot, named);
+}
 
 const results = [];
 results.push(await qualify(await loadNodeSqlite()));
@@ -52,7 +70,7 @@ for (const result of results) {
   );
 }
 
-mkdirSync(outDir, { recursive: true });
-const file = join(outDir, 'sqlite-qualification.json');
+const file = outputPath(args);
+mkdirSync(dirname(file), { recursive: true });
 writeFileSync(file, `${JSON.stringify({ results }, null, 2)}\n`, 'utf8');
-process.stdout.write(`\nevidence written to qualification/evidence/sqlite-qualification.json\n`);
+process.stdout.write(`\nevidence written to ${file}\n`);

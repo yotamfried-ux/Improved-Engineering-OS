@@ -160,12 +160,18 @@ jobs:
       # deliberately not a dependency, so it is not resolvable here and reports
       # itself as not executed rather than being silently omitted.
       - name: Record the SQLite qualification evidence for win32
-        run: pnpm sqlite:qualify
+        # --out is mandatory here. The default path holds the committed
+        # two-candidate record, and this runner cannot resolve better-sqlite3,
+        # so writing there would replace it with a one-candidate record -- and
+        # the suite that reads that file would then fail on evidence this step
+        # had destroyed underneath it. That is not hypothetical; it is what the
+        # first version of this step did.
+        run: pnpm sqlite:qualify --out qualification/evidence/sqlite-qualification.win32.json
 
       - uses: actions/upload-artifact@v4
         with:
           name: windows-sqlite-qualification
-          path: qualification/evidence/sqlite-qualification.json
+          path: qualification/evidence/sqlite-qualification.win32.json
           if-no-files-found: error
 
       - name: Collect this platform's qualification evidence

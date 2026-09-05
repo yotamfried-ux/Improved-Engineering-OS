@@ -14,3 +14,8 @@ qualification/evidence/platforms/
 # ever say NOT PASSED for a reason that is about this laptop rather than about
 # the stage -- exactly the confusion the report exists to remove.
 qualification/reports/stage-00-report.md
+
+# Per-platform SQLite evidence is produced by CI into its own file, never
+# committed: the committed record is the two-candidate one, and the durable
+# win32 result is the provenanced transcript beside it.
+qualification/evidence/sqlite-qualification.win32.json
