@@ -329,3 +329,65 @@ describe('F7: runtime never resolves a floating version', () => {
     expect(findMatches(known("install('@ieos/launcher@1.4.1');"), FLOATING_VERSION)).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// F2 -- adapters own no knowledge semantics
+// ---------------------------------------------------------------------------
+
+describe('F2: adapters deliver the contract, they do not own knowledge', () => {
+  // Armed at Stage 1, when `packages/adapters` first existed. The
+  // dependency-cruiser half forbids importing `knowledge/` or reaching past the
+  // composition set the guide fixes. This is the half a module graph cannot
+  // see: an adapter that opens the knowledge tree as *files* imports nothing at
+  // all, and would slip straight past a dependency rule.
+  const READS_KNOWLEDGE_TREE = /['"`][^'"`]*\bknowledge\/(assets|solution-sets|controls)\b/u;
+
+  // Defining ranking is the other half of "owns knowledge semantics". D20.3
+  // puts deterministic ranking in `packages/resolver`; an adapter that scored
+  // or re-sorted results would be deciding what is best, which is the decision
+  // the resolver and the Effective Score View exist to make and to record.
+  const DEFINES_RANKING = /\b(function|const)\s+\w*(rank|score|bm25|relevance)\w*\s*[=(<]/iu;
+
+  const adapterFiles = stripAllComments(readSourceFiles(['packages/adapters']));
+
+  it('has adapter sources to scan, so the rule is not vacuous', () => {
+    expect(adapterFiles.length).toBeGreaterThan(2);
+  });
+
+  it('no adapter reads the knowledge tree directly', () => {
+    const violations = findMatches(adapterFiles, READS_KNOWLEDGE_TREE);
+    expect(
+      violations,
+      violations.map((v) => `${v.path}:${String(v.line)} ${v.excerpt}`).join('\n'),
+    ).toEqual([]);
+  });
+
+  it('no adapter defines ranking', () => {
+    const violations = findMatches(adapterFiles, DEFINES_RANKING);
+    expect(
+      violations,
+      violations.map((v) => `${v.path}:${String(v.line)} ${v.excerpt}`).join('\n'),
+    ).toEqual([]);
+  });
+
+  it('both scans can actually fire (control)', () => {
+    expect(
+      findMatches(known("readFileSync('knowledge/assets/x/asset.yaml');"), READS_KNOWLEDGE_TREE),
+    ).toHaveLength(1);
+    expect(
+      findMatches(known("const p = join(root, 'knowledge/solution-sets');"), READS_KNOWLEDGE_TREE),
+    ).toHaveLength(1);
+    expect(
+      findMatches(known('function rankResults(items) { return items; }'), DEFINES_RANKING),
+    ).toHaveLength(1);
+    expect(findMatches(known('const computeScore = (a) => a.n;'), DEFINES_RANKING)).toHaveLength(1);
+  });
+
+  it('does not fire on an adapter merely passing a score through', () => {
+    // Reporting a score the score view produced is the adapter's job; deciding
+    // one is not. A rule that could not tell them apart would be unusable.
+    expect(
+      findMatches(known('items.map((i) => ({ id: i.id, score: i.score }));'), DEFINES_RANKING),
+    ).toEqual([]);
+  });
+});

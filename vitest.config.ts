@@ -60,6 +60,14 @@ export default defineConfig({
       },
       {
         test: {
+          name: 'cli',
+          root: './packages/adapters/cli',
+          include: ['test/**/*.test.ts'],
+          environment: 'node',
+        },
+      },
+      {
+        test: {
           name: 'releases',
           root: './packages/releases',
           include: ['test/**/*.test.ts'],

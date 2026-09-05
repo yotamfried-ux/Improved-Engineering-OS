@@ -65,10 +65,18 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
   {
     id: 'F2',
     invariant: 'adapters never own knowledge semantics',
-    status: 'partial',
-    mechanisms: ['dependency-graph'],
-    note: 'No packages/adapters/ exists yet. The rule is armed for the commit that creates one.',
-    dormantWhileAbsent: ['packages/adapters'],
+    status: 'enforced',
+    mechanisms: ['dependency-graph', 'source-scan'],
+    note:
+      'Armed at Stage 1, by the commit that created packages/adapters -- which is what the rule ' +
+      'was waiting for. Both halves are now checked against a real subject: dependency-cruiser ' +
+      'forbids importing knowledge/ or reaching past the composition set the guide fixes (core, ' +
+      'resolver, telemetry, assurance, store-*), and a source scan catches what a module graph ' +
+      'cannot see -- an adapter that opens the knowledge tree as files imports nothing at all -- ' +
+      'plus any adapter that defines ranking rather than passing through a score the score view ' +
+      'produced. Controls prove both scans fire, and that they do not fire on an adapter merely ' +
+      'reporting a score.',
+    dormantWhileAbsent: [],
   },
   {
     id: 'F3',

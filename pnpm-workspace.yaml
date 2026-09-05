@@ -1,5 +1,9 @@
 packages:
   - 'packages/*'
+  # The guide nests the adapters one level deeper (`packages/adapters/{mcp,cli,…}`),
+  # so they need their own glob: `packages/*` does not reach them, and without
+  # this they resolve no workspace dependency at all.
+  - 'packages/adapters/*'
   - 'tools/*'
   - 'fitness'
 

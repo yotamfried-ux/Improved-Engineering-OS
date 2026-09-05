@@ -33,7 +33,8 @@
     "typecheck": "tsc --noEmit",
     "report:collect": "node tools/qualification-report/src/cli.ts --collect",
     "report:stage0": "node tools/qualification-report/src/cli.ts --report",
-    "build:index": "node packages/releases/src/build-index-cli.ts"
+    "build:index": "node packages/releases/src/build-index-cli.ts",
+    "ieos": "node packages/adapters/cli/src/cli.ts"
   },
   "devDependencies": {
     "@types/node": "24.13.3",

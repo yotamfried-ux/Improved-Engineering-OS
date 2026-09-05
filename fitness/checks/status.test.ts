@@ -82,9 +82,14 @@ describe('declared status matches what is actually on disk', () => {
     expect(rule('F10').status).toBe('partial');
   });
 
-  it('F2 is partial because no packages/adapters exists', () => {
-    expect(exists('packages/adapters')).toBe(false);
-    expect(rule('F2').status).toBe('partial');
+  it('F2 is enforced now that packages/adapters exists', () => {
+    // The rule was written before its subject and waited for it. Stage 1
+    // created the adapters, the dormancy guard fired, and the rule was armed
+    // rather than have its excuse rewritten.
+    expect(exists('packages/adapters')).toBe(true);
+    expect(rule('F2').status).toBe('enforced');
+    expect(rule('F2').mechanisms).toContain('source-scan');
+    expect(rule('F2').dormantWhileAbsent).toEqual([]);
   });
 
   it('F4 is partial because its SUBJECTS do not exist, not because no store does', () => {
@@ -182,10 +187,11 @@ describe('the honest summary', () => {
     // drifts because an assertion was written to accept whatever it found.
     //
     // Stage 0 closed at "6 enforced, 4 partial, 3 not yet enforceable".
-    // Stage 1 armed F7 when `packages/releases` gave it a subject, moving it
-    // from not-yet-enforceable to partial. Stage 0's own documents still record
-    // the Stage 0 mix, correctly: they are history, not a claim about now.
-    expect(summarize()).toBe('6 enforced, 5 partial, 2 not yet enforceable');
+    // Stage 1 moved two, each when its subject appeared and its dormancy guard
+    // fired: F7 to partial (packages/releases), F2 to enforced
+    // (packages/adapters). Stage 0's own documents still record the Stage 0
+    // mix, correctly: they are history, not a claim about now.
+    expect(summarize()).toBe('7 enforced, 4 partial, 2 not yet enforceable');
   });
 
   it('does not claim all thirteen rule entries are green', () => {
