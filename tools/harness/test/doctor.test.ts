@@ -7,11 +7,12 @@
  * anything.
  */
 
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { checkToolchain, formatReport, REQUIRED_TOOLCHAIN } from '../src/doctor.ts';
+import { checkToolchain, formatReport, pnpmProbe, REQUIRED_TOOLCHAIN } from '../src/doctor.ts';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
@@ -103,5 +104,47 @@ describe('report formatting', () => {
     const text = formatReport(checkToolchain({ nodeVersion: 'v24.20.0', pnpmVersion: '11.25.0' }));
     expect(text).toContain('toolchain ok');
     expect(text).not.toContain('FAIL');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Probing for pnpm at all
+// ---------------------------------------------------------------------------
+
+describe('the pnpm probe is spawned in a way that works on each platform', () => {
+  it('routes through a shell on Windows, where pnpm is a .CMD shim', () => {
+    // The defect this pins: `execFile` applies no PATHEXT resolution and Node
+    // refuses to spawn `.cmd`/`.bat` without a shell, so a bare `pnpm` probe
+    // reported "pnpm was not found" on a Windows runner that had just invoked
+    // this very script through pnpm. The check said the toolchain was broken
+    // when what was broken was the check.
+    expect(pnpmProbe('win32').shell).toBe(true);
+  });
+
+  it('does not use a shell where one is not needed', () => {
+    expect(pnpmProbe('linux').shell).toBe(false);
+    expect(pnpmProbe('darwin').shell).toBe(false);
+  });
+
+  it('passes constant arguments, so the shell carries no injection surface', () => {
+    const probe = pnpmProbe('win32');
+    expect(probe.command).toBe('pnpm');
+    expect(probe.args).toEqual(['--version']);
+  });
+});
+
+describe('the doctor CLI on the platform running this suite', () => {
+  it('finds the pinned toolchain and exits 0', () => {
+    // End to end, through the real probe: the unit test above fixes the shape
+    // of the Windows invocation, and this proves the probe actually resolves
+    // pnpm wherever the suite is running. A probe that cannot find a pnpm that
+    // is demonstrably present fails here rather than in CI.
+    const output = execFileSync(
+      process.execPath,
+      [join(repoRoot, 'tools/harness/src/doctor-cli.ts')],
+      { cwd: repoRoot, encoding: 'utf8', timeout: 60_000 },
+    );
+    expect(output).toContain('toolchain ok');
+    expect(output).toContain(`pnpm ${REQUIRED_TOOLCHAIN.pnpmVersion}`);
   });
 });

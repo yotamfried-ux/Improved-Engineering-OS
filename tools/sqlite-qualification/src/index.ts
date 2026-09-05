@@ -70,7 +70,21 @@ export function compareVersions(a: string, b: string): number {
 
 function scratch(): { dir: string; dispose: () => void } {
   const dir = mkdtempSync(join(tmpdir(), 'ieos-sqlite-'));
-  return { dir, dispose: () => rmSync(dir, { recursive: true, force: true }) };
+  return {
+    dir,
+    dispose: () => {
+      // Windows refuses to unlink a file another process still has open, and
+      // these checks deliberately spawn processes that hold database handles.
+      // Retries cover the ordinary race; a directory that still cannot be
+      // removed is a cleanup problem, not a result about the binding, so it
+      // must never propagate out of a check and be recorded as a failure.
+      try {
+        rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+      } catch {
+        // Left for the operating system's temp reaper.
+      }
+    },
+  };
 }
 
 /**

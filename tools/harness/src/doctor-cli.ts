@@ -1,15 +1,19 @@
 /**
- * `pnpm doctor` -- the Stage 0 toolchain check (R4, ADR-0002).
+ * `pnpm ieos-doctor` -- the Stage 0 toolchain check (R4, ADR-0002).
  */
 
 import { execFileSync } from 'node:child_process';
-import { checkToolchain, formatReport } from './doctor.ts';
+import { checkToolchain, formatReport, pnpmProbe } from './doctor.ts';
 
 function pnpmVersion(): string | null {
+  // How to spawn pnpm is platform-dependent; `pnpmProbe` holds that decision
+  // and explains why. See doctor.ts.
+  const probe = pnpmProbe();
   try {
-    return execFileSync('pnpm', ['--version'], {
+    return execFileSync(probe.command, [...probe.args], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
+      shell: probe.shell,
     });
   } catch {
     return null;

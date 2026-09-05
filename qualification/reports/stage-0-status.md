@@ -1,13 +1,13 @@
 # Stage 0 status record — NOT a qualification report
 
-| Field              | Value                                                                                                                                                   |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Artifact kind      | **Status record.** Per guide §4 a stage is closed only by a harness-generated report in this directory; this is not one, and it does not close Stage 0. |
-| Stage 0 gate       | **NOT PASSED**                                                                                                                                          |
-| Date               | 2026-09-04                                                                                                                                              |
-| Environment        | Linux x64, Node 24.20.0, pnpm 11.25.0                                                                                                                   |
-| Platforms observed | **linux only.** No Windows or macOS execution has occurred at any point.                                                                                |
-| Remote CI          | **Never run.** This branch has not been pushed; no GitHub Actions workflow has ever executed.                                                           |
+| Field              | Value                                                                                                                                                                   |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Artifact kind      | **Status record.** Per guide §4 a stage is closed only by a harness-generated report in this directory; this is not one, and it does not close Stage 0.                 |
+| Stage 0 gate       | **NOT PASSED**                                                                                                                                                          |
+| Date               | 2026-09-05                                                                                                                                                              |
+| Environment        | Linux x64, Node 24.20.0, pnpm 11.25.0                                                                                                                                   |
+| Platforms observed | **linux only.** One Windows job has started; none has completed. No macOS execution at any point.                                                                       |
+| Remote CI          | **First run 2026-09-05 (PR #1, `368467b`).** `linux` and `fitness` passed. `windows-smoke` failed at its first step, before any contract was exercised — see section C. |
 
 ## Status vocabulary
 
@@ -39,7 +39,7 @@ integration where the criterion requires a live observation.
 | A11  | `core` performs no I/O under a poisoned module environment                                                                             | PASS   | `no-io.test.ts`, incl. a control proving the traps fire                                                        |
 | A12  | F1–F12 statuses declared, and the declaration matches disk                                                                             | PASS   | 6 enforced, 4 partial, 3 not yet enforceable                                                                   |
 | A12b | Every fitness scan carries a control proving it can fire                                                                               | PASS   | `boundaries.test.ts`, `dependency-graph.test.ts`                                                               |
-| A12c | The dependency-graph analysis is non-empty                                                                                             | PASS   | 73 modules, 203 dependencies                                                                                   |
+| A12c | The dependency-graph analysis is non-empty                                                                                             | PASS   | 75 modules, 210 dependencies                                                                                   |
 | A12d | An unresolvable import is an error                                                                                                     | PASS   | `no-unresolvable` rule + its control                                                                           |
 | A13  | Sandbox: no inherited env, no cross-trial visibility, evaluator unreachable, unregistered run rejected, unproven boundary ⇒ ineligible | PASS   | `isolation.test.ts`                                                                                            |
 | A14  | Every dependency recorded with version, licence, problem, copied-vs-studied; exact pins; lockfile                                      | PASS   | `dependencies.test.ts`                                                                                         |
@@ -66,10 +66,18 @@ The documented Stage 0 exit gate requires, among other things, _"F1–F12 green 
 Linux + Windows smoke"_ and _"the D35 cross-platform hashing fixture yields
 identical digests on both"_. Neither can be claimed:
 
-1. **No Windows execution has ever occurred.** Not in CI, not locally, not
-   anywhere. The comparison the gate names has not been performed.
-2. **No GitHub Actions run has occurred at all**, because the branch has not
-   been pushed — which this task was explicitly instructed not to do.
+1. **The D35 cross-platform comparison has still never executed.** The
+   Windows job runs it as its final step and has never reached it. The first
+   run (2026-09-05) stopped at the toolchain doctor: the doctor's pnpm probe
+   used `execFile('pnpm', …)`, which cannot resolve the `pnpm.CMD` shim on
+   Windows, so it reported pnpm missing on a runner that had just invoked it
+   through pnpm. The defect was in the check, not in the toolchain and not in
+   the hashing contract. It is fixed; until the re-run completes, the Windows
+   half of the gate stays **UNPROVEN**, which is not the same as passing and
+   not the same as failing.
+2. **Linux CI has passed** (`linux` and `fitness` jobs, 2026-09-05). That
+   closes the Linux half of B1 and nothing more: a green Linux job is exactly
+   the observation the cross-platform gate exists to distrust on its own.
 3. Four of F1–F12 are `partial` and three are `not-yet-enforceable`, because
    their subjects (`packages/launcher`, `packages/releases`, `packages/resolver`,
    `simulations/`) do not exist at Stage 0. That is expected and honest, but it
@@ -97,15 +105,15 @@ Nothing else is outstanding. B3–B6 and B8 are closed on observed evidence.
 
 | Measure                        | Value                                              |
 | ------------------------------ | -------------------------------------------------- |
-| Test files / tests             | 19 / 463, all passing                              |
+| Test files / tests             | 21 / 536, all passing                              |
 | Repeat run                     | identical results across two consecutive full runs |
-| Modules / dependencies cruised | 73 / 203, 0 violations                             |
+| Modules / dependencies cruised | 75 / 210, 0 violations                             |
 | RFC 8785 conformance vectors   | 6/6                                                |
 | Capabilities seeded            | 28 ids, 7 kinds                                    |
 | SQLite checks executed         | 7 per candidate × 2 candidates, on linux           |
 | Fitness rules                  | 6 enforced, 4 partial, 3 not yet enforceable       |
-| Windows observations           | **0**                                              |
-| GitHub Actions runs            | **0**                                              |
+| Windows observations           | **0 completed** (1 job started, failed at setup)   |
+| GitHub Actions runs            | linux **pass**, fitness **pass**, windows **fail** |
 
 ## F. Defects found and fixed during this work
 
@@ -121,3 +129,13 @@ over nothing:
 3. **A stale fitness assertion** still required `contracts/capabilities.yaml` to
    be empty and `pending`. Replaced with the rule that actually matters: every id
    present must be traceable to an exact revision of a named source.
+4. **The toolchain doctor could not find pnpm on Windows.** `execFile` applies
+   no PATHEXT resolution and Node refuses to spawn `.cmd`/`.bat` without a
+   shell, so the probe reported a broken toolchain on a machine whose toolchain
+   was fine. Found by the first Windows CI run — the first defect in this
+   repository that only an external observation could have surfaced.
+5. **A test asserted that it was not running on Windows.**
+   `qualify.test.ts` checked `platformsObserved` did **not** contain `win32`,
+   which is true only until the cross-platform gate does its job. Replaced with
+   the invariant actually intended: a single run always leaves at least one
+   required platform unobserved.

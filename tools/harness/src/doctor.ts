@@ -33,6 +33,30 @@ export interface ObservedToolchain {
   readonly pnpmVersion: string | null;
 }
 
+/**
+ * How to invoke pnpm for a version probe on a given platform.
+ *
+ * A descriptor rather than a spawn, so the platform-dependent part stays in
+ * this pure module and is testable without a Windows machine.
+ *
+ * On Windows pnpm is a `.CMD` shim, not an executable. `execFile` applies no
+ * PATHEXT resolution, and Node refuses to spawn `.cmd`/`.bat` at all without a
+ * shell (the CVE-2024-27980 mitigation). A bare `execFile('pnpm', ...)`
+ * therefore reports "pnpm was not found" on the very machine that just invoked
+ * this script *through* pnpm -- which is exactly what the Windows CI job
+ * observed. Both the command and its arguments are constants, so routing
+ * through a shell carries no injection surface.
+ */
+export interface PnpmProbe {
+  readonly command: string;
+  readonly args: readonly string[];
+  readonly shell: boolean;
+}
+
+export function pnpmProbe(nodePlatform: string = process.platform): PnpmProbe {
+  return { command: 'pnpm', args: ['--version'], shell: nodePlatform === 'win32' };
+}
+
 export type CheckStatus = 'ok' | 'failed';
 
 export interface CheckOutcome {

@@ -82,14 +82,25 @@ describe('node:sqlite against the seven recorded checks', () => {
     }
   });
 
-  it('is NOT qualified, because Windows has not been observed', () => {
+  it('is NOT qualified, because one run observes only one platform', () => {
     // The whole point of the criterion. Passing everything on one platform is
     // not qualification when the recorded checks name two.
+    //
+    // Stated without naming which platform this is. The earlier wording
+    // asserted `not.toContain('win32')`, which quietly encoded "this suite
+    // never runs on Windows" -- an assumption that is false the moment the
+    // cross-platform gate does its job, and that failed on the first Windows
+    // run. The invariant that actually matters is that a single run always
+    // leaves at least one required platform unobserved.
     expect(result.allChecksPassedOnThisPlatform).toBe(true);
     expect(result.qualified).toBe(false);
     expect(result.platformsRequired).toEqual(REQUIRED_PLATFORMS);
     expect(result.platformsObserved).toEqual([platform()]);
-    expect(result.platformsObserved).not.toContain('win32');
+
+    const unobserved = REQUIRED_PLATFORMS.filter(
+      (required) => !result.platformsObserved.includes(required),
+    );
+    expect(unobserved.length).toBeGreaterThan(0);
   });
 });
 
