@@ -62,9 +62,7 @@ function usage(): string {
   lines.push('', 'options:');
   lines.push('  --eos-root <path>  the EOS source checkout (default: cwd)');
   lines.push('  --index <path>     the compiled knowledge index');
-  lines.push(
-    '  --project <path>   target project root, for `init` and project checks in `doctor`',
-  );
+  lines.push('  --project <path>   target project root, for `init` and project checks in `doctor`');
   return `${lines.join('\n')}\n`;
 }
 
@@ -236,11 +234,10 @@ async function runInit(): Promise<number> {
 
   let identity: { readonly installationId: string; readonly projectId: string };
   try {
-    identity =
-      existingIdentity(projectRoot) ?? {
-        installationId: mintId('inst', systemClock, systemRandom),
-        projectId: mintId('proj', systemClock, systemRandom),
-      };
+    identity = existingIdentity(projectRoot) ?? {
+      installationId: mintId('inst', systemClock, systemRandom),
+      projectId: mintId('proj', systemClock, systemRandom),
+    };
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     return 2;
@@ -255,13 +252,7 @@ async function runInit(): Promise<number> {
     // The project root travels in the arguments: the MCP server binds every
     // context snapshot to the project's HEAD commit, and it must not infer that
     // from whatever directory the agent happened to launch it in.
-    mcpArgs: [
-      join(repoRoot, MCP_SERVER_ENTRY),
-      '--eos-root',
-      repoRoot,
-      '--project',
-      projectRoot,
-    ],
+    mcpArgs: [join(repoRoot, MCP_SERVER_ENTRY), '--eos-root', repoRoot, '--project', projectRoot],
   });
 
   for (const file of files) {
