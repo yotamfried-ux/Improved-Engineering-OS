@@ -27,6 +27,10 @@ const healthy = (over: Partial<RuntimeObservations> = {}): RuntimeObservations =
   sessionKind: 'local_persistent',
   ingest: { state: 'unconfigured' },
   sqliteAvailable: true,
+  bootstrap: {
+    state: 'healthy',
+    detail: `AGENTS.md and CLAUDE.md match sha256:${'b'.repeat(64)}`,
+  },
   ...over,
 });
 
@@ -61,8 +65,6 @@ describe('the four things the gate names are reported', () => {
 
 describe('absent is reported as unknown, never as ok', () => {
   it('no index yet is unknown and not a fault', () => {
-    // Stage 1 has an empty knowledge tree by design. Reporting that as broken
-    // would teach the reader to ignore doctor's output.
     const f = finding(healthy({ indexDigest: null }), 'index');
     expect(f?.level).toBe('unknown');
     expect(f?.blocking).toBe(false);
@@ -74,12 +76,16 @@ describe('absent is reported as unknown, never as ok', () => {
     expect(f?.level).toBe('unknown');
     expect(f?.blocking).toBe(false);
   });
+
+  it('no target installation is unknown and not a fault', () => {
+    const observed = healthy({ bootstrap: { state: 'uninstalled' } });
+    expect(finding(observed, 'bootstrap')?.level).toBe('unknown');
+    expect(buildRuntimeReport(observed).ok).toBe(true);
+  });
 });
 
 describe('what actually counts as a fault', () => {
   it('an index that exists but cannot be read is a fault', () => {
-    // Something built it, so either what it built or this runtime is wrong.
-    // That is categorically different from never having built one.
     const observed = healthy({
       indexDigest: null,
       indexPresentButUnusable: true,
@@ -104,8 +110,6 @@ describe('what actually counts as a fault', () => {
   });
 
   it('an unreachable Evidence Plane is reported but does NOT block', () => {
-    // D23: telemetry loss must never look like a measured run, and the runtime
-    // is required to work offline. So it is a loud finding and not a refusal.
     const observed = healthy({
       ingest: { state: 'unreachable', endpoint: 'https://x', reason: 'timeout' },
     });
@@ -114,6 +118,17 @@ describe('what actually counts as a fault', () => {
     expect(f?.blocking).toBe(false);
     expect(f?.detail).toMatch(/INCOMPLETE/u);
     expect(buildRuntimeReport(observed).ok).toBe(true);
+  });
+
+  it('a generated bootstrap block that drifted is a blocking fault', () => {
+    const observed = healthy({
+      bootstrap: { state: 'drifted', detail: 'AGENTS.md hash changed' },
+    });
+    const f = finding(observed, 'bootstrap');
+    expect(f?.level).toBe('failed');
+    expect(f?.blocking).toBe(true);
+    expect(f?.detail).toMatch(/drifted/u);
+    expect(buildRuntimeReport(observed).ok).toBe(false);
   });
 });
 
