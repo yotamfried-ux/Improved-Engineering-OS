@@ -278,6 +278,22 @@ importers:
         specifier: 24.13.3
         version: 24.13.3
 
+  tools/qualification-report:
+    dependencies:
+      '@ieos/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@ieos/fitness':
+        specifier: workspace:*
+        version: link:../../fitness
+      '@ieos/snapshot-emit':
+        specifier: workspace:*
+        version: link:../snapshot-emit
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
   tools/snapshot-emit:
     dependencies:
       '@ieos/core':

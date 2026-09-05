@@ -30,7 +30,9 @@
     "snapshot:emit": "node tools/snapshot-emit/src/cli.ts",
     "sqlite:qualify": "node tools/sqlite-qualification/src/cli.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "report:collect": "node tools/qualification-report/src/cli.ts --collect",
+    "report:stage0": "node tools/qualification-report/src/cli.ts --report"
   },
   "devDependencies": {
     "@types/node": "24.13.3",

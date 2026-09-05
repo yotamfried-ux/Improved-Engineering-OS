@@ -70,6 +70,19 @@ jobs:
         # corpus, so "all tests passed" cannot mean "no tests ran".
         run: node scripts/assert-corpus.mjs
 
+      - name: Collect this platform's qualification evidence
+        run: |
+          set -euo pipefail
+          pnpm report:collect qualification/evidence/platforms/linux.json \
+            --commit "${{ github.sha }}" \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: platform-linux
+          path: qualification/evidence/platforms/linux.json
+          if-no-files-found: error
+
       - name: Emit the bootstrap snapshot digest
         id: snapshot
         run: |
@@ -155,6 +168,23 @@ jobs:
           path: qualification/evidence/sqlite-qualification.json
           if-no-files-found: error
 
+      - name: Collect this platform's qualification evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm report:collect qualification/evidence/platforms/win32.json \
+            --projects core,snapshot-emit,sqlite-qualification \
+            --commit "${{ github.sha }}" \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo '--- win32 platform record (verbatim) ---'
+          cat qualification/evidence/platforms/win32.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: platform-win32
+          path: qualification/evidence/platforms/win32.json
+          if-no-files-found: error
+
       - uses: actions/download-artifact@v4
         with:
           name: linux-digest
@@ -173,3 +203,58 @@ jobs:
             exit 1
           fi
           echo "D35 cross-platform digest gate: identical on both platforms."
+
+  stage-0-report:
+    # The harness-generated qualification report (guide section 4): the only
+    # artifact permitted to claim a gate passed. It runs here, after both
+    # platforms have reported, because a report about two platforms cannot
+    # honestly be produced by one. It fails the build when the verdict is not
+    # PASS, so "CI green" and "the stage closed" cannot drift apart.
+    name: stage 0 qualification report
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [linux, windows-smoke]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install with a frozen lockfile
+        run: pnpm install --frozen-lockfile
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: platform-*
+          path: platforms
+          merge-multiple: true
+
+      - name: Both platform records are present
+        # Without this, a missing artifact would silently reduce the report to a
+        # one-platform judgement, which it would correctly mark UNPROVEN -- but
+        # the cause would look like a contract problem rather than a plumbing one.
+        run: |
+          set -euo pipefail
+          ls -l platforms
+          test -f platforms/linux.json
+          test -f platforms/win32.json
+
+      - name: Generate the Stage 0 qualification report
+        run: |
+          set -euo pipefail
+          pnpm --silent report:stage0 \
+            --evidence-dir platforms \
+            --out qualification/reports/stage-00-report.md
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stage-0-report
+          path: qualification/reports/stage-00-report.md
+          if-no-files-found: error

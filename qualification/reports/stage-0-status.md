@@ -57,7 +57,7 @@ integration where the criterion requires a live observation.
 | B4  | Capability seed (D28)                                    | **PASS**    | Previously BLOCKED; **that was stale**. Seeded from `yotamfried-ux/Engineering-OS@4d51784`, 28 ids verbatim, 7 kinds, enforcement dropped and named, source digest recorded; regeneration byte-identical against the real checkout.                                                                                                                                                                                           |
 | B5  | D32 replay test                                          | **PASS**    | Replay invariant (identical `evidence_id` **and** identical payload after stripping `derived_at`) over a synthetic derivation, with four negative controls and supersession validation.                                                                                                                                                                                                                                       |
 | B6  | Deterministic `UNPROVEN` snapshot emission               | **PASS**    | `tools/snapshot-emit`; digest pinned as the cross-platform fixture; claim-status model makes "proven on fewer platforms than required" unrepresentable.                                                                                                                                                                                                                                                                       |
-| B7  | SQLite binding qualification                             | **PARTIAL** | All seven checks pass for both candidates on Linux; `node:sqlite` now also passes all seven on **win32** (2026-09-05). `better-sqlite3`'s win32 coverage stays unobserved — it is deliberately not a dependency, so CI cannot load it. **No binding selected**, and that is now an owner decision rather than a missing measurement (decision log §4c).                                                                       |
+| B7  | SQLite binding qualification                             | **PASS**    | All seven checks pass for both candidates on Linux; `node:sqlite` also passes all seven on **win32** (run 33953023783, per-check transcript in `qualification/evidence/sqlite-qualification-win32.md`). **`node:sqlite` selected** by owner decision 2026-09-05, recorded as approved deviation **C-9** from D18.5 — adopted on Stage 0 evidence the guide did not have, not because D18.5 was wrong.                         |
 | B8  | Owner confirmation of C-1 and C-6                        | **PASS**    | Both approved 2026-09-04. C-1 stays recorded as an _approved deviation_, not as F1's original wording being met.                                                                                                                                                                                                                                                                                                              |
 
 ## C. Why the gate has not passed
@@ -66,38 +66,37 @@ The documented Stage 0 exit gate requires, among other things, _"F1–F12 green 
 Linux + Windows smoke"_ and _"the D35 cross-platform hashing fixture yields
 identical digests on both"_. Neither can be claimed:
 
-The D35 half of the gate **is** now met: the cross-platform digest comparison
-executed on 2026-09-05 and the two digests are identical. What remains:
+Every criterion B1–B8 except B2 is now closed on observed evidence, and B2's
+remainder is Stage 3 work by the guide's own sequencing. Two owner decisions on
+2026-09-05 resolved what was outstanding:
 
-1. **F1–F12 are not green, and cannot be at Stage 0.** Four are `partial` and
-   three are `not-yet-enforceable`, because their subjects
-   (`packages/launcher`, `packages/releases`, `packages/resolver`,
-   `simulations/`) do not exist yet. That is expected and honest, but the gate
-   says "F1–F12 green on Linux + Windows smoke", and 6 of 13 enforced is not
-   that.
-2. **O-4 is open.** No SQLite binding is selected. `node:sqlite` has complete
-   observed coverage, `better-sqlite3` does not and cannot get it while it is
-   not a dependency; choosing between them deviates from D18.5 either in fact
-   or in evidence, so it is put to the owner (decision log §4c) rather than
-   settled here. B7 stays PARTIAL until then.
-3. **No harness-generated qualification report exists.** Per guide §4 that is
-   what closes a stage, and this document is not one.
+1. **O-4 closed** — `node:sqlite` adopted, deviation C-9. B7 closes with it.
+2. **The F1–F12 gate reading approved** — deviation C-10. Rules enforceable now
+   must be green; rules whose subject belongs to a later stage must be
+   explicitly dormant **and** guarded by `fitness/checks/dormancy.test.ts`, so
+   dormancy cannot outlive its reason or become a silent vacuous pass.
+
+**What still stands between this document and a closed Stage 0:** this document
+is not a qualification report. Per guide §4 a stage is closed only by a
+harness-generated report, which is now produced by `tools/qualification-report`
+(`pnpm report:stage0`) and written to `qualification/reports/stage-00-report.md`
+by the `stage-0-report` CI job, after both platforms have reported. **Stage 0 is
+closed if and only if that report says PASS.** This record does not decide it,
+and deliberately cannot.
 
 ## D. Minimum remaining actions to pass the gate
 
-The external observation that blocked B1 and B7 has been made. What is left is
-one owner decision and one thing that Stage 0 cannot produce:
-
-1. **Answer O-4** (decision log §4c): select `node:sqlite`, keep
-   `better-sqlite3`, or add `better-sqlite3` as a dependency so CI can qualify
-   it. Only then does B7 close. Nothing is blocked while it is open — no code
-   depends on either binding yet.
-2. **F1–F12 cannot go green at Stage 0**, because seven of the thirteen have no
-   subject to inspect until later stages create it. Closing the gate as written
-   requires either those stages or an owner-approved restatement of the gate.
+1. **Run `.github/workflows/ci.yml` on the current head** so both platforms
+   produce a qualification record at the same commit, and let the
+   `stage-0-report` job generate the report from them. That job fails the build
+   when the verdict is not PASS, so "CI green" and "the stage closed" cannot
+   drift apart.
+2. **Read the verdict.** If it is PASS, Stage 0 is closed by that report and
+   this record becomes history. If it is NOT PASSED, the report names which rows
+   are `fail` and which are `unproven`, and those are the remaining work.
 3. **B2's remainder is not a Stage 0 action.** A real agent trial is Stage 3.
 
-B1 and B3–B6 and B8 are closed on observed evidence.
+B1 and B3–B8 are closed on observed evidence.
 
 ## E. Measured counts (guarding against vacuous success)
 
@@ -109,6 +108,7 @@ B1 and B3–B6 and B8 are closed on observed evidence.
 | RFC 8785 conformance vectors   | 6/6                                                     |
 | Capabilities seeded            | 28 ids, 7 kinds                                         |
 | SQLite checks executed         | 7 × 2 candidates on linux; 7 for `node:sqlite` on win32 |
+| SQLite binding selected        | `node:sqlite` (owner, deviation C-9)                    |
 | Fitness rules                  | 6 enforced, 4 partial, 3 not yet enforceable            |
 | D35 cross-platform digest      | **identical** on linux and win32                        |
 | Windows observations           | 283 tests on windows-latest, all passing                |

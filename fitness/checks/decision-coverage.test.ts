@@ -123,20 +123,56 @@ describe('the documents do not contradict each other', () => {
     expect(log).toMatch(/approved deviation|Approved deviation|APPROVED/u);
   });
 
-  it('no document claims a Windows run has happened', () => {
+  it('every document that claims a Windows run cites the run it rests on', () => {
+    // Was "no document claims a Windows run has happened". A Windows run has
+    // now happened, so the guard changed direction rather than being dropped:
+    // the claim is allowed, and must be anchored. An unanchored "verified on
+    // Windows" is exactly the sentence nobody can check.
     for (const [name, text] of [
       ['DECISION-LOG.md', log],
       ['stage-0-plan.md', plan],
     ] as const) {
-      expect(text, `${name} must not claim Windows verification`).not.toMatch(
-        /Windows (CI )?(verification |run |execution )?(passed|verified|green)/iu,
+      if (!/win32|Windows runner|windows smoke/iu.test(text)) continue;
+      expect(text, `${name} claims a Windows observation without citing a run id`).toMatch(
+        /33953023783|33952550921|run \d{8,}/u,
       );
     }
   });
 
-  it('the plan and the log agree that no SQLite binding is selected', () => {
-    expect(log).toMatch(/no binding is selected|No binding is selected/u);
-    expect(plan).toMatch(/No binding is selected|no binding is selected/u);
+  it('the plan and the log agree on which SQLite binding was selected', () => {
+    // Asserts agreement, not a particular answer, so the selection can change
+    // without this test having to be rewritten -- but the two documents can
+    // never disagree about it.
+    const selectedIn = (text: string): string | null => {
+      if (/no binding is selected/iu.test(text)) return 'none';
+      if (
+        /Binding selected: `?node:sqlite|adopt `?node:sqlite|`node:sqlite` adopted/iu.test(text)
+      ) {
+        return 'node:sqlite';
+      }
+      if (/Binding selected: `?better-sqlite3|`better-sqlite3` adopted/iu.test(text)) {
+        return 'better-sqlite3';
+      }
+      return null;
+    };
+    const inLog = selectedIn(log);
+    const inPlan = selectedIn(plan);
+    expect(inLog, 'the decision log states no SQLite selection either way').not.toBeNull();
+    expect(inPlan, 'the plan states no SQLite selection either way').not.toBeNull();
+    expect(inPlan).toBe(inLog);
+  });
+
+  it("a selected binding is recorded as a deviation when it is not the guide's", () => {
+    // The framing the owner asked for, kept enforceable: adopting something
+    // other than D18.5's choice must stay visible as an approved deviation, not
+    // quietly become the new normal.
+    if (/`node:sqlite` adopted|Binding selected: `?node:sqlite/iu.test(log)) {
+      expect(log).toMatch(/C-9/u);
+      expect(log).toMatch(/D18\.5/u);
+      expect(log, 'the deviation must record that it rests on evidence').toMatch(
+        /on evidence the guide did not have|owner-approved/iu,
+      );
+    }
   });
 
   it('the plan and the log agree the capability seed is no longer blocked', () => {

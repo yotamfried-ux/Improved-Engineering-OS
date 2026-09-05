@@ -22,6 +22,21 @@ export interface FitnessRule {
   readonly mechanisms: readonly FitnessMechanism[];
   /** Why the status is what it is. Required for anything not fully enforced. */
   readonly note: string;
+  /**
+   * Repository paths whose **absence** is the reason this rule is not fully
+   * enforced. Empty for an enforced rule.
+   *
+   * This is what stops a dormant rule from staying dormant after its reason has
+   * gone. `checks/dormancy.test.ts` asserts every path here is genuinely
+   * missing, so the commit that creates one of these directories fails the
+   * suite until the rule is armed against it. Dormancy is therefore conditional
+   * on absence rather than on someone remembering.
+   *
+   * Owner decision, 2026-09-05 (deviation C-10): this is the mechanism that
+   * makes "F1-F12 green" a meetable Stage 0 gate without either deleting rules
+   * or letting them pass over nothing.
+   */
+  readonly dormantWhileAbsent: readonly string[];
 }
 
 export const FITNESS_RULES: readonly FitnessRule[] = [
@@ -31,6 +46,7 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
     status: 'enforced',
     mechanisms: ['dependency-graph'],
     note: 'Split from F1 by ADR-0004 (deviation C-1).',
+    dormantWhileAbsent: [],
   },
   {
     id: 'F1b',
@@ -44,6 +60,7 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
       'requires Zod inside core. Owner-APPROVED on 2026-09-04 as deviation C-1; the allowlist ' +
       'holds exactly one entry, zod. Approval does not make F1 as originally worded satisfied, ' +
       'so C-1 stays recorded as a deviation.',
+    dormantWhileAbsent: [],
   },
   {
     id: 'F2',
@@ -51,6 +68,7 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
     status: 'partial',
     mechanisms: ['dependency-graph'],
     note: 'No packages/adapters/ exists yet. The rule is armed for the commit that creates one.',
+    dormantWhileAbsent: ['packages/adapters'],
   },
   {
     id: 'F3',
@@ -61,6 +79,7 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
       'Armed before knowledge/ exists, which is the point: the commit that creates it meets an ' +
       'existing rule instead of negotiating with one. The C-04 bootstrap path (owner opens the ' +
       'PR, the tool never pushes) is what the push/branch scan enforces.',
+    dormantWhileAbsent: [],
   },
   {
     id: 'F4',
@@ -68,6 +87,7 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
     status: 'partial',
     mechanisms: ['dependency-graph'],
     note: 'None of those packages exists yet. The rule is armed.',
+    dormantWhileAbsent: ['packages/resolver', 'packages/assurance', 'packages/evidence-derivation'],
   },
   {
     id: 'F5',
@@ -75,6 +95,7 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
     status: 'not-yet-enforceable',
     mechanisms: ['none'],
     note: 'packages/launcher is Stage 4 (D18.2). Nothing to check.',
+    dormantWhileAbsent: ['packages/launcher'],
   },
   {
     id: 'F6',
@@ -82,6 +103,7 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
     status: 'enforced',
     mechanisms: ['source-scan'],
     note: 'Scoped per the guide; docs/, root Markdown and qualification/ are excluded.',
+    dormantWhileAbsent: [],
   },
   {
     id: 'F7',
@@ -92,6 +114,7 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
     note:
       'Release resolution is Stage 4. The dependency half of the same idea is enforced today by ' +
       'the exact-pin check in checks/dependencies.test.ts.',
+    dormantWhileAbsent: ['packages/releases'],
   },
   {
     id: 'F8',
@@ -101,6 +124,7 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
     note:
       'Proven for canonical hashing, deterministic identities and schema emission. The knowledge ' +
       'index it ultimately covers is Stage 1.',
+    dormantWhileAbsent: ['knowledge'],
   },
   {
     id: 'F9',
@@ -108,6 +132,7 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
     status: 'enforced',
     mechanisms: ['source-scan'],
     note: 'Scans for secret-shaped values, not for identifier words, which are legitimate in docs.',
+    dormantWhileAbsent: [],
   },
   {
     id: 'F10',
@@ -118,6 +143,7 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
       'No simulations/ directory exists yet, so there is nothing to lint. The contract-level half ' +
       'is enforced: simulationManifestSchema rejects a hidden_conditions_ref that is not under ' +
       'the evaluator-only:// scheme.',
+    dormantWhileAbsent: ['simulations'],
   },
   {
     id: 'F11',
@@ -128,6 +154,7 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
       'No resolver exists. The contract-level half IS enforced today: challenge_state is ' +
       'unrepresentable in a canonical Solution Set, and a null champion_id cannot coexist with ' +
       'canonical_state "pinned". The code-path half needs a resolver, at Stage 2.',
+    dormantWhileAbsent: ['packages/resolver'],
   },
   {
     id: 'F12',
@@ -139,6 +166,7 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
       'The two exceptions C-02 permits -- raw artifact integrity in the launcher, credential ' +
       'hashing in the auth path -- do not exist yet and are pre-registered in allowlist.yaml as ' +
       'forbidden until their stage, so a stray createHash( call fails today.',
+    dormantWhileAbsent: [],
   },
 ];
 

@@ -1,0 +1,19 @@
+{
+  "name": "@ieos/qualification-report",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Harness-generated stage qualification reports. The only artifact permitted to claim a gate passed.",
+  "license": "UNLICENSED",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@ieos/core": "workspace:*",
+    "@ieos/fitness": "workspace:*",
+    "@ieos/snapshot-emit": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3"
+  }
+}

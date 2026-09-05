@@ -31,12 +31,12 @@ const args = process.argv.slice(2);
 
 /** Floors. Raise them when a whole area of the suite lands, never lower them to go green. */
 const MINIMUMS = {
-  fullTestFiles: 14,
-  fullTests: 350,
-  windowsTestFiles: 8,
-  windowsTests: 250,
-  cruisedModules: 40,
-  cruisedDependencies: 90,
+  fullTestFiles: 16,
+  fullTests: 450,
+  windowsTestFiles: 9,
+  windowsTests: 270,
+  cruisedModules: 45,
+  cruisedDependencies: 100,
 };
 
 function fail(message) {

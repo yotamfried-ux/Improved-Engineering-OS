@@ -60,6 +60,14 @@ export default defineConfig({
       },
       {
         test: {
+          name: 'qualification-report',
+          root: './tools/qualification-report',
+          include: ['test/**/*.test.ts'],
+          environment: 'node',
+        },
+      },
+      {
+        test: {
           name: 'fitness',
           root: './fitness',
           include: ['checks/**/*.test.ts'],

@@ -4,3 +4,7 @@ coverage/
 *.tsbuildinfo
 .ieos/
 .DS_Store
+
+# Platform qualification records are produced by CI, never by a laptop.
+# The report cites them inline; a stale local copy would only invite confusion.
+qualification/evidence/platforms/
