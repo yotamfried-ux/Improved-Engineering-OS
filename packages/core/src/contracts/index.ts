@@ -35,6 +35,7 @@ import {
 import type { Stability } from './lifecycle.ts';
 
 export * from './lifecycle.ts';
+export * from './index-meta.ts';
 export * from './claim.ts';
 export * from './asset.ts';
 export * from './solution-set.ts';

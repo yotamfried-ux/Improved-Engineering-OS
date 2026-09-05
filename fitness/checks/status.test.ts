@@ -81,10 +81,24 @@ describe('declared status matches what is actually on disk', () => {
     expect(rule('F2').status).toBe('partial');
   });
 
-  it('F4 is partial because no store-* package exists', () => {
-    expect(exists('packages/store-sqlite')).toBe(false);
-    expect(exists('packages/store-supabase')).toBe(false);
+  it('F4 is partial because its SUBJECTS do not exist, not because no store does', () => {
+    // The earlier wording tied F4 to the store side and fired the moment Stage 1
+    // created `packages/store-sqlite` -- correctly, because the stated reason had
+    // become false. But it was the wrong reason from the start: F4 constrains
+    // `resolver`, `assurance` and `evidence-derivation`, and it is those three
+    // that do not exist yet. A store existing is what gives the rule a real
+    // target; it is not what makes the rule enforceable.
+    for (const subject of [
+      'packages/resolver',
+      'packages/assurance',
+      'packages/evidence-derivation',
+    ]) {
+      expect(exists(subject), `${subject} exists, so F4 must be armed`).toBe(false);
+    }
     expect(rule('F4').status).toBe('partial');
+    // And the dependency rule now has something to point at, so the day a
+    // subject appears the rule bites rather than needing to be written first.
+    expect(exists('packages/store-sqlite')).toBe(true);
   });
 
   it('F1a, F1b, F3, F6, F9 and F12 are enforced, and their subject exists', () => {

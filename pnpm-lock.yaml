@@ -245,6 +245,16 @@ importers:
         specifier: 24.13.3
         version: 24.13.3
 
+  packages/store-sqlite:
+    dependencies:
+      '@ieos/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
   tools/capability-seed:
     dependencies:
       '@ieos/core':

@@ -60,6 +60,14 @@ export default defineConfig({
       },
       {
         test: {
+          name: 'store-sqlite',
+          root: './packages/store-sqlite',
+          include: ['test/**/*.test.ts'],
+          environment: 'node',
+        },
+      },
+      {
+        test: {
           name: 'qualification-report',
           root: './tools/qualification-report',
           include: ['test/**/*.test.ts'],
