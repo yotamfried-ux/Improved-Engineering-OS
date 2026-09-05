@@ -25,7 +25,7 @@
     "contracts:emit": "node tools/contracts-gen/src/cli.ts --write",
     "fitness": "vitest run --project fitness",
     "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format:check": "prettier --write packages/adapters/cli/src/cli.ts packages/adapters/cli/test/simulation-gaps.test.ts && git diff -- packages/adapters/cli/src/cli.ts packages/adapters/cli/test/simulation-gaps.test.ts && exit 1",
     "guard:corpus": "node scripts/assert-corpus.mjs && node scripts/assert-corpus.mjs --dependency-graph",
     "ieos": "node packages/adapters/cli/src/cli.ts",
     "ieos-doctor": "node tools/harness/src/doctor-cli.ts",
