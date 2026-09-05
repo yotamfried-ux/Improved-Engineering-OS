@@ -58,7 +58,10 @@ function runSuites(projects: readonly string[]): { suites: SuiteResult[]; allPas
         '--reporter=json',
         `--outputFile=${out}`,
       ],
-      { cwd: repoRoot, stdio: ['ignore', 'ignore', 'inherit'], timeout: 900_000 },
+      // stdout is inherited so a failure is visible in the log at the moment it
+      // happens. Discarding it, as the first version of this did, hid the names
+      // of failing tests from the only place anyone would look for them.
+      { cwd: repoRoot, stdio: ['ignore', 'inherit', 'inherit'], timeout: 900_000 },
     );
   } catch {
     allPassed = false;
@@ -67,11 +70,24 @@ function runSuites(projects: readonly string[]): { suites: SuiteResult[]; allPas
     const report = JSON.parse(readFileSync(out, 'utf8')) as {
       numTotalTests?: number;
       numPassedTests?: number;
-      testResults?: { name?: string }[];
+      testResults?: {
+        name?: string;
+        assertionResults?: { status?: string; fullName?: string }[];
+      }[];
     };
     const tests = report.numTotalTests ?? 0;
     const passed = report.numPassedTests ?? 0;
     if (passed !== tests) allPassed = false;
+
+    const failed = (report.testResults ?? []).flatMap((file) =>
+      (file.assertionResults ?? [])
+        .filter((assertion) => assertion.status === 'failed')
+        .map((assertion) => assertion.fullName ?? '(unnamed test)'),
+    );
+    if (failed.length > 0) {
+      process.stderr.write(`\nfailing tests in this run:\n  ${failed.join('\n  ')}\n\n`);
+    }
+
     return {
       suites: [
         {
@@ -79,6 +95,7 @@ function runSuites(projects: readonly string[]): { suites: SuiteResult[]; allPas
           files: report.testResults?.length ?? 0,
           tests,
           passed,
+          failed,
         },
       ],
       allPassed,

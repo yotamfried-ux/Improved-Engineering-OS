@@ -24,7 +24,7 @@ const FIXED_CLOCK = () => new Date('2026-09-05T00:00:00.000Z');
 const platform = (over: Partial<PlatformEvidence> = {}): PlatformEvidence => ({
   ...collectPlatformEvidence({
     commit: 'abc1234',
-    suites: [{ project: 'core', files: 10, tests: 300, passed: 300 }],
+    suites: [{ project: 'core', files: 10, tests: 300, passed: 300, failed: [] }],
     now: FIXED_CLOCK,
   }),
   ...over,
@@ -128,7 +128,7 @@ describe('negative controls: the report can withhold a pass', () => {
           platform({ platform: 'linux' }),
           platform({
             platform: 'win32',
-            suites: [{ project: 'core', files: 1, tests: 2, passed: 2 }],
+            suites: [{ project: 'core', files: 1, tests: 2, passed: 2, failed: [] }],
           }),
         ],
       }),
@@ -144,7 +144,15 @@ describe('negative controls: the report can withhold a pass', () => {
           platform({ platform: 'linux' }),
           platform({
             platform: 'win32',
-            suites: [{ project: 'core', files: 10, tests: 300, passed: 299 }],
+            suites: [
+              {
+                project: 'core',
+                files: 10,
+                tests: 300,
+                passed: 299,
+                failed: ['core > a broken test'],
+              },
+            ],
           }),
         ],
       }),
@@ -243,6 +251,32 @@ describe('the rendered report tells the reader what it rests on', () => {
     expect(text).toContain('Empty-snapshot digest');
     expect(text).toContain('`linux`');
     expect(text).toContain('`win32`');
+  });
+
+  it('names the failing tests when a platform record carries failures', () => {
+    // Otherwise "287 of 290" is an answer nobody can act on, and the log that
+    // held the names has expired.
+    const text = render(
+      healthyInput({
+        platforms: [
+          platform({ platform: 'linux' }),
+          platform({
+            platform: 'win32',
+            suites: [
+              {
+                project: 'core',
+                files: 10,
+                tests: 300,
+                passed: 299,
+                failed: ['core > hashing > pins a digest'],
+              },
+            ],
+          }),
+        ],
+      }),
+    );
+    expect(text).toContain('Failing tests on `win32`');
+    expect(text).toContain('core > hashing > pins a digest');
   });
 
   it('says plainly when it rests on nothing', () => {

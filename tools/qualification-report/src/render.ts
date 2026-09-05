@@ -105,6 +105,16 @@ export function renderReport(input: RenderInput): string {
         );
       }
       lines.push('');
+
+      const failures = platform.suites.flatMap((suite) => suite.failed);
+      if (failures.length > 0) {
+        // A record with failures does not satisfy a platform requirement, so the
+        // report must say what failed rather than only that something did.
+        lines.push(`**Failing tests on \`${platform.platform}\`:**`);
+        lines.push('');
+        for (const name of failures) lines.push(`- \`${name}\``);
+        lines.push('');
+      }
     }
   }
 

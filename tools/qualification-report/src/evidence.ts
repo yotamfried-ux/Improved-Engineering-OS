@@ -25,6 +25,16 @@ export interface SuiteResult {
   readonly files: number;
   readonly tests: number;
   readonly passed: number;
+  /**
+   * Full names of the tests that failed, if any.
+   *
+   * Carried in the record rather than left in a log, because the log expires
+   * and because a platform record that says "287 of 290" without saying which
+   * three is an answer nobody can act on. The first version of this tool made
+   * exactly that mistake, and it also discarded the runner's stdout, so the
+   * names were nowhere at all.
+   */
+  readonly failed: readonly string[];
 }
 
 export interface PlatformEvidence {
