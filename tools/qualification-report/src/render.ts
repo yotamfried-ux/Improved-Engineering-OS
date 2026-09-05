@@ -8,7 +8,7 @@
  */
 
 import type { PlatformEvidence } from './evidence.ts';
-import { totalPassed, totalTests } from './evidence.ts';
+import { totalPassed, totalSkipped, totalTests } from './evidence.ts';
 import type { GateReport } from './gate.ts';
 
 export interface RenderInput {
@@ -92,16 +92,18 @@ export function renderReport(input: RenderInput): string {
       lines.push(`| Collected at | ${platform.collectedAt} |`);
       lines.push(`| Run | ${platform.runUrl ?? '_local_'} |`);
       lines.push(
-        `| Tests | ${String(totalPassed(platform))} passed of ${String(totalTests(platform))} |`,
+        `| Tests | ${String(totalPassed(platform))} passed of ${String(totalTests(platform))}` +
+          `${totalSkipped(platform) > 0 ? `, ${String(totalSkipped(platform))} skipped` : ''} |`,
       );
       lines.push(`| Empty-snapshot digest | \`${platform.digests.emptySnapshot}\` |`);
       lines.push(`| Asset-tree digest | \`${platform.digests.assetTreeWithNestedFiles}\` |`);
       lines.push('');
-      lines.push('| Suite | Files | Tests | Passed |');
-      lines.push('| --- | --- | --- | --- |');
+      lines.push('| Suite | Files | Tests | Passed | Skipped | Failed |');
+      lines.push('| --- | --- | --- | --- | --- | --- |');
       for (const suite of platform.suites) {
         lines.push(
-          `| ${suite.project} | ${String(suite.files)} | ${String(suite.tests)} | ${String(suite.passed)} |`,
+          `| ${suite.project} | ${String(suite.files)} | ${String(suite.tests)} | ` +
+            `${String(suite.passed)} | ${String(suite.skipped)} | ${String(suite.failed.length)} |`,
         );
       }
       lines.push('');

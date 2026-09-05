@@ -77,7 +77,6 @@ function runSuites(projects: readonly string[]): { suites: SuiteResult[]; allPas
     };
     const tests = report.numTotalTests ?? 0;
     const passed = report.numPassedTests ?? 0;
-    if (passed !== tests) allPassed = false;
 
     const failed = (report.testResults ?? []).flatMap((file) =>
       (file.assertionResults ?? [])
@@ -85,8 +84,12 @@ function runSuites(projects: readonly string[]): { suites: SuiteResult[]; allPas
         .map((assertion) => assertion.fullName ?? '(unnamed test)'),
     );
     if (failed.length > 0) {
+      allPassed = false;
       process.stderr.write(`\nfailing tests in this run:\n  ${failed.join('\n  ')}\n\n`);
     }
+    // Whatever is neither passed nor failed was skipped. Kept as its own number
+    // rather than folded into either: skipped is unproven, not failed.
+    const skipped = Math.max(0, tests - passed - failed.length);
 
     return {
       suites: [
@@ -96,6 +99,7 @@ function runSuites(projects: readonly string[]): { suites: SuiteResult[]; allPas
           tests,
           passed,
           failed,
+          skipped,
         },
       ],
       allPassed,

@@ -1,7 +1,9 @@
 export {
   ASSET_TREE_FIXTURE,
   collectPlatformEvidence,
+  failures,
   totalPassed,
+  totalSkipped,
   totalTests,
   type CollectOptions,
   type PlatformEvidence,

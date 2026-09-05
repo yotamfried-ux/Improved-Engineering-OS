@@ -91,13 +91,21 @@ function assertTestCorpus({ projects, minFiles, minTests, label }) {
         'A collapsed corpus exits 0 and reports success; that is what this guard exists to catch.',
     );
   }
-  if (tests < minTests) {
+  // Floored on tests that actually PASSED, not on tests discovered. A suite
+  // that finds hundreds of tests and then skips them all would otherwise clear
+  // this floor while proving nothing -- the same vacuity this guard exists for,
+  // one level up.
+  if (passed < minTests) {
     fail(
-      `${label} ran ${String(tests)} tests, expected at least ${String(minTests)}. ` +
-        'Lower this floor only alongside an architectural justification, never to go green.',
+      `${label} passed ${String(passed)} tests (of ${String(tests)} discovered), expected at ` +
+        `least ${String(minTests)} passing. Lower this floor only alongside an architectural ` +
+        'justification, never to go green.',
     );
   }
-  ok(`${label} corpus is non-vacuous (${String(files)} files, ${String(tests)} tests)`);
+  ok(
+    `${label} corpus is non-vacuous (${String(files)} files, ${String(passed)} passing` +
+      `${tests > passed ? `, ${String(tests - passed)} skipped` : ''})`,
+  );
 }
 
 function assertDependencyGraph() {

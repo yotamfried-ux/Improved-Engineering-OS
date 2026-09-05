@@ -24,7 +24,7 @@ const FIXED_CLOCK = () => new Date('2026-09-05T00:00:00.000Z');
 const platform = (over: Partial<PlatformEvidence> = {}): PlatformEvidence => ({
   ...collectPlatformEvidence({
     commit: 'abc1234',
-    suites: [{ project: 'core', files: 10, tests: 300, passed: 300, failed: [] }],
+    suites: [{ project: 'core', files: 10, tests: 300, passed: 300, failed: [], skipped: 0 }],
     now: FIXED_CLOCK,
   }),
   ...over,
@@ -128,7 +128,7 @@ describe('negative controls: the report can withhold a pass', () => {
           platform({ platform: 'linux' }),
           platform({
             platform: 'win32',
-            suites: [{ project: 'core', files: 1, tests: 2, passed: 2, failed: [] }],
+            suites: [{ project: 'core', files: 1, tests: 2, passed: 2, failed: [], skipped: 0 }],
           }),
         ],
       }),
@@ -151,12 +151,57 @@ describe('negative controls: the report can withhold a pass', () => {
                 tests: 300,
                 passed: 299,
                 failed: ['core > a broken test'],
+                skipped: 0,
               },
             ],
           }),
         ],
       }),
     );
+    expect(report.verdict).toBe('NOT PASSED');
+  });
+
+  it('DOES count a platform that skipped tests but failed none', () => {
+    // Skipped is not failed. Two legitimately skipped tests -- a fixture that
+    // exists on one machine and not on a runner -- must not disqualify a whole
+    // platform. The first version of this gate required passed === total and so
+    // could never pass at all, which is a check wrong in the safe direction and
+    // still wrong.
+    const report = evaluateStage0(
+      healthyInput({
+        platforms: [
+          platform({ platform: 'linux' }),
+          platform({
+            platform: 'win32',
+            suites: [
+              { project: 'core', files: 10, tests: 300, passed: 298, failed: [], skipped: 2 },
+            ],
+          }),
+        ],
+      }),
+    );
+    expect(report.rows.find((row) => row.id === 'G4')?.status).toBe('pass');
+    expect(report.verdict).toBe('PASS');
+  });
+
+  it('does not count a platform that reached the floor only by skipping', () => {
+    // The other half: a platform must clear the floor on tests that actually
+    // PASSED, so discovering many tests and then declining to run them cannot
+    // satisfy a requirement.
+    const report = evaluateStage0(
+      healthyInput({
+        platforms: [
+          platform({ platform: 'linux' }),
+          platform({
+            platform: 'win32',
+            suites: [
+              { project: 'core', files: 10, tests: 300, passed: 10, failed: [], skipped: 290 },
+            ],
+          }),
+        ],
+      }),
+    );
+    expect(report.rows.find((row) => row.id === 'G4')?.status).toBe('unproven');
     expect(report.verdict).toBe('NOT PASSED');
   });
 
@@ -269,6 +314,7 @@ describe('the rendered report tells the reader what it rests on', () => {
                 tests: 300,
                 passed: 299,
                 failed: ['core > hashing > pins a digest'],
+                skipped: 0,
               },
             ],
           }),

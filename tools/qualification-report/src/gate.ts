@@ -28,7 +28,7 @@
  */
 
 import type { PlatformEvidence } from './evidence.ts';
-import { totalPassed, totalTests } from './evidence.ts';
+import { failures, totalPassed } from './evidence.ts';
 
 export type RowStatus = 'pass' | 'fail' | 'unproven';
 
@@ -76,12 +76,24 @@ function row(id: string, requirement: string, status: RowStatus, evidence: strin
   return { id, requirement, status, evidence };
 }
 
-/** Platforms whose record is present, non-vacuous, and internally consistent. */
+/**
+ * Platforms whose record is present, non-vacuous, and free of failures.
+ *
+ * Two conditions, and the difference between them matters:
+ *
+ *   enough tests actually PASSED -- counted on passes, not on the total, so a
+ *   platform that skipped almost everything cannot satisfy a requirement by
+ *   having discovered a lot of tests it then declined to run;
+ *
+ *   nothing FAILED. Skips are not failures. An earlier version required
+ *   `passed === total`, which treated two legitimately skipped tests as
+ *   disqualifying and made the report incapable of ever passing -- a check
+ *   wrong in the safe direction is still wrong.
+ */
 function usablePlatforms(input: GateInput): PlatformEvidence[] {
   return input.platforms.filter(
     (platform) =>
-      totalTests(platform) >= input.minimumTestsPerPlatform &&
-      totalPassed(platform) === totalTests(platform),
+      totalPassed(platform) >= input.minimumTestsPerPlatform && failures(platform).length === 0,
   );
 }
 

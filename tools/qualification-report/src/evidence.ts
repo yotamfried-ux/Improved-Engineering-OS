@@ -35,6 +35,18 @@ export interface SuiteResult {
    * names were nowhere at all.
    */
   readonly failed: readonly string[];
+  /**
+   * Tests the runner skipped, typically because their precondition is absent
+   * (a checkout that only exists on one machine, say).
+   *
+   * Counted separately and never folded into either side. A skipped test is
+   * unproven, not failed and not passed -- the same three-way distinction the
+   * claim model makes everywhere else. Conflating "skipped" with "failed" is
+   * what made the first version of this report unable to pass at all: it
+   * required `passed === tests`, and two legitimately skipped tests silently
+   * disqualified an entire platform.
+   */
+  readonly skipped: number;
 }
 
 export interface PlatformEvidence {
@@ -88,4 +100,13 @@ export function totalTests(evidence: PlatformEvidence): number {
 
 export function totalPassed(evidence: PlatformEvidence): number {
   return evidence.suites.reduce((sum, suite) => sum + suite.passed, 0);
+}
+
+export function totalSkipped(evidence: PlatformEvidence): number {
+  return evidence.suites.reduce((sum, suite) => sum + suite.skipped, 0);
+}
+
+/** Every test that actually failed on this platform, by full name. */
+export function failures(evidence: PlatformEvidence): string[] {
+  return evidence.suites.flatMap((suite) => [...suite.failed]);
 }
