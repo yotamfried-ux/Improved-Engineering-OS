@@ -197,7 +197,8 @@ export function buildRuntimeReport(observed: RuntimeObservations): DoctorReport 
       findings.push({
         name: 'bootstrap',
         level: 'unknown',
-        detail: 'target project has no .ieos/installation.json, so no generated block can be verified',
+        detail:
+          'target project has no .ieos/installation.json, so no generated block can be verified',
         blocking: false,
       });
   }
