@@ -52,6 +52,15 @@ export interface RuntimeObservations {
     | { readonly state: 'unreachable'; readonly endpoint: string; readonly reason: string };
   /** Whether `node:sqlite` could be loaded at all. */
   readonly sqliteAvailable: boolean;
+  /**
+   * D18.4 bootstrap integrity for the target project. An installation that
+   * exists but whose generated block no longer matches its recorded template is
+   * a fault: agents consume those files as live project instructions.
+   */
+  readonly bootstrap:
+    | { readonly state: 'uninstalled' }
+    | { readonly state: 'healthy'; readonly detail: string }
+    | { readonly state: 'drifted'; readonly detail: string };
 }
 
 export interface DoctorReport {
@@ -93,8 +102,6 @@ export function buildRuntimeReport(observed: RuntimeObservations): DoctorReport 
       blocking: false,
     });
   } else if (observed.indexPresentButUnusable) {
-    // An index that exists and cannot be read is a real fault: something built
-    // it, so something is wrong with what it built or with this runtime.
     findings.push({
       name: 'index',
       level: 'failed',
@@ -148,9 +155,6 @@ export function buildRuntimeReport(observed: RuntimeObservations): DoctorReport 
       });
       break;
     case 'unreachable':
-      // Not blocking by design: D23 says telemetry loss must never look like a
-      // measured run, and the runtime is required to work offline. An
-      // unreachable plane is a fact to report, not a reason to refuse to run.
       findings.push({
         name: 'ingest',
         level: 'failed',
@@ -167,6 +171,34 @@ export function buildRuntimeReport(observed: RuntimeObservations): DoctorReport 
         detail:
           'no Evidence Plane is configured. Expected at Stage 1: the installation credential ' +
           'and ingest arrive at Stage 2 (D22).',
+        blocking: false,
+      });
+  }
+
+  // --- generated bootstrap integrity (D18.4) -------------------------------
+  switch (observed.bootstrap.state) {
+    case 'healthy':
+      findings.push({
+        name: 'bootstrap',
+        level: 'ok',
+        detail: observed.bootstrap.detail,
+        blocking: false,
+      });
+      break;
+    case 'drifted':
+      findings.push({
+        name: 'bootstrap',
+        level: 'failed',
+        detail: `generated IEOS instructions drifted: ${observed.bootstrap.detail}`,
+        blocking: true,
+      });
+      break;
+    default:
+      findings.push({
+        name: 'bootstrap',
+        level: 'unknown',
+        detail:
+          'target project has no .ieos/installation.json, so no generated block can be verified',
         blocking: false,
       });
   }

@@ -16,6 +16,7 @@ import {
   classifySessionKind,
   mintId,
   readSessionMarkers,
+  sha256Text,
   type Clock,
   type RandomSource,
   type SessionKind,
@@ -24,6 +25,8 @@ import { IndexUnavailableError, SqliteKnowledgeIndex } from '@ieos/store-sqlite'
 import { buildRuntimeReport, formatRuntimeReport, type RuntimeObservations } from './doctor.ts';
 import { COMMANDS, describeCommand, isCommand, isImplemented } from './commands.ts';
 import {
+  BEGIN_MARKER,
+  END_MARKER,
   MCP_SERVER_ENTRY,
   mergeCodexToml,
   mergeMcpJson,
@@ -59,8 +62,61 @@ function usage(): string {
   lines.push('', 'options:');
   lines.push('  --eos-root <path>  the EOS source checkout (default: cwd)');
   lines.push('  --index <path>     the compiled knowledge index');
-  lines.push('  --project <path>   target project root, for `init`');
+  lines.push('  --project <path>   target project root, for `init` and project checks in `doctor`');
   return `${lines.join('\n')}\n`;
+}
+
+function markedBlock(text: string): string | null {
+  const begin = text.indexOf(BEGIN_MARKER);
+  const end = text.indexOf(END_MARKER);
+  if (begin === -1 || end === -1 || end < begin) return null;
+  return text.slice(begin, end + END_MARKER.length);
+}
+
+function observeBootstrap(projectRoot: string): RuntimeObservations['bootstrap'] {
+  const installationPath = join(projectRoot, '.ieos', 'installation.json');
+  if (!existsSync(installationPath)) return { state: 'uninstalled' };
+
+  let expectedHash: string;
+  try {
+    const installation = JSON.parse(readFileSync(installationPath, 'utf8')) as {
+      bootstrap_template_hash?: unknown;
+    };
+    if (
+      typeof installation.bootstrap_template_hash !== 'string' ||
+      !/^sha256:[0-9a-f]{64}$/u.test(installation.bootstrap_template_hash)
+    ) {
+      return {
+        state: 'drifted',
+        detail: '.ieos/installation.json has no valid bootstrap_template_hash',
+      };
+    }
+    expectedHash = installation.bootstrap_template_hash;
+  } catch {
+    return { state: 'drifted', detail: '.ieos/installation.json is not valid JSON' };
+  }
+
+  const problems: string[] = [];
+  for (const name of ['AGENTS.md', 'CLAUDE.md'] as const) {
+    const path = join(projectRoot, name);
+    if (!existsSync(path)) {
+      problems.push(`${name} is missing`);
+      continue;
+    }
+    const block = markedBlock(readFileSync(path, 'utf8'));
+    if (block === null) {
+      problems.push(`${name} is missing a complete IEOS marker block`);
+      continue;
+    }
+    const actualHash = sha256Text(block);
+    if (actualHash !== expectedHash) {
+      problems.push(`${name} IEOS block hash ${actualHash} != ${expectedHash}`);
+    }
+  }
+
+  return problems.length === 0
+    ? { state: 'healthy', detail: `AGENTS.md and CLAUDE.md match ${expectedHash}` }
+    : { state: 'drifted', detail: problems.join('; ') };
 }
 
 /** Observe the runtime. Every failure is caught and reported, never thrown. */
@@ -101,6 +157,8 @@ async function observeRuntime(): Promise<RuntimeObservations> {
       ? { state: 'unconfigured' }
       : { state: 'unreachable', endpoint, reason: 'ingest probing arrives at Stage 2 (D22)' };
 
+  const projectRoot = resolve(flag('--project') ?? process.cwd());
+
   return {
     indexDigest,
     indexProblem,
@@ -109,6 +167,7 @@ async function observeRuntime(): Promise<RuntimeObservations> {
     sessionKind,
     ingest,
     sqliteAvailable,
+    bootstrap: observeBootstrap(projectRoot),
   };
 }
 
@@ -116,6 +175,41 @@ async function runDoctor(): Promise<number> {
   const report = buildRuntimeReport(await observeRuntime());
   process.stdout.write(formatRuntimeReport(report));
   return report.ok ? 0 : 1;
+}
+
+function existingIdentity(
+  projectRoot: string,
+): { readonly installationId: string; readonly projectId: string } | null {
+  const installationPath = join(projectRoot, '.ieos', 'installation.json');
+  if (!existsSync(installationPath)) return null;
+
+  let installation: { installation_id?: unknown; project_id?: unknown };
+  try {
+    installation = JSON.parse(readFileSync(installationPath, 'utf8')) as {
+      installation_id?: unknown;
+      project_id?: unknown;
+    };
+  } catch {
+    throw new Error(
+      '.ieos/installation.json exists but is not valid JSON. Refusing to mint a new identity over an existing installation.',
+    );
+  }
+
+  if (
+    typeof installation.installation_id !== 'string' ||
+    !installation.installation_id.startsWith('inst_') ||
+    typeof installation.project_id !== 'string' ||
+    !installation.project_id.startsWith('proj_')
+  ) {
+    throw new Error(
+      '.ieos/installation.json exists but does not contain valid installation_id/project_id values. Refusing to replace an existing identity implicitly.',
+    );
+  }
+
+  return {
+    installationId: installation.installation_id,
+    projectId: installation.project_id,
+  };
 }
 
 async function runInit(): Promise<number> {
@@ -138,11 +232,22 @@ async function runInit(): Promise<number> {
     // rather than a digest it did not observe.
   }
 
+  let identity: { readonly installationId: string; readonly projectId: string };
+  try {
+    identity = existingIdentity(projectRoot) ?? {
+      installationId: mintId('inst', systemClock, systemRandom),
+      projectId: mintId('proj', systemClock, systemRandom),
+    };
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    return 2;
+  }
+
   const files = planFootprint({
     sourceCheckout: repoRoot,
     indexDigest,
-    installationId: mintId('inst', systemClock, systemRandom),
-    projectId: mintId('proj', systemClock, systemRandom),
+    installationId: identity.installationId,
+    projectId: identity.projectId,
     mcpCommand: process.execPath,
     // The project root travels in the arguments: the MCP server binds every
     // context snapshot to the project's HEAD commit, and it must not infer that
@@ -153,7 +258,17 @@ async function runInit(): Promise<number> {
   for (const file of files) {
     const target = join(projectRoot, file.path);
     mkdirSync(dirname(target), { recursive: true });
-    const existing = existsSync(target) ? readFileSync(target, 'utf8') : '';
+    const exists = existsSync(target);
+    const existing = exists ? readFileSync(target, 'utf8') : '';
+
+    // The profile belongs to the target project after first creation. It contains
+    // user-owned spec fields, so rerunning init must never reset those fields to
+    // the bootstrap defaults. If it is missing, recreate it with the preserved
+    // project identity.
+    if (file.path === '.ieos/profile.yaml' && exists) {
+      process.stdout.write('  kept   .ieos/profile.yaml\n');
+      continue;
+    }
 
     let content: string;
     switch (file.mode) {
