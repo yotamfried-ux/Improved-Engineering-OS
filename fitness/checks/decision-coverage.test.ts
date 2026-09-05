@@ -180,8 +180,45 @@ describe('the documents do not contradict each other', () => {
     expect(log).toMatch(/seeded/u);
   });
 
-  it('the plan does not claim a Stage 0 pass', () => {
-    expect(plan).not.toMatch(/Stage 0 (has )?passed/iu);
-    expect(plan).toMatch(/No Stage 0 report[\s\S]{0,200}claims a pass/u);
+  it('a Stage 0 pass is claimed only where a report actually says PASS', () => {
+    // Was "the plan does not claim a Stage 0 pass", which was right while no
+    // report existed. One does now, so the guard inverts like the others: the
+    // claim is permitted, and it has to rest on a harness-generated report in
+    // qualification/reports/ whose own text carries the verdict. A document
+    // may not promote itself.
+    const claimsPass = /Stage 0 (has )?passed|gate[^\n]*\bPASSED\b/iu.test(plan);
+    if (!claimsPass) return;
+
+    const reports = readdirSync(join(REPO_ROOT, 'qualification/reports')).filter((name) =>
+      /^stage-00-\d{4}-\d{2}-\d{2}\.md$/u.test(name),
+    );
+    expect(reports.length, 'the plan claims a Stage 0 pass with no dated report').toBeGreaterThan(
+      0,
+    );
+
+    const passing = reports.filter((name) =>
+      /\*\*Verdict: PASS\*\*/u.test(
+        readFileSync(join(REPO_ROOT, 'qualification/reports', name), 'utf8'),
+      ),
+    );
+    expect(passing.length, 'no report in qualification/reports/ records a PASS verdict').toBe(
+      reports.length,
+    );
+  });
+
+  it('every dated stage report states a verdict and the platforms it rests on', () => {
+    const dir = join(REPO_ROOT, 'qualification/reports');
+    const reports = readdirSync(dir).filter((name) => /^stage-\d{2}-\d{4}-/u.test(name));
+    for (const name of reports) {
+      const text = readFileSync(join(dir, name), 'utf8');
+      expect(text, `${name} states no verdict`).toMatch(/\*\*Verdict: (PASS|NOT PASSED)\*\*/u);
+      expect(text, `${name} names no platforms`).toMatch(/Platforms in evidence/u);
+      // A PASS that rests on one platform is the failure the whole gate exists
+      // to prevent, so it is asserted here too rather than only in the tool.
+      if (/\*\*Verdict: PASS\*\*/u.test(text)) {
+        expect(text, `${name} claims PASS without win32`).toMatch(/win32/u);
+        expect(text, `${name} claims PASS without linux`).toMatch(/linux/u);
+      }
+    }
   });
 });

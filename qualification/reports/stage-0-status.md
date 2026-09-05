@@ -1,9 +1,15 @@
 # Stage 0 status record — NOT a qualification report
 
+> **Superseded as the answer to "did Stage 0 pass?".** That question is now
+> answered by `stage-00-2026-09-05.md`, the harness-generated report, whose
+> verdict is PASS. This record remains as the working history of how the stage
+> was reached — including the defects found along the way — and it still does
+> not close anything.
+
 | Field              | Value                                                                                                                                                                                                       |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Artifact kind      | **Status record.** Per guide §4 a stage is closed only by a harness-generated report in this directory; this is not one, and it does not close Stage 0.                                                     |
-| Stage 0 gate       | **NOT PASSED**                                                                                                                                                                                              |
+| Stage 0 gate       | **PASSED** — closed by `stage-00-2026-09-05.md`, not by this record                                                                                                                                         |
 | Date               | 2026-09-05                                                                                                                                                                                                  |
 | Environment        | Linux x64, Node 24.20.0, pnpm 11.25.0                                                                                                                                                                       |
 | Platforms observed | **linux + win32.** Windows observed on GitHub Actions 2026-09-05 (`6d8c27b`). No macOS execution at any point.                                                                                              |

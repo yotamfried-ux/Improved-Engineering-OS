@@ -1,12 +1,12 @@
 # Stage 0 implementation plan — minimal contracts and harness foundation
 
-| Field               | Value                                                                                                                                                                         |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status              | Active. Stage 0 is in progress; **no Stage 0 gate has passed**.                                                                                                               |
-| Written             | 2026-09-04                                                                                                                                                                    |
-| Authority           | `docs/source/Improved-Engineering-OS_Architecture_Report.pdf` (constitution) > `docs/source/Improved-Engineering-OS-Build-Guide-FROZEN-v1.4.1.md` (frozen guide) > this plan. |
-| Supporting evidence | `docs/research/2026-09-04-research-inventory.md`. Evidence only; it does not close a decision.                                                                                |
-| Scope               | Stage 0 only. Stages 1+ are out of scope and must not be started here.                                                                                                        |
+| Field               | Value                                                                                                                                                                                     |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status              | **Stage 0 gate PASSED**, closed by `qualification/reports/stage-00-2026-09-05.md` (run 33954587246). This plan is now a record of how it was reached, not a statement of where it stands. |
+| Written             | 2026-09-04                                                                                                                                                                                |
+| Authority           | `docs/source/Improved-Engineering-OS_Architecture_Report.pdf` (constitution) > `docs/source/Improved-Engineering-OS-Build-Guide-FROZEN-v1.4.1.md` (frozen guide) > this plan.             |
+| Supporting evidence | `docs/research/2026-09-04-research-inventory.md`. Evidence only; it does not close a decision.                                                                                            |
+| Scope               | Stage 0 only. Stages 1+ are out of scope and must not be started here.                                                                                                                    |
 
 This plan answers seven questions before implementation, then fixes the Stage 0
 acceptance criteria. Decisions are recorded in
@@ -368,7 +368,15 @@ Measured on Linux x64, Node 24.20.0, pnpm 11.25.0:
   tests, SQLite qualification 20 tests, all passing; corpus guard 10 files /
   283 tests; D35 digest identical to Linux.
 
-**No Stage 0 report in `qualification/reports/` claims a pass.**
-`qualification/reports/stage-0-status.md` is a status record, not a
-qualification report; per guide §4 a stage is closed only by a harness-generated
-report, and the gate cannot be met while B1 and B7 remain PARTIAL.
+**Stage 0 is closed by `qualification/reports/stage-00-2026-09-05.md`**, the
+harness-generated report the guide names as the only artifact permitted to claim
+a gate passed. Its verdict is **PASS — 6 pass, 0 fail, 0 unproven**, generated
+from measurements taken on both required platforms in GitHub Actions run
+33954587246: linux 594 passed of 596 (2 skipped, 0 failed) and win32 290 of 290,
+with the D35 empty-snapshot digest `sha256:e8c450ac…ee6febbe` and the asset-tree
+digest `sha256:ebdf184a…6a55de` identical on each.
+
+This document does not close the stage and cannot. It is checked against that
+report rather than the other way round: a fitness test asserts that any claim of
+a Stage 0 pass here is backed by a dated report in `qualification/reports/` whose
+own text carries a PASS verdict and names both platforms.
