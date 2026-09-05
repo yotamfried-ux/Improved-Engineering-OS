@@ -29,14 +29,32 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
 
+/**
+ * The vitest projects the Windows smoke job runs.
+ *
+ * Exported in spirit: `fitness/checks/ci-workflows.test.ts` reads this list out
+ * of this file and compares it with `.github/workflows/ci.yml`, so a project
+ * added to one and not the other fails rather than silently narrowing whichever
+ * side was forgotten.
+ */
+export const WINDOWS_SMOKE_PROJECTS = [
+  'core',
+  'snapshot-emit',
+  'sqlite-qualification',
+  'releases',
+  'store-sqlite',
+  'mcp',
+  'cli',
+];
+
 /** Floors. Raise them when a whole area of the suite lands, never lower them to go green. */
 const MINIMUMS = {
-  fullTestFiles: 16,
-  fullTests: 450,
-  windowsTestFiles: 9,
-  windowsTests: 270,
-  cruisedModules: 45,
-  cruisedDependencies: 100,
+  fullTestFiles: 31,
+  fullTests: 725,
+  windowsTestFiles: 16,
+  windowsTests: 365,
+  cruisedModules: 60,
+  cruisedDependencies: 150,
 };
 
 function fail(message) {
@@ -147,7 +165,10 @@ if (args.includes('--dependency-graph')) {
   assertDependencyGraph();
 } else if (args.includes('--windows-smoke')) {
   assertTestCorpus({
-    projects: ['core', 'snapshot-emit', 'sqlite-qualification'],
+    // Must match the projects the Windows job actually runs, or this guards
+    // less than runs and the gap is invisible. `ci-workflows.test.ts` asserts
+    // the two lists agree.
+    projects: WINDOWS_SMOKE_PROJECTS,
     minFiles: MINIMUMS.windowsTestFiles,
     minTests: MINIMUMS.windowsTests,
     label: 'windows smoke',

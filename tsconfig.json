@@ -3,6 +3,13 @@
   "include": [
     "packages/*/src/**/*.ts",
     "packages/*/test/**/*.ts",
+    // The adapters nest one level deeper (`packages/adapters/{cli,mcp}`), and a
+    // single `*` matches one path segment -- so without these two lines that
+    // whole tree is silently outside the typecheck program. It was, until a
+    // runtime import error exposed it; `fitness/checks/typecheck-coverage.test.ts`
+    // now asserts every workspace package is covered.
+    "packages/*/*/src/**/*.ts",
+    "packages/*/*/test/**/*.ts",
     "tools/*/src/**/*.ts",
     "tools/*/test/**/*.ts",
     "fitness/**/*.ts",

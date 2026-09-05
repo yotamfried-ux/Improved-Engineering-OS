@@ -12,6 +12,7 @@ export * from './hashing.ts';
 export * from './ids.ts';
 export * from './replay.ts';
 export * from './champion.ts';
+export * from './session.ts';
 export * from './contracts/index.ts';
 export * from './schema-export.ts';
 export type * from './ports/index.ts';

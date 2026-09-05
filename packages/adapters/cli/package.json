@@ -1,0 +1,19 @@
+{
+  "name": "@ieos/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The `ieos` command: the Agent Contract over a CLI (guide section 5.6).",
+  "license": "UNLICENSED",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@ieos/core": "workspace:*",
+    "@ieos/store-sqlite": "workspace:*",
+    "yaml": "2.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3"
+  }
+}

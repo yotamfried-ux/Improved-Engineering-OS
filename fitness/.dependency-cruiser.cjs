@@ -78,6 +78,19 @@ module.exports = {
       to: { path: '^knowledge/' },
     },
     {
+      name: 'f2-adapters-import-only-their-composition-set',
+      comment:
+        'F2: the guide fixes what an adapter may compose -- core, resolver, telemetry, ' +
+        'assurance, store-sqlite, store-supabase. `releases` is deliberately not in that ' +
+        'set: an adapter that could reach the index builder could rebuild knowledge on ' +
+        'the fly, which is exactly the ownership F2 denies it.',
+      severity: 'error',
+      from: { path: '^packages/adapters' },
+      to: {
+        path: '^packages/(releases|curator|evidence-derivation)',
+      },
+    },
+    {
       name: 'f4-domain-imports-no-store',
       comment:
         'F4: resolver, assurance and evidence-derivation talk to ports, not to a storage ' +

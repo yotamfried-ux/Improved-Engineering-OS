@@ -61,9 +61,15 @@ describe('declared status matches what is actually on disk', () => {
     expect(rule('F5').status).toBe('not-yet-enforceable');
   });
 
-  it('F7 is not-yet-enforceable because no release resolution exists', () => {
-    expect(exists('packages/releases')).toBe(false);
-    expect(rule('F7').status).toBe('not-yet-enforceable');
+  it('F7 is partial: the prohibition is enforced, the resolution half has no subject', () => {
+    // Armed at Stage 1. `packages/releases` exists, so the scan has runtime
+    // code to inspect and does. What is still missing is the thing that
+    // *resolves* a release -- the launcher, at Stage 4 -- which is where the
+    // guide puts the unit test for the exact-version-plus-digest half.
+    expect(exists('packages/releases')).toBe(true);
+    expect(exists('packages/launcher')).toBe(false);
+    expect(rule('F7').status).toBe('partial');
+    expect(rule('F7').mechanisms).toContain('source-scan');
   });
 
   it('F11 is not-yet-enforceable because no resolver exists', () => {
@@ -76,15 +82,34 @@ describe('declared status matches what is actually on disk', () => {
     expect(rule('F10').status).toBe('partial');
   });
 
-  it('F2 is partial because no packages/adapters exists', () => {
-    expect(exists('packages/adapters')).toBe(false);
-    expect(rule('F2').status).toBe('partial');
+  it('F2 is enforced now that packages/adapters exists', () => {
+    // The rule was written before its subject and waited for it. Stage 1
+    // created the adapters, the dormancy guard fired, and the rule was armed
+    // rather than have its excuse rewritten.
+    expect(exists('packages/adapters')).toBe(true);
+    expect(rule('F2').status).toBe('enforced');
+    expect(rule('F2').mechanisms).toContain('source-scan');
+    expect(rule('F2').dormantWhileAbsent).toEqual([]);
   });
 
-  it('F4 is partial because no store-* package exists', () => {
-    expect(exists('packages/store-sqlite')).toBe(false);
-    expect(exists('packages/store-supabase')).toBe(false);
+  it('F4 is partial because its SUBJECTS do not exist, not because no store does', () => {
+    // The earlier wording tied F4 to the store side and fired the moment Stage 1
+    // created `packages/store-sqlite` -- correctly, because the stated reason had
+    // become false. But it was the wrong reason from the start: F4 constrains
+    // `resolver`, `assurance` and `evidence-derivation`, and it is those three
+    // that do not exist yet. A store existing is what gives the rule a real
+    // target; it is not what makes the rule enforceable.
+    for (const subject of [
+      'packages/resolver',
+      'packages/assurance',
+      'packages/evidence-derivation',
+    ]) {
+      expect(exists(subject), `${subject} exists, so F4 must be armed`).toBe(false);
+    }
     expect(rule('F4').status).toBe('partial');
+    // And the dependency rule now has something to point at, so the day a
+    // subject appears the rule bites rather than needing to be written first.
+    expect(exists('packages/store-sqlite')).toBe(true);
   });
 
   it('F1a, F1b, F3, F6, F9 and F12 are enforced, and their subject exists', () => {
@@ -156,7 +181,17 @@ describe('the allowlist and exclusions are real files with reasons', () => {
 
 describe('the honest summary', () => {
   it('reports the split rather than a single green tick', () => {
-    expect(summarize()).toBe('6 enforced, 4 partial, 3 not yet enforceable');
+    // Pinned deliberately, as a tripwire rather than a fact worth restating.
+    // The mix only moves when a rule's enforceability genuinely changes, and
+    // that should be a decision someone makes and records -- not something that
+    // drifts because an assertion was written to accept whatever it found.
+    //
+    // Stage 0 closed at "6 enforced, 4 partial, 3 not yet enforceable".
+    // Stage 1 moved two, each when its subject appeared and its dormancy guard
+    // fired: F7 to partial (packages/releases), F2 to enforced
+    // (packages/adapters). Stage 0's own documents still record the Stage 0
+    // mix, correctly: they are history, not a claim about now.
+    expect(summarize()).toBe('7 enforced, 4 partial, 2 not yet enforceable');
   });
 
   it('does not claim all thirteen rule entries are green', () => {

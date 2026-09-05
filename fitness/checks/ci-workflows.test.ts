@@ -157,6 +157,33 @@ describe('the workflows pin the same toolchain the repository does', () => {
   });
 });
 
+describe('the Windows vacuity guard covers what the Windows job runs', () => {
+  it('the two project lists agree', () => {
+    // The drift this catches, because it already happened once: the Windows job
+    // gained two projects and the guard's own hardcoded list did not, so the
+    // guard was asserting a floor over less than the job ran. A guard that
+    // watches a subset of the thing it guards is worse than none, because the
+    // gap is invisible from either side.
+    const guard = readFileSync(join(REPO_ROOT, 'scripts/assert-corpus.mjs'), 'utf8');
+    const declared = /WINDOWS_SMOKE_PROJECTS = \[([^\]]*)\]/u.exec(guard)?.[1] ?? '';
+    const guardProjects = [...declared.matchAll(/'([^']+)'/gu)].map((m) => m[1]).sort();
+    expect(guardProjects.length, 'no projects parsed out of assert-corpus.mjs').toBeGreaterThan(0);
+
+    const windowsJob = ci.jobs['windows-smoke'];
+    const jobProjects = new Set<string>();
+    for (const step of windowsJob?.steps ?? []) {
+      for (const match of (step.run ?? '').matchAll(/--project\s+([a-z-]+)/gu)) {
+        jobProjects.add(match[1] as string);
+      }
+      // The evidence-collection step passes them as one comma-separated flag.
+      const csv = /--projects\s+([a-z,-]+)/u.exec(step.run ?? '')?.[1];
+      if (csv !== undefined) for (const name of csv.split(',')) jobProjects.add(name);
+    }
+
+    expect([...jobProjects].sort()).toEqual(guardProjects);
+  });
+});
+
 describe('CI steps do not destroy the evidence the suite reads', () => {
   it('never runs sqlite:qualify without redirecting its output', () => {
     // What this prevents, because it already happened: the Windows job ran

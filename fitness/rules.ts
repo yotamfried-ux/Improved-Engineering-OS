@@ -65,10 +65,18 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
   {
     id: 'F2',
     invariant: 'adapters never own knowledge semantics',
-    status: 'partial',
-    mechanisms: ['dependency-graph'],
-    note: 'No packages/adapters/ exists yet. The rule is armed for the commit that creates one.',
-    dormantWhileAbsent: ['packages/adapters'],
+    status: 'enforced',
+    mechanisms: ['dependency-graph', 'source-scan'],
+    note:
+      'Armed at Stage 1, by the commit that created packages/adapters -- which is what the rule ' +
+      'was waiting for. Both halves are now checked against a real subject: dependency-cruiser ' +
+      'forbids importing knowledge/ or reaching past the composition set the guide fixes (core, ' +
+      'resolver, telemetry, assurance, store-*), and a source scan catches what a module graph ' +
+      'cannot see -- an adapter that opens the knowledge tree as files imports nothing at all -- ' +
+      'plus any adapter that defines ranking rather than passing through a score the score view ' +
+      'produced. Controls prove both scans fire, and that they do not fire on an adapter merely ' +
+      'reporting a score.',
+    dormantWhileAbsent: [],
   },
   {
     id: 'F3',
@@ -109,12 +117,16 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
     id: 'F7',
     invariant:
       'runtime never resolves "latest"; release resolution needs an exact version + digest',
-    status: 'not-yet-enforceable',
-    mechanisms: ['none'],
+    status: 'partial',
+    mechanisms: ['source-scan'],
     note:
-      'Release resolution is Stage 4. The dependency half of the same idea is enforced today by ' +
-      'the exact-pin check in checks/dependencies.test.ts.',
-    dormantWhileAbsent: ['packages/releases'],
+      'Armed at Stage 1, when packages/releases gave the rule a subject. The prohibition half is ' +
+      'enforced now: a source scan over every runtime package rejects "latest", @latest, dist-tags ' +
+      'and releases/latest, with controls proving it fires. The positive half -- release resolution ' +
+      'requiring an exact version + digest -- has nothing to check until the launcher performs that ' +
+      'resolution at Stage 4, which is where the guide itself puts the test. The dependency half of ' +
+      'the same idea is enforced by the exact-pin check in checks/dependencies.test.ts.',
+    dormantWhileAbsent: ['packages/launcher'],
   },
   {
     id: 'F8',

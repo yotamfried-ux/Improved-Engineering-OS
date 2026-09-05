@@ -19,3 +19,10 @@ qualification/reports/stage-00-report.md
 # committed: the committed record is the two-candidate one, and the durable
 # win32 result is the provenanced transcript beside it.
 qualification/evidence/sqlite-qualification.win32.json
+
+# The compiled knowledge index is a build artifact: `pnpm build:index` produces
+# it from `knowledge/`, and committing it would create a second source of truth
+# that could disagree with the tree it was built from.
+knowledge.sqlite
+knowledge.sqlite-wal
+knowledge.sqlite-shm

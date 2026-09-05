@@ -1,0 +1,17 @@
+{
+  "name": "@ieos/store-sqlite",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Implements the KnowledgeIndex read port over the compiled SQLite index (D20.2).",
+  "license": "UNLICENSED",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@ieos/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3"
+  }
+}

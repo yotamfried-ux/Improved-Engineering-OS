@@ -17,6 +17,7 @@
     }
   },
   "scripts": {
+    "build:index": "node packages/releases/src/build-index-cli.ts",
     "capabilities:check": "node tools/capability-seed/src/cli.ts --check",
     "capabilities:emit": "node tools/capability-seed/src/cli.ts",
     "check": "pnpm ieos-doctor && pnpm typecheck && pnpm contracts:check && pnpm format:check && pnpm test && pnpm guard:corpus",
@@ -26,13 +27,16 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "guard:corpus": "node scripts/assert-corpus.mjs && node scripts/assert-corpus.mjs --dependency-graph",
+    "ieos": "node packages/adapters/cli/src/cli.ts",
     "ieos-doctor": "node tools/harness/src/doctor-cli.ts",
+    "ieos-mcp": "node packages/adapters/mcp/src/server-cli.ts",
+    "report:collect": "node tools/qualification-report/src/cli.ts --collect",
+    "report:stage0": "node tools/qualification-report/src/cli.ts --report",
+    "report:stage1": "node tools/qualification-report/src/cli.ts --report --stage 1",
     "snapshot:emit": "node tools/snapshot-emit/src/cli.ts",
     "sqlite:qualify": "node tools/sqlite-qualification/src/cli.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
-    "report:collect": "node tools/qualification-report/src/cli.ts --collect",
-    "report:stage0": "node tools/qualification-report/src/cli.ts --report"
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "24.13.3",

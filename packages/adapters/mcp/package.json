@@ -1,0 +1,20 @@
+{
+  "name": "@ieos/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Stateless MCP server exposing the Agent Contract (MCP 2026-07-28).",
+  "license": "UNLICENSED",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@ieos/core": "workspace:*",
+    "@ieos/store-sqlite": "workspace:*",
+    "@modelcontextprotocol/server": "2.0.0",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3"
+  }
+}

@@ -74,6 +74,7 @@ jobs:
         run: |
           set -euo pipefail
           pnpm report:collect qualification/evidence/platforms/linux.json \
+            --stage 1 \
             --commit "${{ github.sha }}" \
             --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
@@ -150,6 +151,23 @@ jobs:
         # The half of the seven recorded checks that names Windows explicitly.
         run: pnpm vitest run --project sqlite-qualification
 
+      - name: Knowledge index build and read on win32
+        # Both packages drive node:sqlite and FTS5 through real files, and the
+        # index build must be byte-for-byte deterministic across platforms (F8).
+        # This is precisely the class of defect the Windows job exists to catch.
+        run: pnpm vitest run --project releases --project store-sqlite
+
+      - name: The ieos CLI on win32
+        # `ieos doctor` is a Stage 1 gate row, and the doctor's session-kind and
+        # path handling are exactly what differs between platforms.
+        run: pnpm vitest run --project cli
+
+      - name: MCP 2026-07-28 conformance smoke on win32
+        # The protocol layer has no filesystem in it, but the runtime that
+        # serves it does run here, and Stage 0 already caught two defects on
+        # win32 that Linux structurally cannot show.
+        run: pnpm vitest run --project mcp
+
       - name: Guard against a vacuous test run
         shell: bash
         run: node scripts/assert-corpus.mjs --windows-smoke
@@ -179,7 +197,8 @@ jobs:
         run: |
           set -euo pipefail
           pnpm report:collect qualification/evidence/platforms/win32.json \
-            --projects core,snapshot-emit,sqlite-qualification \
+            --stage 1 \
+            --projects core,snapshot-emit,sqlite-qualification,releases,store-sqlite,mcp,cli \
             --commit "${{ github.sha }}" \
             --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           echo '--- win32 platform record (verbatim) ---'
@@ -216,7 +235,7 @@ jobs:
     # platforms have reported, because a report about two platforms cannot
     # honestly be produced by one. It fails the build when the verdict is not
     # PASS, so "CI green" and "the stage closed" cannot drift apart.
-    name: stage 0 qualification report
+    name: qualification reports
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: [linux, windows-smoke]
@@ -258,9 +277,22 @@ jobs:
             --evidence-dir platforms \
             --out qualification/reports/stage-00-report.md
 
+      - name: Generate the Stage 1 qualification report
+        # Runs even when Stage 0's step failed, because a Stage 1 report that
+        # says NOT PASSED is the artifact this repository wants either way. The
+        # job still fails: the exit code carries the verdict.
+        if: always()
+        run: |
+          set -euo pipefail
+          pnpm --silent report:stage1 \
+            --evidence-dir platforms \
+            --out qualification/reports/stage-01-report.md
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: stage-0-report
-          path: qualification/reports/stage-00-report.md
+          name: stage-reports
+          path: |
+            qualification/reports/stage-00-report.md
+            qualification/reports/stage-01-report.md
           if-no-files-found: error

@@ -60,6 +60,38 @@ export default defineConfig({
       },
       {
         test: {
+          name: 'cli',
+          root: './packages/adapters/cli',
+          include: ['test/**/*.test.ts'],
+          environment: 'node',
+        },
+      },
+      {
+        test: {
+          name: 'mcp',
+          root: './packages/adapters/mcp',
+          include: ['test/**/*.test.ts'],
+          environment: 'node',
+        },
+      },
+      {
+        test: {
+          name: 'releases',
+          root: './packages/releases',
+          include: ['test/**/*.test.ts'],
+          environment: 'node',
+        },
+      },
+      {
+        test: {
+          name: 'store-sqlite',
+          root: './packages/store-sqlite',
+          include: ['test/**/*.test.ts'],
+          environment: 'node',
+        },
+      },
+      {
+        test: {
           name: 'qualification-report',
           root: './tools/qualification-report',
           include: ['test/**/*.test.ts'],

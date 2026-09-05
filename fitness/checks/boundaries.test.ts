@@ -276,3 +276,133 @@ describe('F12 -- one canonical hashing site', () => {
     expect(exists('supabase/functions/ingest')).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// F7 -- runtime never resolves "latest"
+// ---------------------------------------------------------------------------
+
+describe('F7: runtime never resolves a floating version', () => {
+  // Armed at Stage 1, when `packages/releases` appeared and made the rule have
+  // a subject. The guide puts the *release resolution* half at Stage 4 ("unit
+  // test (from Stage 4)"), and the launcher that performs it does not exist
+  // yet -- so this is the prohibition half, enforced now over every runtime
+  // package, rather than the whole rule.
+  //
+  // What it forbids: asking a registry, a release feed or a tag for whatever is
+  // newest. A pinned release is only pinned if nothing in the path to it can
+  // quietly resolve to something else.
+  const FLOATING_VERSION =
+    /(["'`]latest["'`]|@latest\b|dist-tags|\btag:\s*["'`]?latest|releases\/latest)/iu;
+
+  const runtimeSources = stripAllComments(
+    readSourceFiles(['packages'], { extensions: ['.ts', '.mts', '.cts', '.json'] }),
+  );
+
+  it('has runtime sources to scan, so the rule is not vacuous', () => {
+    expect(runtimeSources.length).toBeGreaterThan(10);
+  });
+
+  it('no runtime package resolves "latest"', () => {
+    const violations = findMatches(runtimeSources, FLOATING_VERSION);
+    expect(
+      violations,
+      violations.map((v) => `${v.path}:${String(v.line)} ${v.excerpt}`).join('\n'),
+    ).toEqual([]);
+  });
+
+  it('the scan can actually fire (control)', () => {
+    // Without these, a regex that matched nothing would look like compliance.
+    expect(
+      findMatches(known('const url = `${base}/releases/latest`;'), FLOATING_VERSION),
+    ).toHaveLength(1);
+    expect(
+      findMatches(known("await fetch(registry + '/dist-tags');"), FLOATING_VERSION),
+    ).toHaveLength(1);
+    expect(findMatches(known("install('@ieos/launcher@latest');"), FLOATING_VERSION)).toHaveLength(
+      1,
+    );
+    expect(findMatches(known("const version = 'latest';"), FLOATING_VERSION)).toHaveLength(1);
+  });
+
+  it('does not fire on an exact version, which is the whole point', () => {
+    expect(findMatches(known("const version = '1.4.1';"), FLOATING_VERSION)).toEqual([]);
+    expect(findMatches(known("install('@ieos/launcher@1.4.1');"), FLOATING_VERSION)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// F2 -- adapters own no knowledge semantics
+// ---------------------------------------------------------------------------
+
+describe('F2: adapters deliver the contract, they do not own knowledge', () => {
+  // Armed at Stage 1, when `packages/adapters` first existed. The
+  // dependency-cruiser half forbids importing `knowledge/` or reaching past the
+  // composition set the guide fixes. This is the half a module graph cannot
+  // see: an adapter that opens the knowledge tree as *files* imports nothing at
+  // all, and would slip straight past a dependency rule.
+  const READS_KNOWLEDGE_TREE = /['"`][^'"`]*\bknowledge\/(assets|solution-sets|controls)\b/u;
+
+  // Defining ranking is the other half of "owns knowledge semantics". D20.3
+  // puts deterministic ranking in `packages/resolver`; an adapter that scored
+  // or re-sorted results would be deciding what is best, which is the decision
+  // the resolver and the Effective Score View exist to make and to record.
+  //
+  // Matched on function *shape*, not on any binding whose name contains the
+  // word. An adapter legitimately holds the score snapshot it read
+  // (`const scoreSnapshot = await index.getScoreSnapshot()`); a rule that fired
+  // on that would make reading a snapshot impossible and would be weakened the
+  // first time an adapter needed to. Defining a function is the thing F2 forbids.
+  const DEFINES_RANKING =
+    /\bfunction\s+\w*(rank|score|bm25|relevance)\w*\s*[(<]|\bconst\s+\w*(rank|score|bm25|relevance)\w*\s*=\s*(async\s+)?(\(|function\b|<)/iu;
+
+  const adapterFiles = stripAllComments(readSourceFiles(['packages/adapters']));
+
+  it('has adapter sources to scan, so the rule is not vacuous', () => {
+    expect(adapterFiles.length).toBeGreaterThan(2);
+  });
+
+  it('no adapter reads the knowledge tree directly', () => {
+    const violations = findMatches(adapterFiles, READS_KNOWLEDGE_TREE);
+    expect(
+      violations,
+      violations.map((v) => `${v.path}:${String(v.line)} ${v.excerpt}`).join('\n'),
+    ).toEqual([]);
+  });
+
+  it('no adapter defines ranking', () => {
+    const violations = findMatches(adapterFiles, DEFINES_RANKING);
+    expect(
+      violations,
+      violations.map((v) => `${v.path}:${String(v.line)} ${v.excerpt}`).join('\n'),
+    ).toEqual([]);
+  });
+
+  it('both scans can actually fire (control)', () => {
+    expect(
+      findMatches(known("readFileSync('knowledge/assets/x/asset.yaml');"), READS_KNOWLEDGE_TREE),
+    ).toHaveLength(1);
+    expect(
+      findMatches(known("const p = join(root, 'knowledge/solution-sets');"), READS_KNOWLEDGE_TREE),
+    ).toHaveLength(1);
+    expect(
+      findMatches(known('function rankResults(items) { return items; }'), DEFINES_RANKING),
+    ).toHaveLength(1);
+    expect(findMatches(known('const computeScore = (a) => a.n;'), DEFINES_RANKING)).toHaveLength(1);
+  });
+
+  it('does not fire on an adapter holding a score it was given', () => {
+    // Reading the release's snapshot is what an adapter is for. The name
+    // contains "score"; the code decides nothing.
+    expect(
+      findMatches(known('const scoreSnapshot = await index.getScoreSnapshot();'), DEFINES_RANKING),
+    ).toEqual([]);
+  });
+
+  it('does not fire on an adapter merely passing a score through', () => {
+    // Reporting a score the score view produced is the adapter's job; deciding
+    // one is not. A rule that could not tell them apart would be unusable.
+    expect(
+      findMatches(known('items.map((i) => ({ id: i.id, score: i.score }));'), DEFINES_RANKING),
+    ).toEqual([]);
+  });
+});

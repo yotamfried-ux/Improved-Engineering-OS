@@ -9,7 +9,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@ieos/core": "workspace:*"
+    "@ieos/core": "workspace:*",
+    "@ieos/releases": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "24.13.3"

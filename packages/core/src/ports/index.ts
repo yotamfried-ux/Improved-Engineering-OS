@@ -62,8 +62,46 @@ export interface KnowledgeIndex {
    * highest-scoring asset for a null champion (F11).
    */
   getScoreSnapshot(): Promise<ScoreSnapshot>;
+  /**
+   * Full-text search over the compiled index (D20.2: FTS5 over title, summary,
+   * tags and body).
+   *
+   * Returns matches in a deterministic order with their raw relevance rank. It
+   * deliberately does NOT rank in the D20.3 sense: capability/problem matching,
+   * Project Fit filtering, Champion selection and score tie-breaks belong to
+   * `packages/resolver` at Stage 2. Keeping retrieval and ranking apart is what
+   * lets the resolver be tested without a database and the index be tested
+   * without a ranking policy.
+   */
+  searchAssets(query: string, limit: number): Promise<readonly AssetSearchHit[]>;
+
+  /**
+   * The asset's body text (D20.1: `inspect` returns metadata + body, `resolve`
+   * returns metadata + `summary` only).
+   *
+   * Separate from `getAsset` rather than a field on the record, because the two
+   * have different costs and different callers: `resolve` must never pay for a
+   * body it is contractually forbidden to return.
+   */
+  getAssetBody(id: string): Promise<string | undefined>;
+
+  /** Every solution set in the index, ordered by id. */
+  listSolutionSets(): Promise<readonly SolutionSetRecord[]>;
+
   /** Digest of the compiled index, part of `context_snapshot_id`. */
   indexDigest(): Promise<string>;
+}
+
+/**
+ * One full-text match.
+ *
+ * `rank` is the index's own relevance number, carried through unchanged and
+ * explicitly not a score: D24 scores come from the Effective Score View, and
+ * conflating the two is how a retrieval detail would quietly become evidence.
+ */
+export interface AssetSearchHit {
+  readonly asset: AssetRecord;
+  readonly rank: number;
 }
 
 // ---------------------------------------------------------------------------
