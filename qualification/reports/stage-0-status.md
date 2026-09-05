@@ -1,13 +1,13 @@
 # Stage 0 status record — NOT a qualification report
 
-| Field              | Value                                                                                                                                                                   |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Artifact kind      | **Status record.** Per guide §4 a stage is closed only by a harness-generated report in this directory; this is not one, and it does not close Stage 0.                 |
-| Stage 0 gate       | **NOT PASSED**                                                                                                                                                          |
-| Date               | 2026-09-05                                                                                                                                                              |
-| Environment        | Linux x64, Node 24.20.0, pnpm 11.25.0                                                                                                                                   |
-| Platforms observed | **linux only.** One Windows job has started; none has completed. No macOS execution at any point.                                                                       |
-| Remote CI          | **First run 2026-09-05 (PR #1, `368467b`).** `linux` and `fitness` passed. `windows-smoke` failed at its first step, before any contract was exercised — see section C. |
+| Field              | Value                                                                                                                                                                                                       |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Artifact kind      | **Status record.** Per guide §4 a stage is closed only by a harness-generated report in this directory; this is not one, and it does not close Stage 0.                                                     |
+| Stage 0 gate       | **NOT PASSED**                                                                                                                                                                                              |
+| Date               | 2026-09-05                                                                                                                                                                                                  |
+| Environment        | Linux x64, Node 24.20.0, pnpm 11.25.0                                                                                                                                                                       |
+| Platforms observed | **linux + win32.** Windows observed on GitHub Actions 2026-09-05 (`6d8c27b`). No macOS execution at any point.                                                                                              |
+| Remote CI          | **Green on `6d8c27b` (PR #1):** `linux (primary)`, `fitness`, `windows smoke (D35 cross-platform digest)` all pass. The first attempt (`368467b`) failed on Windows at the toolchain doctor; see section F. |
 
 ## Status vocabulary
 
@@ -51,13 +51,13 @@ integration where the criterion requires a live observation.
 
 | #   | Criterion                                                | Status      | Evidence and what is missing                                                                                                                                                                                                                                                                                                                                                                                                  |
 | --- | -------------------------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B1  | Linux CI + Windows smoke; D35 cross-platform digest gate | **PARTIAL** | Workflows written and structurally tested; YAML parses; every referenced script executed locally; the vacuity guards were negative-controlled (exit 1 on an unreachable floor). **No Actions run has ever happened.** The Windows half of the D35 gate is **UNPROVEN**.                                                                                                                                                       |
+| B1  | Linux CI + Windows smoke; D35 cross-platform digest gate | **PASS**    | Observed on GitHub Actions 2026-09-05 (`6d8c27b`). The digest comparison — the gate itself, not the green tick — printed `linux: sha256:e8c450ac…ee6febbe`, `windows: sha256:e8c450ac…ee6febbe`, identical, matching the pinned fixture. The Windows corpus guard ran too (10 files, 283 tests), so the comparison was not made over an empty suite.                                                                          |
 | B2  | Agent-driver and grader surface                          | **PARTIAL** | Graders (deterministic, trace, model port), the grading hierarchy, grader-validity controls, budgets, collection and trial reports: implemented, 65 harness tests. `AgentDriver` port + deterministic fake. **No live agent trial has run** — `codex` is not installed, and a real trial is Stage 3 work by the guide's own sequencing (T-07/Q-09 put the second agent at Stage 8). Live external qualification **UNPROVEN**. |
 | B3  | ADR coverage for D19–D36                                 | **PASS**    | `ADR-0006`–`ADR-0009` group all eighteen; `decision-coverage.test.ts` asserts coverage and cross-document consistency.                                                                                                                                                                                                                                                                                                        |
 | B4  | Capability seed (D28)                                    | **PASS**    | Previously BLOCKED; **that was stale**. Seeded from `yotamfried-ux/Engineering-OS@4d51784`, 28 ids verbatim, 7 kinds, enforcement dropped and named, source digest recorded; regeneration byte-identical against the real checkout.                                                                                                                                                                                           |
 | B5  | D32 replay test                                          | **PASS**    | Replay invariant (identical `evidence_id` **and** identical payload after stripping `derived_at`) over a synthetic derivation, with four negative controls and supersession validation.                                                                                                                                                                                                                                       |
 | B6  | Deterministic `UNPROVEN` snapshot emission               | **PASS**    | `tools/snapshot-emit`; digest pinned as the cross-platform fixture; claim-status model makes "proven on fewer platforms than required" unrepresentable.                                                                                                                                                                                                                                                                       |
-| B7  | SQLite binding qualification                             | **PARTIAL** | All seven recorded checks executed against **both** candidates on Linux; all seven pass for each. `better-sqlite3@13.0.3` engine measured **through the binding** (3.53.4), never substituted from Node's. **No binding selected** — check 3 names Linux _and_ Windows; win32 unobserved.                                                                                                                                     |
+| B7  | SQLite binding qualification                             | **PARTIAL** | All seven checks pass for both candidates on Linux; `node:sqlite` now also passes all seven on **win32** (2026-09-05). `better-sqlite3`'s win32 coverage stays unobserved — it is deliberately not a dependency, so CI cannot load it. **No binding selected**, and that is now an owner decision rather than a missing measurement (decision log §4c).                                                                       |
 | B8  | Owner confirmation of C-1 and C-6                        | **PASS**    | Both approved 2026-09-04. C-1 stays recorded as an _approved deviation_, not as F1's original wording being met.                                                                                                                                                                                                                                                                                                              |
 
 ## C. Why the gate has not passed
@@ -66,54 +66,53 @@ The documented Stage 0 exit gate requires, among other things, _"F1–F12 green 
 Linux + Windows smoke"_ and _"the D35 cross-platform hashing fixture yields
 identical digests on both"_. Neither can be claimed:
 
-1. **The D35 cross-platform comparison has still never executed.** The
-   Windows job runs it as its final step and has never reached it. The first
-   run (2026-09-05) stopped at the toolchain doctor: the doctor's pnpm probe
-   used `execFile('pnpm', …)`, which cannot resolve the `pnpm.CMD` shim on
-   Windows, so it reported pnpm missing on a runner that had just invoked it
-   through pnpm. The defect was in the check, not in the toolchain and not in
-   the hashing contract. It is fixed; until the re-run completes, the Windows
-   half of the gate stays **UNPROVEN**, which is not the same as passing and
-   not the same as failing.
-2. **Linux CI has passed** (`linux` and `fitness` jobs, 2026-09-05). That
-   closes the Linux half of B1 and nothing more: a green Linux job is exactly
-   the observation the cross-platform gate exists to distrust on its own.
-3. Four of F1–F12 are `partial` and three are `not-yet-enforceable`, because
-   their subjects (`packages/launcher`, `packages/releases`, `packages/resolver`,
-   `simulations/`) do not exist at Stage 0. That is expected and honest, but it
-   is not "F1–F12 green".
+The D35 half of the gate **is** now met: the cross-platform digest comparison
+executed on 2026-09-05 and the two digests are identical. What remains:
+
+1. **F1–F12 are not green, and cannot be at Stage 0.** Four are `partial` and
+   three are `not-yet-enforceable`, because their subjects
+   (`packages/launcher`, `packages/releases`, `packages/resolver`,
+   `simulations/`) do not exist yet. That is expected and honest, but the gate
+   says "F1–F12 green on Linux + Windows smoke", and 6 of 13 enforced is not
+   that.
+2. **O-4 is open.** No SQLite binding is selected. `node:sqlite` has complete
+   observed coverage, `better-sqlite3` does not and cannot get it while it is
+   not a dependency; choosing between them deviates from D18.5 either in fact
+   or in evidence, so it is put to the owner (decision log §4c) rather than
+   settled here. B7 stays PARTIAL until then.
+3. **No harness-generated qualification report exists.** Per guide §4 that is
+   what closes a stage, and this document is not one.
 
 ## D. Minimum remaining actions to pass the gate
 
-Exactly one external observation is missing, and it closes two criteria at once:
+The external observation that blocked B1 and B7 has been made. What is left is
+one owner decision and one thing that Stage 0 cannot produce:
 
-1. **Push the branch and let `.github/workflows/ci.yml` run.**
-   - the `linux` job must go green;
-   - the `windows-smoke` job must go green, which requires its digest comparison
-     against the Linux artifact to match — that _is_ the D35 cross-platform gate
-     (closes B1);
-   - its `sqlite-qualification` step supplies check 3 on win32 for both
-     candidates (closes the platform half of B7).
-2. **Record the Windows result**: re-run `pnpm sqlite:qualify` on the Windows
-   runner and commit the evidence, then select a binding — or record why neither
-   qualifies. Only then does O-4 close.
+1. **Answer O-4** (decision log §4c): select `node:sqlite`, keep
+   `better-sqlite3`, or add `better-sqlite3` as a dependency so CI can qualify
+   it. Only then does B7 close. Nothing is blocked while it is open — no code
+   depends on either binding yet.
+2. **F1–F12 cannot go green at Stage 0**, because seven of the thirteen have no
+   subject to inspect until later stages create it. Closing the gate as written
+   requires either those stages or an owner-approved restatement of the gate.
 3. **B2's remainder is not a Stage 0 action.** A real agent trial is Stage 3.
 
-Nothing else is outstanding. B3–B6 and B8 are closed on observed evidence.
+B1 and B3–B6 and B8 are closed on observed evidence.
 
 ## E. Measured counts (guarding against vacuous success)
 
-| Measure                        | Value                                              |
-| ------------------------------ | -------------------------------------------------- |
-| Test files / tests             | 21 / 536, all passing                              |
-| Repeat run                     | identical results across two consecutive full runs |
-| Modules / dependencies cruised | 75 / 210, 0 violations                             |
-| RFC 8785 conformance vectors   | 6/6                                                |
-| Capabilities seeded            | 28 ids, 7 kinds                                    |
-| SQLite checks executed         | 7 per candidate × 2 candidates, on linux           |
-| Fitness rules                  | 6 enforced, 4 partial, 3 not yet enforceable       |
-| Windows observations           | **0 completed** (1 job started, failed at setup)   |
-| GitHub Actions runs            | linux **pass**, fitness **pass**, windows **fail** |
+| Measure                        | Value                                                   |
+| ------------------------------ | ------------------------------------------------------- |
+| Test files / tests             | 21 / 536, all passing                                   |
+| Repeat run                     | identical results across two consecutive full runs      |
+| Modules / dependencies cruised | 75 / 210, 0 violations                                  |
+| RFC 8785 conformance vectors   | 6/6                                                     |
+| Capabilities seeded            | 28 ids, 7 kinds                                         |
+| SQLite checks executed         | 7 × 2 candidates on linux; 7 for `node:sqlite` on win32 |
+| Fitness rules                  | 6 enforced, 4 partial, 3 not yet enforceable            |
+| D35 cross-platform digest      | **identical** on linux and win32                        |
+| Windows observations           | 283 tests on windows-latest, all passing                |
+| GitHub Actions runs            | linux **pass**, fitness **pass**, windows **pass**      |
 
 ## F. Defects found and fixed during this work
 

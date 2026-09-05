@@ -141,6 +141,20 @@ jobs:
         shell: bash
         run: node scripts/assert-corpus.mjs --windows-smoke
 
+      # The suite above proves the checks pass here; this records *what was
+      # measured*, per check, so win32 coverage is evidence in the repository
+      # rather than a green tick in a log that expires. `better-sqlite3` is
+      # deliberately not a dependency, so it is not resolvable here and reports
+      # itself as not executed rather than being silently omitted.
+      - name: Record the SQLite qualification evidence for win32
+        run: pnpm sqlite:qualify
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-sqlite-qualification
+          path: qualification/evidence/sqlite-qualification.json
+          if-no-files-found: error
+
       - uses: actions/download-artifact@v4
         with:
           name: linux-digest

@@ -3,14 +3,13 @@
  *
  * These tests prove the workflows are present and say what they must say. They
  * prove NOTHING about whether GitHub has ever run them: configuration presence
- * is not evidence of execution, and the Windows half of the D35 cross-platform
- * gate stays UNPROVEN until a real Windows runner reports.
- *
- * That distinction is the whole point of the criterion, so it is asserted here
- * rather than only written in a document.
+ * is not evidence of execution. A real Windows runner reported on 2026-09-05,
+ * so the D35 cross-platform gate is no longer unproven -- but that fact comes
+ * from the run, never from this file, and the last block below exists to keep
+ * that distinction enforced rather than merely written down.
  */
 
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
@@ -158,25 +157,63 @@ describe('the workflows pin the same toolchain the repository does', () => {
   });
 });
 
-describe('configuration presence is not evidence of execution', () => {
-  it('records that the Windows job has never been observed to run', () => {
-    // Deliberately asserted, not merely documented. If someone later claims the
-    // D35 cross-platform gate passed, the evidence has to come from a real
-    // Windows runner, not from this file existing.
-    const plan = readFileSync(join(REPO_ROOT, 'docs/plan/stage-0-plan.md'), 'utf8');
-    expect(plan).toMatch(/Windows[\s\S]{0,200}(UNPROVEN|unproven|never (been )?(executed|run))/u);
+describe('a cross-platform claim has to name the evidence it rests on', () => {
+  // This block used to assert the opposite: that the plan said Windows had
+  // never been observed. That observation has since happened (GitHub Actions,
+  // 2026-09-05), so the guard changed shape rather than being deleted. What
+  // needs protecting now is not the absence of the claim but its anchoring --
+  // a cross-platform PASS must carry the commit it was observed on and the
+  // digest that was actually compared, so a reader can go and re-check it
+  // instead of taking this repository's word for it.
+
+  const plan = readFileSync(join(REPO_ROOT, 'docs/plan/stage-0-plan.md'), 'utf8');
+
+  it('names the commit the Windows run was observed on', () => {
+    expect(plan).toMatch(/6d8c27b/u);
   });
 
-  it('the repository contains no artefact claiming a Windows run happened', () => {
-    // A cheap, permanent guard against a fabricated cross-platform PASS.
-    const evidenceDir = join(REPO_ROOT, 'qualification/evidence');
-    const sqlite = JSON.parse(
-      readFileSync(join(evidenceDir, 'sqlite-qualification.json'), 'utf8'),
-    ) as { results: { platformsObserved: string[]; qualified: boolean }[] };
+  it('quotes a digest that still matches the fixture the repository pins', () => {
+    // Read as text on both sides, so this stays a consistency check between two
+    // documents and adds no dependency from fitness onto a tool it inspects.
+    // The point: if the pinned fixture ever changes, the digest quoted in the
+    // plan is stale and "identical on both platforms" no longer refers to
+    // anything this repository produces.
+    const pinnedSource = readFileSync(
+      join(REPO_ROOT, 'tools/snapshot-emit/test/snapshot.test.ts'),
+      'utf8',
+    );
+    const pinned = /'(sha256:[0-9a-f]{64})'/u.exec(pinnedSource)?.[1];
+    expect(pinned, 'no pinned cross-platform digest found in the snapshot suite').toBeTruthy();
 
-    for (const result of sqlite.results) {
-      expect(result.platformsObserved).not.toContain('win32');
-      expect(result.qualified).toBe(false);
+    // The plan elides the middle of the hash for readability, so compare on the
+    // prefix it actually shows.
+    const quoted = /sha256:[0-9a-f]{8}/u.exec(plan)?.[0];
+    expect(quoted, 'the plan quotes no digest for its cross-platform claim').toBeTruthy();
+    expect(pinned).toMatch(new RegExp(`^${quoted as string}`, 'u'));
+  });
+
+  it('lets no evidence file claim a qualification that was never made', () => {
+    // A cheap, permanent guard against a fabricated cross-platform PASS. It
+    // covers every file in the directory, so adding win32 evidence later
+    // cannot slip past it.
+    const evidenceDir = join(REPO_ROOT, 'qualification/evidence');
+    const files = readdirSync(evidenceDir).filter((name) => name.endsWith('.json'));
+    expect(files.length, 'the evidence directory is empty').toBeGreaterThan(0);
+
+    let inspected = 0;
+    for (const name of files) {
+      const parsed = JSON.parse(readFileSync(join(evidenceDir, name), 'utf8')) as {
+        results?: { platform?: string; platformsObserved?: string[]; qualified?: boolean }[];
+      };
+      for (const result of parsed.results ?? []) {
+        // No single run observes every required platform, so no single run may
+        // report itself qualified. Selection is a decision recorded in the
+        // decision log, never a field a measurement sets for itself.
+        expect(result.qualified, `${name} claims a qualification`).toBe(false);
+        expect(result.platformsObserved).toEqual([result.platform]);
+        inspected += 1;
+      }
     }
+    expect(inspected, 'no qualification results were inspected').toBeGreaterThan(0);
   });
 });

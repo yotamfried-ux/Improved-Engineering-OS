@@ -138,14 +138,16 @@ carry their own scope: **Linux x64 only.**
 
 The seven checks below are unchanged from when they were first recorded. They
 were executed on 2026-09-04 by `tools/sqlite-qualification`
-(`pnpm sqlite:qualify`), against both candidates. Evidence:
+(`pnpm sqlite:qualify`), against both candidates on Linux, and re-executed for
+`node:sqlite` on a GitHub Actions `windows-latest` runner on 2026-09-05
+(commit `6d8c27b`). Evidence:
 `qualification/evidence/sqlite-qualification.json`.
 
 | #   | Check                                                                                 | `node:sqlite`                                                                        | `better-sqlite3`                                       |
 | --- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------ |
 | 1   | `sqlite_version()` measured at runtime, never inferred from a package version         | PASS — 3.53.4                                                                        | PASS — **3.53.4, measured through the binding itself** |
 | 2   | engine `>= 3.51.3` (the R3 WAL corruption fix)                                        | PASS                                                                                 | PASS                                                   |
-| 3   | `pragma journal_mode` returns `wal` on a real file database, **Linux and Windows**    | PASS on linux; **win32 UNEXECUTED**                                                  | PASS on linux; **win32 UNEXECUTED**                    |
+| 3   | `pragma journal_mode` returns `wal` on a real file database, **Linux and Windows**    | **PASS on linux and win32**                                                          | PASS on linux; **win32 UNEXECUTED**                    |
 | 4   | busy handling: two writers, `timeout >= 5000 ms`, no `SQLITE_BUSY` reaches the caller | PASS — second writer waited 1238 ms, then committed                                  | PASS — waited 1236 ms, then committed                  |
 | 5   | WAL truncation under a concurrent reader                                              | PASS — wal 2 080 632 → 0 bytes, reader saw 500 rows throughout                       | PASS — identical                                       |
 | 6   | `UNIQUE(event_id)` collision absorbed as a no-op                                      | PASS — 1 row, first write preserved; control confirms a plain duplicate still raises | PASS — identical                                       |
@@ -153,23 +155,28 @@ were executed on 2026-09-04 by `tools/sqlite-qualification`
 
 **Measured candidate facts.**
 
-|                    | `node:sqlite`                                          | `better-sqlite3`                                                                                      |
-| ------------------ | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| Binding version    | Node 24.20.0 (built in)                                | `13.0.3`                                                                                              |
-| Bundled engine     | 3.53.4                                                 | 3.53.4                                                                                                |
-| Engine `source_id` | `2026-07-24 19:02:57 bf7c7f30…59bcc`                   | `2026-07-24 19:02:57 bf7c7f30…59bcc` (identical build)                                                |
-| FTS5               | available                                              | available                                                                                             |
-| Native addon       | no                                                     | **yes** — install resolved a prebuild on linux-x64/Node 24; a Windows build or prebuild is unverified |
-| Experimental       | **yes** — Node 24 still emits an `ExperimentalWarning` | no                                                                                                    |
-| Extra dependency   | none                                                   | one direct + `node-addon-api`                                                                         |
+|                    | `node:sqlite`                                          | `better-sqlite3`                                                                                                |
+| ------------------ | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| Binding version    | Node 24.20.0 (built in)                                | `13.0.3`                                                                                                        |
+| Bundled engine     | 3.53.4                                                 | 3.53.4                                                                                                          |
+| Engine `source_id` | `2026-07-24 19:02:57 bf7c7f30…59bcc`                   | `2026-07-24 19:02:57 bf7c7f30…59bcc` (identical build)                                                          |
+| FTS5               | available                                              | available                                                                                                       |
+| Native addon       | no                                                     | **yes** — install resolved a prebuild on linux-x64/Node 24; a Windows build or prebuild is **still** unverified |
+| Experimental       | **yes** — Node 24 still emits an `ExperimentalWarning` | no                                                                                                              |
+| Extra dependency   | none                                                   | one direct + `node-addon-api`                                                                                   |
 
-**Outcome: no binding is selected.** Both pass all seven checks on Linux, and
-neither is qualified, because check 3 names Linux **and** Windows and no Windows
-execution has been observed. `qualified` in the evidence file is computed
-conjunctively over required platforms, so it reads `false` for both — passing
-everything on one platform is not qualification when the criteria name two.
+**Outcome: no binding is selected.** Both pass all seven checks on Linux.
+`node:sqlite` now also passes all seven on win32 (2026-09-05), so it has the
+complete platform coverage check 3 names. `better-sqlite3` does not, and cannot
+get it from this repository's CI: it is deliberately not a dependency here —
+adding it would be adopting a candidate in order to qualify it — so the Windows
+runner has nothing to load.
 
-Nothing was weakened to reach a selection, and no selection was reached.
+Nothing was weakened to reach a selection, and no selection was reached. The
+`qualified` field stays `false` for both in the per-run evidence, because a
+single run observes a single platform; cross-run platform coverage is asserted
+here, in prose, against two named runs, rather than being silently synthesised
+into a field that would then claim more than any one measurement supports.
 
 **What the measurement already settles**, so the Windows run only has to confirm
 the platform-sensitive half:
@@ -183,12 +190,29 @@ the platform-sensitive half:
   `index_digest` must be taken over canonical structure per D35, never over
   database pages.
 
-**Remaining to select:** run `pnpm sqlite:qualify` on Windows (check 3 for both,
-plus a `better-sqlite3` native build or prebuild check on Windows / the Node 24
-ABI). That is the Windows smoke job in `.github/workflows/`, which has never
-executed. Until then O-4 stays open, and the tie-break between an
-experimental-but-dependency-free built-in and a stable-but-native addon is a
-Stage 1/2 decision with the engine question already answered.
+### 4c. O-4 is now a decision, not a measurement — open question for the owner
+
+The Windows run that O-4 was waiting on has happened. What it produced is not a
+tie-break but an asymmetry, and resolving it is an owner call because either
+answer costs something real:
+
+| Option                                                                | What it buys                                                                                                               | What it costs                                                                                                                                                                                   |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A. Select `node:sqlite`**                                           | The only candidate with all seven checks observed on both required platforms. No dependency, no native build, no ABI risk. | Deviates from **D18.5**, which names `better-sqlite3`. Node 24 still emits an `ExperimentalWarning` for it, so a pinned runtime upgrade could change behaviour under us.                        |
+| **B. Keep `better-sqlite3` (the guide's D18.5 choice)**               | No deviation from the frozen guide. A stable, non-experimental API.                                                        | Its win32 coverage is **unobserved and will stay unobserved** while it is not a dependency. Selecting it means selecting on Linux evidence plus the guide's authority, not on the seven checks. |
+| **C. Add `better-sqlite3` as a real dependency so CI can qualify it** | Would produce the missing win32 evidence, making B a decision on measurement rather than authority.                        | Adopts a candidate in order to qualify it — the exact ordering this whole tool exists to avoid — and takes on a native addon plus a Windows/Node 24 prebuild requirement before it is chosen.   |
+
+**Recommendation, for the owner to accept or reject: A**, recorded as a
+documented deviation from D18.5 in the same way C-1 is recorded — the guide's
+choice is not satisfied, and saying so is the point. The engine question is
+already settled and does not distinguish them: both bundle the identical SQLite
+build 3.53.4, `source_id 2026-07-24 19:02:57 bf7c7f30…`. What separates them is
+observed platform coverage and dependency surface, and on both of those
+`node:sqlite` is ahead.
+
+**This is not decided here.** Until the owner answers, O-4 stays open and B7
+stays PARTIAL. No code depends on either binding yet, so nothing is blocked by
+the delay.
 
 ## 4b. Owner decisions
 
