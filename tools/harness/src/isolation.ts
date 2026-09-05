@@ -141,6 +141,60 @@ export function deriveQualificationEligibility(
   return { eligible: reasons.length === 0, reasons };
 }
 
+/**
+ * The stricter of two probes of the same trial, boundary by boundary.
+ *
+ * A boundary is `proven` only if it was proven both before the agent ran and
+ * after. That is not belt and braces: the earlier harness probed once, before
+ * the driver, and reported that verdict as the trial's isolation -- so a driver
+ * could be handed a clean workspace, link its way out of it, and the outcome
+ * would still read `filesystem: proven`. The probe was answering a question
+ * about a moment that had passed.
+ *
+ * `violated` beats `unproven` beats `proven`, and the evidence carried is the
+ * evidence for the verdict that won, so the report says which probe saw it.
+ */
+export function strictestOf(
+  policy: IsolationPolicy,
+  before: readonly BoundaryFinding[],
+  after: readonly BoundaryFinding[],
+): IsolationReport {
+  const rank: Record<BoundaryVerdict, number> = { proven: 0, unproven: 1, violated: 2 };
+  const findings: BoundaryFinding[] = [];
+
+  for (const boundary of BOUNDARY_KINDS) {
+    const first = before.find((finding) => finding.boundary === boundary);
+    const second = after.find((finding) => finding.boundary === boundary);
+    if (first === undefined && second === undefined) continue;
+    if (first === undefined) {
+      findings.push(second as BoundaryFinding);
+      continue;
+    }
+    if (second === undefined) {
+      findings.push(first);
+      continue;
+    }
+    if (rank[second.verdict] > rank[first.verdict]) {
+      findings.push({
+        ...second,
+        evidence: `after the trial ran: ${second.evidence}`,
+      });
+    } else if (rank[first.verdict] > rank[second.verdict]) {
+      findings.push({ ...first, evidence: `before the trial ran: ${first.evidence}` });
+    } else {
+      findings.push({
+        ...second,
+        evidence:
+          first.evidence === second.evidence
+            ? `before and after the trial ran: ${second.evidence}`
+            : `before: ${first.evidence}; after: ${second.evidence}`,
+      });
+    }
+  }
+
+  return buildIsolationReport(policy, findings);
+}
+
 export function buildIsolationReport(
   policy: IsolationPolicy,
   findings: readonly BoundaryFinding[],

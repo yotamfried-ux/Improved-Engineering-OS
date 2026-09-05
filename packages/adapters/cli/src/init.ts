@@ -39,6 +39,8 @@ export const END_MARKER = '<!-- ieos:end -->';
  * first version of this constant named a file that had been called something
  * else. `test/init.test.ts` now asserts the file is really there.
  */
+import { AGENT_CONTRACT_COMMANDS, isImplemented } from './commands.ts';
+
 export const MCP_SERVER_ENTRY = 'packages/adapters/mcp/src/server-cli.ts';
 
 export interface FootprintInput {
@@ -71,6 +73,18 @@ export function bootstrapParagraph(input: FootprintInput): string {
   // particular task. TD-07's failure mode is a bootstrap that drifts into
   // task-specific hints, which would leak evaluation conditions into a target
   // project and make Stage 3's trials measure the hint rather than the system.
+  //
+  // The transport sentence is derived from IMPLEMENTED_COMMANDS rather than
+  // written out, because the written-out version was wrong: it promised the
+  // Agent Contract "over MCP and over the `ieos` CLI" while all four CLI verbs
+  // exited 3. This text lands in someone else's repository, where nothing will
+  // contradict it.
+  const cliVerbs = AGENT_CONTRACT_COMMANDS.filter(isImplemented);
+  const transports =
+    cliVerbs.length === AGENT_CONTRACT_COMMANDS.length
+      ? 'available over MCP and over the `ieos` CLI.'
+      : 'available over MCP. The `ieos` CLI does not serve them yet.';
+
   return [
     BEGIN_MARKER,
     '',
@@ -78,7 +92,7 @@ export function bootstrapParagraph(input: FootprintInput): string {
     '',
     'This project is registered with an Engineering OS (EOS) installation. EOS provides',
     'retrieval over a curated knowledge base through four tools -- `resolve`, `inspect`,',
-    '`expand` and `observe` -- available over MCP and over the `ieos` CLI.',
+    `\`expand\` and \`observe\` -- ${transports}`,
     '',
     'The tools are available if you want them. Nothing here instructs you to call them,',
     'and no tool call is required to complete work in this repository.',

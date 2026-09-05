@@ -10,7 +10,11 @@ export {
   type SuiteResult,
 } from './evidence.ts';
 export {
+  CHAMPION_PROPERTY_TESTS,
+  describeProblems,
   evaluateStage0,
+  platformProblems,
+  type NamedTestOutcome,
   type GateInput,
   type GateReport,
   type GateRow,

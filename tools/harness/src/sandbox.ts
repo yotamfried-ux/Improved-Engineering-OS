@@ -10,7 +10,7 @@
 
 import { mkdtempSync, mkdirSync, readdirSync, rmSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, relative, resolve, isAbsolute, sep } from 'node:path';
+import { basename, dirname, join, relative, resolve, isAbsolute, sep } from 'node:path';
 import {
   buildIsolationReport,
   type BoundaryFinding,
@@ -77,7 +77,14 @@ export function createTrial(options: CreateTrialOptions): Trial {
   };
 }
 
-/** True when `candidate` is inside `root` (or is `root`), after symlink resolution. */
+/**
+ * True when `candidate` is inside `root` (or is `root`), by path *spelling*.
+ *
+ * Lexical only: `resolve` normalizes `..` and separators, and does not follow
+ * symlinks. That is the right primitive for comparing two already-real paths,
+ * and the wrong one for deciding where a write will land -- see
+ * {@link physicalPathOf} and {@link writeIntoTrial}.
+ */
 export function isContainedBy(root: string, candidate: string): boolean {
   const resolvedRoot = resolve(root);
   const resolvedCandidate = resolve(candidate);
@@ -196,12 +203,49 @@ function leakedPaths(trial: Trial): string[] {
   return leaks;
 }
 
-/** Write a file into a trial workspace, refusing anything that escapes it. */
+/**
+ * Where a path will physically land, following symlinks as far as they exist.
+ *
+ * `resolve()` alone answers a different question. Given a workspace containing
+ * `link -> /etc`, the path `link/passwd` is lexically inside the workspace and
+ * physically is not; a containment check built on `resolve` waves it through.
+ * So this walks up to the deepest component that actually exists, resolves
+ * *that* with `realpathSync`, and re-appends the rest.
+ *
+ * A path whose every component is absent has no physical answer yet, and the
+ * lexical one is then the honest best available.
+ */
+export function physicalPathOf(target: string): string {
+  const trailing: string[] = [];
+  let existing = resolve(target);
+  for (;;) {
+    try {
+      const real = realpathSync(existing);
+      return trailing.length === 0 ? real : join(real, ...trailing);
+    } catch {
+      const parent = dirname(existing);
+      if (parent === existing) return resolve(target);
+      trailing.unshift(basename(existing));
+      existing = parent;
+    }
+  }
+}
+
+/**
+ * Write a file into a trial workspace, refusing anything that escapes it.
+ *
+ * The check is on where the bytes will land, not on how the path is spelled.
+ * Note the ordering: nothing is created -- not even a parent directory -- until
+ * containment holds, because `mkdirSync -p` through a symlink escapes just as
+ * effectively as the write would.
+ */
 export function writeIntoTrial(trial: Trial, relativePath: string, content: string): string {
   const target = resolve(trial.workspaceRoot, relativePath);
-  if (!isContainedBy(trial.workspaceRoot, target)) {
+  const physical = physicalPathOf(target);
+  const root = physicalPathOf(trial.workspaceRoot);
+  if (!isContainedBy(root, physical)) {
     throw new Error(
-      `refusing to write ${relativePath}: it resolves to ${target}, outside the trial workspace`,
+      `refusing to write ${relativePath}: it resolves to ${physical}, outside the trial workspace`,
     );
   }
   mkdirSync(target.slice(0, target.lastIndexOf(sep)), { recursive: true });

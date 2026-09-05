@@ -283,6 +283,112 @@ HTTP leg is **a test, not a shipped transport** — no listener is opened, and
 `Mcp-Method` and `MCP-Protocol-Version` headers to agree with the body; the entry
 answers `-32020` when they disagree, which the smoke satisfies by sending both.
 
+## 4e. Pre-Stage-2 hardening (owner audit, 2026-09-05)
+
+Stage 0 and Stage 1 both passed their gates, and post-merge CI on `main` at
+`9592650` was green. An owner code review then found five defects that a green
+CI could not have caught, because in each case the check that would have caught
+them did not exist. None reopens a passed gate; all seven items below were fixed
+before Stage 2 began.
+
+The pattern across all five is worth naming: **a test that asserts a shape
+rather than a claim**. Each of these had a test beside it that passed.
+
+### H-1 `index_digest` did not cover what the index contains (blocker)
+
+`knowledgeTreeDigest` hashed `{id, content_hash, body_hash}` per asset. D19
+defines `content_hash` over `body.md` and `files/`, so `title`, `summary`,
+`status`, `problem_id` and `problem.capabilities` — all written to SQLite, and
+all of them what the Stage 2 resolver ranks on — could change while the digest
+stood still. `index_digest` is an input to every `context_snapshot_id` (T-05),
+so a recorded decision could cite an index state it had not seen.
+
+The existing test named `changes the digest when an asset record changes`
+mutated `content_hash` directly, which is the one field that did move the
+digest. Six new tests mutate title, summary, status, problem id, a capability
+and solution-set metadata; all six failed before the fix. The rule is now: if it
+reaches the index, it reaches the digest.
+
+### H-2 `content_hash` was never verified against the files (blocker)
+
+It is an addressing key (D19): equal hashes mean "the same content" to the
+importer and the resolver. Nothing recomputed it, so it was whatever the author
+typed. `readKnowledgeTree` now hashes `body.md` plus everything under `files/`
+and rejects a record whose declared hash disagrees.
+
+### H-3 Isolation was proven before the agent ran, not after (blocker)
+
+`runTrial` probed once, before `driver.run`, and returned that report as the
+trial's isolation. A driver handed a clean workspace could symlink its way out
+of it and the outcome still read `filesystem: proven`. The probe was answering a
+question about a moment that had passed.
+
+There were two halves. `runTrial` now probes again on the workspace the driver
+leaves behind and takes the stricter verdict per boundary (`strictestOf`). And
+`writeIntoTrial` checked containment with `resolve()`, which is lexical: given
+`link -> /outside`, the path `link/notes.md` never leaves the workspace by
+spelling and leaves it in every other sense. Containment is now physical
+(`physicalPathOf`), and it is checked before anything is created, because
+`mkdirSync -p` through a symlink escapes just as effectively as the write.
+
+Both have negative controls: a driver that creates an escaping symlink mid-trial
+(the outcome must be `violated` and ineligible), and a write through a
+pre-existing symlink (must throw, and must not appear outside). Both failed
+before the fix; the two matching positive controls passed throughout.
+
+### H-4 Stage 0 row G3 could have become a false PASS
+
+The generator ran the whole `core` project and, if it was green, asserted
+`championProperty: { passed: true, cases: 2000 }`. The Champion property test
+itself is good — real `fast-check`, a vacuity control, a positive control — and
+it genuinely ran, so the recorded Stage 0 PASS is sound. But nothing checked
+that the _specific_ test still existed. Renaming or deleting
+`champion.property.test.ts` would have left `core` green and G3 still reporting
+a property that held over 2000 cases nobody generated.
+
+G3 now names its six tests and reads their outcomes from the run. Verified by
+removing the file: `core` stays green at 238 tests, and G3 turns `unproven`,
+naming what it did not observe. The invented case count is gone; the evidence
+says which tests passed.
+
+### H-5 Two platform records were not required to describe one commit
+
+`usablePlatforms` and `digestRow` never read `commit`. Two green records from
+different trees would have produced a PASS, and "identical on 2 platforms" would
+have been comparing two different pieces of software. Records must now match the
+commit the report is about, and a record that does not is unusable with that
+reason stated — "no usable record for win32" sends someone looking for a missing
+artifact when the artifact arrived and described something else.
+
+### H-6 `ieos init` wrote a false claim into other people's repositories
+
+The bootstrap paragraph said the four Agent Contract tools were "available over
+MCP and over the `ieos` CLI". Every CLI verb exits 3. The test beside it,
+`names the four tools and both transports`, asserted that the strings `MCP` and
+`ieos` appear in the text — and `ieos` appears in the `Installation:` line
+regardless. A substring is not a claim.
+
+The sentence is now derived from `IMPLEMENTED_COMMANDS`, which the dispatcher
+also reads, so it corrects itself when the verbs land. Seven end-to-end tests
+spawn the CLI and check the declaration against what actually happens.
+
+### Not a defect: the absent agent drivers
+
+Stage 0 has no `drivers/claude-code.ts` or `drivers/codex.ts` although the
+frozen guide lists them. That is deviation C-5, recorded at the time: writing
+real drivers without running real agents would have produced false confidence,
+so the port plus `FakeAgentDriver` stand in, and `TrialOutcome.driverKind`
+records which produced any result. Not a Stage 2 blocker; a precondition for the
+Stage 3 real-agent slice.
+
+### One digest that did not move
+
+The `index_digest` algorithm changed, but the empty-tree digest
+(`sha256:1d46d3b6…`, recorded in the Stage 1 report's G7 row) is unchanged: the
+outer shape is the same and there was no content for the change to affect. That
+is the correct behaviour, and it means the Stage 1 report's recorded value is
+still the value this code produces.
+
 ## 4b. Owner decisions
 
 | Item                                   | Decision                                                                                                                                                                                                                                                            | Date       | Consequence                                                                                                                                                                                                                                                                                                                                                                                |
