@@ -372,3 +372,64 @@ describe('the index is opened read-only (fitness F3, structurally)', () => {
     writable.close();
   });
 });
+
+describe('a rejected index never leaks its handle', () => {
+  /**
+   * The bug this pins, found by the Windows smoke job and invisible on Linux:
+   * `open()` validated the index after acquiring the handle, and the throw for
+   * a missing meta table sat outside the two places that closed it. Linux lets
+   * you unlink an open file, so every Linux run passed; Windows refuses, and
+   * the temp directory could not be removed -- EPERM, from cleanup code that
+   * was not itself at fault.
+   *
+   * Testing it through a fake handle rather than through the filesystem means
+   * the release is provable everywhere, not only where the OS enforces it.
+   */
+  const fakeDb = (behaviour: 'no-meta' | 'bad-version' | 'no-digest') => {
+    let closed = 0;
+    const db = {
+      prepare(sql: string) {
+        if (behaviour === 'no-meta') {
+          return {
+            get: () => {
+              throw new Error('no such table: meta');
+            },
+            all: () => [],
+          };
+        }
+        return {
+          get: (key?: unknown) => {
+            if (!sql.includes('meta')) return undefined;
+            if (key === 'schema_version')
+              return { value: behaviour === 'bad-version' ? '999' : '1' };
+            if (key === 'index_digest')
+              return behaviour === 'no-digest' ? undefined : { value: 'sha256:x' };
+            return undefined;
+          },
+          all: () => [],
+        };
+      },
+      close: () => {
+        closed += 1;
+      },
+    };
+    return { db, closed: () => closed };
+  };
+
+  it.each(['no-meta', 'bad-version', 'no-digest'] as const)(
+    'closes the handle when the index is rejected for: %s',
+    async (behaviour) => {
+      const fake = fakeDb(behaviour);
+      await expect(
+        SqliteKnowledgeIndex.open('irrelevant', () => Promise.resolve(fake.db as never)),
+      ).rejects.toThrow(IndexUnavailableError);
+      expect(fake.closed(), 'the handle was not released on rejection').toBe(1);
+    },
+  );
+
+  it('the control: a handle that is never closed would be caught', () => {
+    // Without this, `closed() === 1` could pass because the fake counts wrong.
+    const fake = fakeDb('no-meta');
+    expect(fake.closed()).toBe(0);
+  });
+});

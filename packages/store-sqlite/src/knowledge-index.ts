@@ -93,28 +93,55 @@ export class SqliteKnowledgeIndex implements KnowledgeIndex {
     this.#digest = digest;
   }
 
-  static async open(path: string): Promise<SqliteKnowledgeIndex> {
-    const db = await openReadOnly(path);
+  /**
+   * Open and validate an index.
+   *
+   * Every failure after the handle exists closes it. That is done with one
+   * try/catch rather than a `close()` beside each `throw`, because the
+   * per-throw version is what broke: `readMeta` throws when there is no meta
+   * table, and it sat outside both of the explicit closes. The handle leaked,
+   * which Linux hides -- an open file can still be unlinked -- and Windows does
+   * not, so the Windows smoke job failed with EPERM while every Linux run
+   * passed. A structure that cannot forget is worth more here than one that
+   * remembers correctly today.
+   *
+   * `opener` is injectable so the release is provable in a test rather than
+   * only on the platform that happens to enforce it.
+   */
+  static async open(
+    path: string,
+    opener: (p: string) => Promise<ReadOnlyDatabase> = openReadOnly,
+  ): Promise<SqliteKnowledgeIndex> {
+    const db = await opener(path);
+    try {
+      const schemaVersion = readMeta(db, INDEX_META_KEYS.schemaVersion);
+      if (schemaVersion !== INDEX_SCHEMA_VERSION) {
+        throw new IndexUnavailableError(
+          `the index at ${path} declares schema version ${String(schemaVersion)}, but this ` +
+            `runtime reads version ${INDEX_SCHEMA_VERSION}. Rebuild it with \`pnpm build:index\`.`,
+        );
+      }
 
-    const schemaVersion = readMeta(db, INDEX_META_KEYS.schemaVersion);
-    if (schemaVersion !== INDEX_SCHEMA_VERSION) {
-      db.close();
-      throw new IndexUnavailableError(
-        `the index at ${path} declares schema version ${String(schemaVersion)}, but this ` +
-          `runtime reads version ${INDEX_SCHEMA_VERSION}. Rebuild it with \`pnpm build:index\`.`,
-      );
+      const digest = readMeta(db, INDEX_META_KEYS.indexDigest);
+      if (digest === undefined) {
+        throw new IndexUnavailableError(
+          `the index at ${path} carries no index digest, so nothing that cites it could be ` +
+            'reproduced. Rebuild it with `pnpm build:index`.',
+        );
+      }
+
+      return new SqliteKnowledgeIndex(db, digest);
+    } catch (error) {
+      // Closing must not mask the real failure, so a close that itself fails is
+      // swallowed: the caller needs to know why the index was rejected, not
+      // that cleanup was also unhappy.
+      try {
+        db.close();
+      } catch {
+        // ignored deliberately; see above
+      }
+      throw error;
     }
-
-    const digest = readMeta(db, INDEX_META_KEYS.indexDigest);
-    if (digest === undefined) {
-      db.close();
-      throw new IndexUnavailableError(
-        `the index at ${path} carries no index digest, so nothing that cites it could be ` +
-          'reproduced. Rebuild it with `pnpm build:index`.',
-      );
-    }
-
-    return new SqliteKnowledgeIndex(db, digest);
   }
 
   close(): void {
