@@ -10,7 +10,10 @@
  * that always passes would select a binding on no evidence at all.
  */
 
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { platform } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -204,6 +207,90 @@ describe('the recorded evidence file', () => {
   it('records seven checks per candidate', () => {
     for (const result of evidence.results) {
       expect(result.checks).toHaveLength(7);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The writer refuses to lose evidence
+// ---------------------------------------------------------------------------
+
+describe('writing evidence never silently drops a candidate', () => {
+  const cli = join(repoRoot, 'tools/sqlite-qualification/src/cli.ts');
+
+  const runCli = (args: readonly string[]): { code: number; stderr: string } => {
+    try {
+      execFileSync(process.execPath, [cli, ...args], {
+        cwd: repoRoot,
+        encoding: 'utf8',
+        stdio: ['ignore', 'ignore', 'pipe'],
+        timeout: 120_000,
+      });
+      return { code: 0, stderr: '' };
+    } catch (error) {
+      const failure = error as { status?: number; stderr?: string };
+      return { code: failure.status ?? -1, stderr: failure.stderr ?? '' };
+    }
+  };
+
+  it('refuses to overwrite a two-candidate record with a one-candidate one', () => {
+    // The hazard, in the exact shape it took twice: `better-sqlite3` is not a
+    // dependency, so on most machines a plain run measures one candidate. If
+    // that overwrote the committed record, evidence would vanish -- and lost
+    // evidence is indistinguishable from evidence never gathered.
+    const dir = mkdtempSync(join(tmpdir(), 'ieos-evidence-'));
+    const target = join(dir, 'record.json');
+    writeFileSync(
+      target,
+      JSON.stringify({ results: [{ candidate: 'node:sqlite' }, { candidate: 'better-sqlite3' }] }),
+      'utf8',
+    );
+    try {
+      const result = runCli(['--out', target]);
+      expect(result.code, 'the CLI must exit non-zero when it refuses').toBe(1);
+      expect(result.stderr).toMatch(/Refusing to write/u);
+      expect(result.stderr).toMatch(/better-sqlite3/u);
+
+      // The file is untouched, which is the whole point.
+      const after = JSON.parse(readFileSync(target, 'utf8')) as {
+        results: { candidate: string }[];
+      };
+      expect(after.results.map((r) => r.candidate)).toEqual(['node:sqlite', 'better-sqlite3']);
+    } finally {
+      rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    }
+  });
+
+  it('writes freely when nothing would be lost', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ieos-evidence-'));
+    const target = join(dir, 'fresh.json');
+    try {
+      expect(runCli(['--out', target]).code).toBe(0);
+      const written = JSON.parse(readFileSync(target, 'utf8')) as {
+        results: { candidate: string }[];
+      };
+      expect(written.results.length).toBeGreaterThan(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    }
+  });
+
+  it('--force is the deliberate escape, and it really writes', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ieos-evidence-'));
+    const target = join(dir, 'record.json');
+    writeFileSync(
+      target,
+      JSON.stringify({ results: [{ candidate: 'node:sqlite' }, { candidate: 'better-sqlite3' }] }),
+      'utf8',
+    );
+    try {
+      expect(runCli(['--out', target, '--force']).code).toBe(0);
+      const after = JSON.parse(readFileSync(target, 'utf8')) as {
+        results: { candidate: string }[];
+      };
+      expect(after.results.map((r) => r.candidate)).not.toContain('better-sqlite3');
+    } finally {
+      rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     }
   });
 });

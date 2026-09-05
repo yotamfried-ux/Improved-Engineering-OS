@@ -7,7 +7,7 @@
  * alongside it.
  */
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadBetterSqlite3, loadNodeSqlite, qualify } from './index.ts';
@@ -71,6 +71,56 @@ for (const result of results) {
 }
 
 const file = outputPath(args);
+
+/**
+ * Refuse to replace an evidence file with a strictly weaker one.
+ *
+ * Whether a candidate can be loaded depends on the machine: `better-sqlite3` is
+ * deliberately not a dependency here, so a plain `pnpm sqlite:qualify` on a
+ * runner -- or on a laptop without it installed -- measures one candidate and
+ * would overwrite a two-candidate record with a one-candidate record. Evidence
+ * would silently disappear, and the loss looks exactly like a measurement.
+ *
+ * That is not hypothetical. It happened in CI, where it also broke the suite
+ * that reads this file, and the failure pointed nowhere near the cause. The CI
+ * step now passes --out, but a guard living only in a workflow does not protect
+ * anyone running the command by hand, so the refusal belongs here.
+ *
+ * `--force` exists for the deliberate case: re-recording on a machine that
+ * genuinely resolves fewer candidates, on purpose.
+ */
+function candidatesLostBy(target: string, incoming: readonly string[]): string[] {
+  let existing: string[];
+  try {
+    const parsed = JSON.parse(readFileSync(target, 'utf8')) as {
+      results?: { candidate?: string }[];
+    };
+    existing = (parsed.results ?? []).flatMap((r) =>
+      r.candidate === undefined ? [] : [r.candidate],
+    );
+  } catch {
+    return []; // No readable file to lose anything from.
+  }
+  return existing.filter((candidate) => !incoming.includes(candidate));
+}
+
+const measured = results.map((result) => result.candidate);
+const lost = candidatesLostBy(file, measured);
+if (lost.length > 0 && !args.includes('--force')) {
+  process.stderr.write(
+    `\nRefusing to write ${file}.\n\n` +
+      `It records ${lost.length + measured.length} candidate(s), and this run measured only ` +
+      `${String(measured.length)} (${measured.join(', ')}). Writing would drop: ${lost.join(', ')}.\n\n` +
+      'Evidence that disappears looks the same as evidence that was never gathered, so this is\n' +
+      'refused rather than merged. Either point the run somewhere else:\n\n' +
+      `  pnpm sqlite:qualify --out qualification/evidence/<name>.json\n\n` +
+      'or, if a candidate is unresolvable here and you want it measured, say where it is:\n\n' +
+      '  pnpm sqlite:qualify --better-sqlite3 <path>/node_modules/better-sqlite3/lib/index.js\n\n' +
+      'Pass --force only if dropping those candidates is what you actually intend.\n',
+  );
+  process.exit(1);
+}
+
 mkdirSync(dirname(file), { recursive: true });
 writeFileSync(file, `${JSON.stringify({ results }, null, 2)}\n`, 'utf8');
 process.stdout.write(`\nevidence written to ${file}\n`);
