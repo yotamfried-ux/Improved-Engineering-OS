@@ -40,29 +40,40 @@ export interface GateRow {
   readonly evidence: string;
 }
 
-export interface GateInput {
+/**
+ * The part of a gate input every stage shares: which platform records exist,
+ * which are required, and how much a record must contain to count.
+ *
+ * Split out so Stage 1 reuses the Stage 0 platform arithmetic rather than
+ * writing a second, subtly different version of "is this record usable".
+ */
+export interface PlatformSet {
   /** One record per platform observed. Keyed by nothing; duplicates are an error. */
   readonly platforms: readonly PlatformEvidence[];
   /** Platforms the stage requires. */
   readonly requiredPlatforms: readonly string[];
-  /** Fitness rules, with their declared status and dormancy subjects. */
+  /** Minimum tests a platform must have run for its record to count. */
+  readonly minimumTestsPerPlatform: number;
+}
+
+/** The fitness half, shared by Stage 0 row G1 and Stage 1 row G9. */
+export interface FitnessInput {
   readonly fitness: readonly {
     readonly id: string;
     readonly status: string;
     readonly dormantWhileAbsent: readonly string[];
   }[];
-  /** Dormancy subjects that actually exist in the tree right now. */
   readonly presentDormancySubjects: readonly string[];
-  /** Did the guarded fitness suite pass in this run? */
   readonly fitnessSuitePassed: boolean;
+}
+
+export interface GateInput extends PlatformSet, FitnessInput {
   /** Did `contracts:check` report no diff? */
   readonly contractsUpToDate: boolean;
   /** Decisions D18-D36 with no ADR covering them. */
   readonly decisionsWithoutAdr: readonly string[];
   /** Did the champion/Solution-Set property test pass, and how many cases? */
   readonly championProperty: { readonly passed: boolean; readonly cases: number } | null;
-  /** Minimum tests a platform must have run for its record to count. */
-  readonly minimumTestsPerPlatform: number;
 }
 
 export interface GateReport {
@@ -72,7 +83,7 @@ export interface GateReport {
   readonly summary: string;
 }
 
-function row(id: string, requirement: string, status: RowStatus, evidence: string): GateRow {
+export function row(id: string, requirement: string, status: RowStatus, evidence: string): GateRow {
   return { id, requirement, status, evidence };
 }
 
@@ -90,21 +101,21 @@ function row(id: string, requirement: string, status: RowStatus, evidence: strin
  *   disqualifying and made the report incapable of ever passing -- a check
  *   wrong in the safe direction is still wrong.
  */
-function usablePlatforms(input: GateInput): PlatformEvidence[] {
+export function usablePlatforms(input: PlatformSet): PlatformEvidence[] {
   return input.platforms.filter(
     (platform) =>
       totalPassed(platform) >= input.minimumTestsPerPlatform && failures(platform).length === 0,
   );
 }
 
-function missingPlatforms(input: GateInput): string[] {
+export function missingPlatforms(input: PlatformSet): string[] {
   const usable = new Set(usablePlatforms(input).map((platform) => platform.platform));
   return input.requiredPlatforms.filter((required) => !usable.has(required));
 }
 
 /** Row 2 and row 4: a named digest must agree across every required platform. */
-function digestRow(
-  input: GateInput,
+export function digestRow(
+  input: PlatformSet,
   id: string,
   requirement: string,
   pick: (evidence: PlatformEvidence) => string,
@@ -138,78 +149,72 @@ function digestRow(
   );
 }
 
+/**
+ * The F1-F12 row, under the owner's approved reading (deviation C-10).
+ *
+ * Shared by every stage that has this row, because "every enforceable rule is
+ * green and every dormant rule is guarded" is the same judgement each time, and
+ * two copies of it would eventually disagree.
+ */
+export function fitnessRow(
+  input: FitnessInput & PlatformSet,
+  id: string,
+  requirement: string,
+): GateRow {
+  const enforced = input.fitness.filter((rule) => rule.status === 'enforced');
+  const dormant = input.fitness.filter((rule) => rule.status !== 'enforced');
+  const unguarded = dormant.filter((rule) => rule.dormantWhileAbsent.length === 0);
+  const expired = dormant.filter((rule) =>
+    rule.dormantWhileAbsent.some((subject) => input.presentDormancySubjects.includes(subject)),
+  );
+  const missing = missingPlatforms(input);
+
+  if (input.fitness.length === 0) {
+    return row(id, requirement, 'unproven', 'no fitness rules were supplied to evaluate');
+  }
+  if (!input.fitnessSuitePassed) {
+    return row(id, requirement, 'fail', 'the fitness suite did not pass');
+  }
+  if (unguarded.length > 0) {
+    return row(
+      id,
+      requirement,
+      'fail',
+      `dormant without a declared subject: ${unguarded.map((r) => r.id).join(', ')} — ` +
+        'dormancy that names nothing cannot be shown to have ended',
+    );
+  }
+  if (expired.length > 0) {
+    return row(
+      id,
+      requirement,
+      'fail',
+      `dormancy has expired for ${expired.map((r) => r.id).join(', ')}: their subjects now exist`,
+    );
+  }
+  if (missing.length > 0) {
+    return row(
+      id,
+      requirement,
+      'unproven',
+      `the fitness suite passed, but ${missing.join(', ')} produced no usable record`,
+    );
+  }
+  return row(
+    id,
+    requirement,
+    'pass',
+    `${String(enforced.length)} of ${String(input.fitness.length)} rules enforced and green; ` +
+      `${String(dormant.length)} dormant, each naming an absent subject and guarded by ` +
+      'fitness/checks/dormancy.test.ts (owner reading C-10)',
+  );
+}
+
 export function evaluateStage0(input: GateInput): GateReport {
   const rows: GateRow[] = [];
 
   // --- Row 1: F1-F12, under the C-10 reading -------------------------------
-  {
-    const enforced = input.fitness.filter((rule) => rule.status === 'enforced');
-    const dormant = input.fitness.filter((rule) => rule.status !== 'enforced');
-    const unguarded = dormant.filter((rule) => rule.dormantWhileAbsent.length === 0);
-    const expired = dormant.filter((rule) =>
-      rule.dormantWhileAbsent.some((subject) => input.presentDormancySubjects.includes(subject)),
-    );
-    const missing = missingPlatforms(input);
-
-    if (input.fitness.length === 0) {
-      rows.push(
-        row(
-          'G1',
-          'F1-F12 green on Linux + Windows smoke',
-          'unproven',
-          'no fitness rules were supplied to evaluate',
-        ),
-      );
-    } else if (!input.fitnessSuitePassed) {
-      rows.push(
-        row(
-          'G1',
-          'F1-F12 green on Linux + Windows smoke',
-          'fail',
-          'the fitness suite did not pass',
-        ),
-      );
-    } else if (unguarded.length > 0) {
-      rows.push(
-        row(
-          'G1',
-          'F1-F12 green on Linux + Windows smoke',
-          'fail',
-          `dormant without a declared subject: ${unguarded.map((r) => r.id).join(', ')} — ` +
-            'dormancy that names nothing cannot be shown to have ended',
-        ),
-      );
-    } else if (expired.length > 0) {
-      rows.push(
-        row(
-          'G1',
-          'F1-F12 green on Linux + Windows smoke',
-          'fail',
-          `dormancy has expired for ${expired.map((r) => r.id).join(', ')}: their subjects now exist`,
-        ),
-      );
-    } else if (missing.length > 0) {
-      rows.push(
-        row(
-          'G1',
-          'F1-F12 green on Linux + Windows smoke',
-          'unproven',
-          `the fitness suite passed, but ${missing.join(', ')} produced no usable record`,
-        ),
-      );
-    } else {
-      rows.push(
-        row(
-          'G1',
-          'F1-F12 green on Linux + Windows smoke',
-          'pass',
-          `${String(enforced.length)} of ${String(input.fitness.length)} rules enforced and green; ` +
-            `${String(dormant.length)} dormant, each naming an absent subject and guarded by ` +
-            'fitness/checks/dormancy.test.ts (owner reading C-10)',
-        ),
-      );
-    }
-  }
+  rows.push(fitnessRow(input, 'G1', 'F1-F12 green on Linux + Windows smoke'));
 
   // --- Row 2: the asset-tree fixture ---------------------------------------
   rows.push(
