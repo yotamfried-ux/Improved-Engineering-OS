@@ -1,0 +1,200 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stability": {
+      "type": "string",
+      "enum": [
+        "development",
+        "stable",
+        "deprecated",
+        "removed"
+      ]
+    },
+    "introduced_in": {
+      "type": "string",
+      "minLength": 1
+    },
+    "deprecated_in": {
+      "default": null,
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "replacement": {
+      "default": null,
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "migration_path": {
+      "default": null,
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "context_snapshot_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ranking_mode": {
+      "type": "string",
+      "enum": [
+        "live_overlay",
+        "recorded"
+      ]
+    },
+    "effective_score_view_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          },
+          "project_fit": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "champion_of": {
+            "type": "string",
+            "minLength": 1
+          },
+          "champion_status": {
+            "type": "string",
+            "enum": [
+              "pinned",
+              "pinned_challenged"
+            ]
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "score_source": {
+            "type": "string",
+            "enum": [
+              "overlay",
+              "snapshot"
+            ]
+          },
+          "evidence_count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "title",
+          "summary",
+          "project_fit",
+          "score",
+          "score_source",
+          "evidence_count"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "coverage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "solution_set_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "unresolved_solution_set": {
+            "type": "boolean",
+            "const": true
+          },
+          "member_count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "problem_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "solution_set_id",
+          "unresolved_solution_set",
+          "member_count",
+          "problem_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "omitted_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "controls": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "stability",
+    "introduced_in",
+    "context_snapshot_id",
+    "ranking_mode",
+    "effective_score_view_id",
+    "items",
+    "coverage",
+    "omitted_count",
+    "controls"
+  ],
+  "additionalProperties": false
+}

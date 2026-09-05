@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stability": {
+      "type": "string",
+      "enum": [
+        "development",
+        "stable",
+        "deprecated",
+        "removed"
+      ]
+    },
+    "introduced_in": {
+      "type": "string",
+      "minLength": 1
+    },
+    "deprecated_in": {
+      "default": null,
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "replacement": {
+      "default": null,
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "migration_path": {
+      "default": null,
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "eos": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "pinned_release": {
+              "type": "string",
+              "minLength": 1
+            },
+            "release_digest": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "pinned_release",
+            "release_digest"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "source_checkout": {
+              "type": "string",
+              "minLength": 1
+            },
+            "index_digest": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "source_checkout",
+            "index_digest"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "spec": {
+      "type": "object",
+      "properties": {
+        "lifecycle": {
+          "type": "string",
+          "enum": [
+            "prototype",
+            "internal",
+            "production"
+          ]
+        },
+        "database_provider": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "authentication_required": {
+          "type": "boolean"
+        },
+        "deployment": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "architecture_constraints": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "lifecycle",
+        "database_provider",
+        "authentication_required",
+        "deployment",
+        "architecture_constraints"
+      ],
+      "additionalProperties": false
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "decision_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "subject": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "proposed",
+              "accepted",
+              "superseded"
+            ]
+          }
+        },
+        "required": [
+          "decision_id",
+          "subject",
+          "status"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "known_unknowns": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "stability",
+    "introduced_in",
+    "project_id",
+    "eos",
+    "spec",
+    "decisions",
+    "known_unknowns"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,15 @@
+node_modules/
+pnpm-lock.yaml
+docs/source/
+packages/core/test/fixtures/
+contracts/schemas/
+
+# Pre-existing documents. Reformatting them would bury a real change in table padding.
+docs/README.md
+docs/research/
+
+# Generated artifacts whose exact bytes are the contract. Reformatting them
+# breaks byte-identity with a fresh regeneration, which is what their staleness
+# checks compare.
+contracts/capabilities.yaml
+qualification/evidence/

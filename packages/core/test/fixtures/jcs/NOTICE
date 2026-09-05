@@ -1,0 +1,22 @@
+RFC 8785 (JCS) conformance vectors
+==================================
+
+The files under input/ and output/ in this directory are copied verbatim from:
+
+    https://github.com/cyberphone/json-canonicalization
+    path: testdata/input/, testdata/output/
+    retrieved: 2026-09-04 (master branch)
+
+    Copyright 2018 Anders Rundgren
+    Licensed under the Apache License, Version 2.0
+    https://www.apache.org/licenses/LICENSE-2.0
+
+They are used as DATA ONLY, to test this repository's own RFC 8785
+implementation against an independently produced oracle.
+
+No source code from that project was copied, adapted, or derived.
+packages/core/src/hashing.ts was written from RFC 8785 itself.
+
+The files are unmodified. .gitattributes marks this directory `-text` so the
+bytes -- including line endings, which matter for a canonicalization fixture --
+survive checkout on every platform.

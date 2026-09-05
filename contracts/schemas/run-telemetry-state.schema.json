@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "telemetry_state": {
+      "type": "string",
+      "enum": [
+        "COMPLETE",
+        "INCOMPLETE"
+      ]
+    },
+    "qualification_eligible": {
+      "type": "boolean"
+    },
+    "ingest_reachable_at_start": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "run_id",
+    "telemetry_state",
+    "qualification_eligible",
+    "ingest_reachable_at_start"
+  ],
+  "additionalProperties": false
+}

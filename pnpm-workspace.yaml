@@ -1,0 +1,7 @@
+packages:
+  - 'packages/*'
+  - 'tools/*'
+  - 'fitness'
+
+# D18.6: refuse to install under a runtime that does not match engines.node.
+engineStrict: true

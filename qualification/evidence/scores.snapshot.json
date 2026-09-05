@@ -1,0 +1,13 @@
+{
+  "schema_version": "1",
+  "stability": "development",
+  "introduced_in": "0.1.0",
+  "deprecated_in": null,
+  "replacement": null,
+  "migration_path": null,
+  "state": "UNPROVEN",
+  "score_view_id": null,
+  "scoring_policy_version": "0",
+  "computed_at": null,
+  "assets": []
+}

@@ -1,0 +1,334 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stability": {
+      "type": "string",
+      "enum": [
+        "development",
+        "stable",
+        "deprecated",
+        "removed"
+      ]
+    },
+    "introduced_in": {
+      "type": "string",
+      "minLength": 1
+    },
+    "deprecated_in": {
+      "default": null,
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "replacement": {
+      "default": null,
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "migration_path": {
+      "default": null,
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "evidence_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "subject": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "asset",
+            "control",
+            "integration",
+            "project",
+            "solution_set"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "type",
+        "id"
+      ]
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "success",
+        "failure",
+        "partial",
+        "verification",
+        "rework"
+      ]
+    },
+    "origin_class": {
+      "type": "string",
+      "enum": [
+        "development",
+        "qualification",
+        "operational",
+        "holdout",
+        "external_attestation"
+      ]
+    },
+    "holdout_state": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "active",
+            "retired"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "independence_group": {
+      "type": "string",
+      "minLength": 1
+    },
+    "strength": {
+      "type": "object",
+      "properties": {
+        "polarity": {
+          "type": "string",
+          "enum": [
+            "positive",
+            "negative",
+            "neutral"
+          ]
+        },
+        "weight": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "polarity",
+        "weight",
+        "confidence"
+      ]
+    },
+    "attribution": {
+      "type": "object",
+      "properties": {
+        "exposure": {
+          "type": "string",
+          "enum": [
+            "exposed",
+            "inspected",
+            "applied",
+            "directly_verified",
+            "failed",
+            "contributed_to_failure"
+          ]
+        },
+        "source_event_ids": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "trace_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "exposure",
+        "source_event_ids",
+        "trace_id"
+      ]
+    },
+    "integrity": {
+      "type": "object",
+      "properties": {
+        "source_authority": {
+          "type": "string",
+          "enum": [
+            "agent_runtime",
+            "deterministic_test",
+            "ci",
+            "review",
+            "external"
+          ]
+        },
+        "verification": {
+          "type": "string",
+          "enum": [
+            "reported",
+            "observed",
+            "corroborated",
+            "externally_verified"
+          ]
+        }
+      },
+      "required": [
+        "source_authority",
+        "verification"
+      ],
+      "additionalProperties": false
+    },
+    "derivation": {
+      "type": "object",
+      "properties": {
+        "deriver_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deriver_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "input_snapshot_hash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "input_watermark": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "derived_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+        },
+        "supersedes_derivation_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "deriver_id",
+        "deriver_version",
+        "input_snapshot_hash",
+        "input_watermark",
+        "derived_at",
+        "supersedes_derivation_id"
+      ],
+      "additionalProperties": false
+    },
+    "revision": {
+      "type": "object",
+      "properties": {
+        "repo_sha": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "repo_sha"
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "properties": {
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "depends_on": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(dependency|profile|provider|infra):.+$"
+          }
+        },
+        "max_age_days": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "paths",
+        "depends_on",
+        "max_age_days"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "stability",
+    "introduced_in",
+    "evidence_id",
+    "subject",
+    "kind",
+    "origin_class",
+    "holdout_state",
+    "independence_group",
+    "strength",
+    "attribution",
+    "integrity",
+    "derivation",
+    "revision",
+    "scope"
+  ],
+  "additionalProperties": false
+}

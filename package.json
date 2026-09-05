@@ -1,0 +1,46 @@
+{
+  "name": "improved-engineering-os",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Personal engineering knowledge and evidence system with an agent-neutral core.",
+  "license": "UNLICENSED",
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": "24.x"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "11.25.0",
+      "onFail": "error"
+    }
+  },
+  "scripts": {
+    "capabilities:check": "node tools/capability-seed/src/cli.ts --check",
+    "capabilities:emit": "node tools/capability-seed/src/cli.ts",
+    "check": "pnpm ieos-doctor && pnpm typecheck && pnpm contracts:check && pnpm format:check && pnpm test && pnpm guard:corpus",
+    "contracts:check": "node tools/contracts-gen/src/cli.ts --check",
+    "contracts:emit": "node tools/contracts-gen/src/cli.ts --write",
+    "fitness": "vitest run --project fitness",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "guard:corpus": "node scripts/assert-corpus.mjs && node scripts/assert-corpus.mjs --dependency-graph",
+    "ieos-doctor": "node tools/harness/src/doctor-cli.ts",
+    "snapshot:emit": "node tools/snapshot-emit/src/cli.ts",
+    "sqlite:qualify": "node tools/sqlite-qualification/src/cli.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "report:collect": "node tools/qualification-report/src/cli.ts --collect",
+    "report:stage0": "node tools/qualification-report/src/cli.ts --report"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "dependency-cruiser": "18.2.0",
+    "fast-check": "4.9.0",
+    "prettier": "3.9.6",
+    "typescript": "6.0.3",
+    "vitest": "5.0.0",
+    "yaml": "2.9.0"
+  }
+}

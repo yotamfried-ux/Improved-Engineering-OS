@@ -1,0 +1,100 @@
+# Telemetry attribute allowlist (D26, TD-06).
+#
+# The exporter and the ingest function reconstruct every event from THIS list.
+# Unknown keys are dropped and counted, never passed through. TD-06 records that
+# this project already learned an allowlist reconstruction is the only safe
+# control; a denylist scan was explicitly rejected as a primary mechanism.
+#
+# sensitivity:
+#   public    may appear in a report or a shared artifact
+#   internal  stored in the Evidence Plane, never rendered into a shared artifact
+#   never     must not be collected at all; present here to name it as forbidden,
+#             so a future contributor finds a decision rather than a gap
+#
+# Values are scalars only. The telemetry envelope contract enforces that
+# separately, because a nested value is where a prompt fragment or a credential
+# would hide from a top-level allowlist.
+
+schema_version: '1'
+stability: development
+introduced_in: '0.1.0'
+deprecated_in: null
+replacement: null
+migration_path: null
+
+attributes:
+  - key: tool.name
+    type: string
+    sensitivity: public
+    max_length: 64
+    note: Which Agent Contract tool was called. Needed for attribution (D32).
+
+  - key: tool.outcome
+    type: string
+    sensitivity: public
+    max_length: 32
+    note: ok | error | timeout. Never the error body, which can carry payload text.
+
+  - key: tool.duration_ms
+    type: number
+    sensitivity: public
+    max_length: 16
+    note: Feeds the resolve-latency budget (open parameter 8).
+
+  - key: resolve.item_count
+    type: number
+    sensitivity: public
+    max_length: 8
+    note: How many items resolve returned. Part of the context-size budget.
+
+  - key: resolve.returned_bytes
+    type: number
+    sensitivity: public
+    max_length: 16
+    note: Measured against the provisional 6 KB per-resolve budget.
+
+  - key: asset.id
+    type: string
+    sensitivity: internal
+    max_length: 64
+    note: Opaque ULID. An id, not a body -- exposure is attribution, not content.
+
+  - key: solution_set.id
+    type: string
+    sensitivity: internal
+    max_length: 64
+
+  - key: context_snapshot.id
+    type: string
+    sensitivity: internal
+    max_length: 96
+    note: Makes a recommendation explainable a month later (D25, R-10).
+
+  - key: test.exit_code
+    type: number
+    sensitivity: internal
+    max_length: 8
+    note: >-
+      An exit code the EOS runtime observed itself, which is what separates
+      integrity "observed" from "reported" (D32, P-02).
+
+  - key: error.kind
+    type: string
+    sensitivity: internal
+    max_length: 64
+    note: A taxonomy value from the report's failure taxonomy, never a message.
+
+forbidden:
+  # Named rather than merely absent, so a future contributor finds a decision.
+  - key: prompt.text
+    sensitivity: never
+    note: Raw prompts are not metadata. D11 lists "secrets/prompts persisted" as a failure mode.
+  - key: source.content
+    sensitivity: never
+    note: Source bodies belong in Git, not in the Evidence Plane.
+  - key: env.*
+    sensitivity: never
+    note: Environment variables are the most common accidental credential carrier.
+  - key: credential.*
+    sensitivity: never
+    note: No credential value is ever an attribute. F9 scans for the shapes.
