@@ -1,16 +1,16 @@
 {
-  "name": "@ieos/snapshot-emit",
+  "name": "@ieos/releases",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Emits the deterministic bootstrap UNPROVEN score snapshot (D24, Q-02) and its D35 digest.",
+  "description": "Release manifest, knowledge index build (D20.2) and the bootstrap score snapshot (D24, Q-02).",
   "license": "UNLICENSED",
   "exports": {
     ".": "./src/index.ts"
   },
   "dependencies": {
     "@ieos/core": "workspace:*",
-    "@ieos/releases": "workspace:*"
+    "yaml": "2.9.0"
   },
   "devDependencies": {
     "@types/node": "24.13.3"

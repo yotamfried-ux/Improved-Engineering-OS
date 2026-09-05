@@ -245,6 +245,19 @@ importers:
         specifier: 24.13.3
         version: 24.13.3
 
+  packages/releases:
+    dependencies:
+      '@ieos/core':
+        specifier: workspace:*
+        version: link:../core
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
   packages/store-sqlite:
     dependencies:
       '@ieos/core':
@@ -309,6 +322,9 @@ importers:
       '@ieos/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@ieos/releases':
+        specifier: workspace:*
+        version: link:../../packages/releases
     devDependencies:
       '@types/node':
         specifier: 24.13.3

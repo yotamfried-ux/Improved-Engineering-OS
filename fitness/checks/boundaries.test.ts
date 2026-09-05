@@ -276,3 +276,56 @@ describe('F12 -- one canonical hashing site', () => {
     expect(exists('supabase/functions/ingest')).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// F7 -- runtime never resolves "latest"
+// ---------------------------------------------------------------------------
+
+describe('F7: runtime never resolves a floating version', () => {
+  // Armed at Stage 1, when `packages/releases` appeared and made the rule have
+  // a subject. The guide puts the *release resolution* half at Stage 4 ("unit
+  // test (from Stage 4)"), and the launcher that performs it does not exist
+  // yet -- so this is the prohibition half, enforced now over every runtime
+  // package, rather than the whole rule.
+  //
+  // What it forbids: asking a registry, a release feed or a tag for whatever is
+  // newest. A pinned release is only pinned if nothing in the path to it can
+  // quietly resolve to something else.
+  const FLOATING_VERSION =
+    /(["'`]latest["'`]|@latest\b|dist-tags|\btag:\s*["'`]?latest|releases\/latest)/iu;
+
+  const runtimeSources = stripAllComments(
+    readSourceFiles(['packages'], { extensions: ['.ts', '.mts', '.cts', '.json'] }),
+  );
+
+  it('has runtime sources to scan, so the rule is not vacuous', () => {
+    expect(runtimeSources.length).toBeGreaterThan(10);
+  });
+
+  it('no runtime package resolves "latest"', () => {
+    const violations = findMatches(runtimeSources, FLOATING_VERSION);
+    expect(
+      violations,
+      violations.map((v) => `${v.path}:${String(v.line)} ${v.excerpt}`).join('\n'),
+    ).toEqual([]);
+  });
+
+  it('the scan can actually fire (control)', () => {
+    // Without these, a regex that matched nothing would look like compliance.
+    expect(
+      findMatches(known('const url = `${base}/releases/latest`;'), FLOATING_VERSION),
+    ).toHaveLength(1);
+    expect(
+      findMatches(known("await fetch(registry + '/dist-tags');"), FLOATING_VERSION),
+    ).toHaveLength(1);
+    expect(findMatches(known("install('@ieos/launcher@latest');"), FLOATING_VERSION)).toHaveLength(
+      1,
+    );
+    expect(findMatches(known("const version = 'latest';"), FLOATING_VERSION)).toHaveLength(1);
+  });
+
+  it('does not fire on an exact version, which is the whole point', () => {
+    expect(findMatches(known("const version = '1.4.1';"), FLOATING_VERSION)).toEqual([]);
+    expect(findMatches(known("install('@ieos/launcher@1.4.1');"), FLOATING_VERSION)).toEqual([]);
+  });
+});

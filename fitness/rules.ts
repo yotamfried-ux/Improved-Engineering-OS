@@ -109,12 +109,16 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
     id: 'F7',
     invariant:
       'runtime never resolves "latest"; release resolution needs an exact version + digest',
-    status: 'not-yet-enforceable',
-    mechanisms: ['none'],
+    status: 'partial',
+    mechanisms: ['source-scan'],
     note:
-      'Release resolution is Stage 4. The dependency half of the same idea is enforced today by ' +
-      'the exact-pin check in checks/dependencies.test.ts.',
-    dormantWhileAbsent: ['packages/releases'],
+      'Armed at Stage 1, when packages/releases gave the rule a subject. The prohibition half is ' +
+      'enforced now: a source scan over every runtime package rejects "latest", @latest, dist-tags ' +
+      'and releases/latest, with controls proving it fires. The positive half -- release resolution ' +
+      'requiring an exact version + digest -- has nothing to check until the launcher performs that ' +
+      'resolution at Stage 4, which is where the guide itself puts the test. The dependency half of ' +
+      'the same idea is enforced by the exact-pin check in checks/dependencies.test.ts.',
+    dormantWhileAbsent: ['packages/launcher'],
   },
   {
     id: 'F8',

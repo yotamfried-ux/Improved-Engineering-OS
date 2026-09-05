@@ -150,6 +150,12 @@ jobs:
         # The half of the seven recorded checks that names Windows explicitly.
         run: pnpm vitest run --project sqlite-qualification
 
+      - name: Knowledge index build and read on win32
+        # Both packages drive node:sqlite and FTS5 through real files, and the
+        # index build must be byte-for-byte deterministic across platforms (F8).
+        # This is precisely the class of defect the Windows job exists to catch.
+        run: pnpm vitest run --project releases --project store-sqlite
+
       - name: Guard against a vacuous test run
         shell: bash
         run: node scripts/assert-corpus.mjs --windows-smoke
@@ -179,7 +185,7 @@ jobs:
         run: |
           set -euo pipefail
           pnpm report:collect qualification/evidence/platforms/win32.json \
-            --projects core,snapshot-emit,sqlite-qualification \
+            --projects core,snapshot-emit,sqlite-qualification,releases,store-sqlite \
             --commit "${{ github.sha }}" \
             --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           echo '--- win32 platform record (verbatim) ---'

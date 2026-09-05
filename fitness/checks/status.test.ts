@@ -61,9 +61,15 @@ describe('declared status matches what is actually on disk', () => {
     expect(rule('F5').status).toBe('not-yet-enforceable');
   });
 
-  it('F7 is not-yet-enforceable because no release resolution exists', () => {
-    expect(exists('packages/releases')).toBe(false);
-    expect(rule('F7').status).toBe('not-yet-enforceable');
+  it('F7 is partial: the prohibition is enforced, the resolution half has no subject', () => {
+    // Armed at Stage 1. `packages/releases` exists, so the scan has runtime
+    // code to inspect and does. What is still missing is the thing that
+    // *resolves* a release -- the launcher, at Stage 4 -- which is where the
+    // guide puts the unit test for the exact-version-plus-digest half.
+    expect(exists('packages/releases')).toBe(true);
+    expect(exists('packages/launcher')).toBe(false);
+    expect(rule('F7').status).toBe('partial');
+    expect(rule('F7').mechanisms).toContain('source-scan');
   });
 
   it('F11 is not-yet-enforceable because no resolver exists', () => {
@@ -170,7 +176,16 @@ describe('the allowlist and exclusions are real files with reasons', () => {
 
 describe('the honest summary', () => {
   it('reports the split rather than a single green tick', () => {
-    expect(summarize()).toBe('6 enforced, 4 partial, 3 not yet enforceable');
+    // Pinned deliberately, as a tripwire rather than a fact worth restating.
+    // The mix only moves when a rule's enforceability genuinely changes, and
+    // that should be a decision someone makes and records -- not something that
+    // drifts because an assertion was written to accept whatever it found.
+    //
+    // Stage 0 closed at "6 enforced, 4 partial, 3 not yet enforceable".
+    // Stage 1 armed F7 when `packages/releases` gave it a subject, moving it
+    // from not-yet-enforceable to partial. Stage 0's own documents still record
+    // the Stage 0 mix, correctly: they are history, not a claim about now.
+    expect(summarize()).toBe('6 enforced, 5 partial, 2 not yet enforceable');
   });
 
   it('does not claim all thirteen rule entries are green', () => {
