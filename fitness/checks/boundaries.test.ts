@@ -346,7 +346,14 @@ describe('F2: adapters deliver the contract, they do not own knowledge', () => {
   // puts deterministic ranking in `packages/resolver`; an adapter that scored
   // or re-sorted results would be deciding what is best, which is the decision
   // the resolver and the Effective Score View exist to make and to record.
-  const DEFINES_RANKING = /\b(function|const)\s+\w*(rank|score|bm25|relevance)\w*\s*[=(<]/iu;
+  //
+  // Matched on function *shape*, not on any binding whose name contains the
+  // word. An adapter legitimately holds the score snapshot it read
+  // (`const scoreSnapshot = await index.getScoreSnapshot()`); a rule that fired
+  // on that would make reading a snapshot impossible and would be weakened the
+  // first time an adapter needed to. Defining a function is the thing F2 forbids.
+  const DEFINES_RANKING =
+    /\bfunction\s+\w*(rank|score|bm25|relevance)\w*\s*[(<]|\bconst\s+\w*(rank|score|bm25|relevance)\w*\s*=\s*(async\s+)?(\(|function\b|<)/iu;
 
   const adapterFiles = stripAllComments(readSourceFiles(['packages/adapters']));
 
@@ -381,6 +388,14 @@ describe('F2: adapters deliver the contract, they do not own knowledge', () => {
       findMatches(known('function rankResults(items) { return items; }'), DEFINES_RANKING),
     ).toHaveLength(1);
     expect(findMatches(known('const computeScore = (a) => a.n;'), DEFINES_RANKING)).toHaveLength(1);
+  });
+
+  it('does not fire on an adapter holding a score it was given', () => {
+    // Reading the release's snapshot is what an adapter is for. The name
+    // contains "score"; the code decides nothing.
+    expect(
+      findMatches(known('const scoreSnapshot = await index.getScoreSnapshot();'), DEFINES_RANKING),
+    ).toEqual([]);
   });
 
   it('does not fire on an adapter merely passing a score through', () => {

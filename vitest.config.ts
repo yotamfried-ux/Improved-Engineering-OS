@@ -68,6 +68,14 @@ export default defineConfig({
       },
       {
         test: {
+          name: 'mcp',
+          root: './packages/adapters/mcp',
+          include: ['test/**/*.test.ts'],
+          environment: 'node',
+        },
+      },
+      {
+        test: {
           name: 'releases',
           root: './packages/releases',
           include: ['test/**/*.test.ts'],

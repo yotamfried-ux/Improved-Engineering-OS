@@ -7,6 +7,9 @@
  * written and, more importantly, that nothing the project already had is lost.
  */
 
+import { existsSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   BEGIN_MARKER,
@@ -15,9 +18,12 @@ import {
   mergeCodexToml,
   mergeMcpJson,
   planFootprint,
+  MCP_SERVER_ENTRY,
   spliceMarkedBlock,
   type FootprintInput,
 } from '../src/init.ts';
+
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 
 const input: FootprintInput = {
   sourceCheckout: '/srv/eos',
@@ -155,5 +161,15 @@ describe('regeneration never destroys what the project already had', () => {
     );
     expect(merged).toContain('[mcp_servers.other]');
     expect(merged).toContain('[mcp_servers.ieos]');
+  });
+});
+
+describe('the footprint points at a server that exists', () => {
+  it('names an MCP entry file that is really in the checkout', () => {
+    // A path into another package that nothing type-checks: `ieos init` writes
+    // it into `.mcp.json` and `.codex/config.toml`, and a stale one produces a
+    // footprint that reads correctly and launches nothing. The first version of
+    // this constant named a file that had been called something else.
+    expect(existsSync(join(REPO_ROOT, MCP_SERVER_ENTRY))).toBe(true);
   });
 });

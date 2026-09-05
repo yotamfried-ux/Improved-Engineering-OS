@@ -16,9 +16,13 @@ import { telemetryEnvelopeSchema, runTelemetryStateSchema } from './telemetry.ts
 import { evidenceSchema } from './evidence.ts';
 import {
   expandRequestSchema,
+  expandResponseSchema,
+  inspectAssetResponseSchema,
   inspectRequestSchema,
+  inspectSnapshotResponseSchema,
   inspectSolutionSetResponseSchema,
   observationSchema,
+  observeRequestSchema,
   observeResponseSchema,
   resolveRequestSchema,
   resolveResponseSchema,
@@ -118,6 +122,20 @@ export const CONTRACT_REGISTRY: readonly ContractDescriptor[] = [
     ownedByStage: 0,
   },
   {
+    name: 'agent-contract-inspect-asset',
+    schema: inspectAssetResponseSchema,
+    stability: 'development',
+    stub: false,
+    ownedByStage: 1,
+  },
+  {
+    name: 'agent-contract-inspect-snapshot',
+    schema: inspectSnapshotResponseSchema,
+    stability: 'development',
+    stub: false,
+    ownedByStage: 1,
+  },
+  {
     name: 'agent-contract-inspect-solution-set',
     schema: inspectSolutionSetResponseSchema,
     stability: 'development',
@@ -130,6 +148,20 @@ export const CONTRACT_REGISTRY: readonly ContractDescriptor[] = [
     stability: 'development',
     stub: false,
     ownedByStage: 0,
+  },
+  {
+    name: 'agent-contract-expand-response',
+    schema: expandResponseSchema,
+    stability: 'development',
+    stub: false,
+    ownedByStage: 1,
+  },
+  {
+    name: 'agent-contract-observe-request',
+    schema: observeRequestSchema,
+    stability: 'development',
+    stub: false,
+    ownedByStage: 1,
   },
   {
     name: 'agent-contract-observation',

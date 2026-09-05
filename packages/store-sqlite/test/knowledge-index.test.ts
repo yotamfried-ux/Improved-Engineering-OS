@@ -197,6 +197,17 @@ describe('reading a well-formed index', () => {
     index.close();
   });
 
+  it('returns the body text, which is what `inspect` returns and `resolve` must not', async () => {
+    const index = await SqliteKnowledgeIndex.open(
+      buildFixture({ bodies: { asset_alpha: 'remember the code_verifier' } }),
+    );
+    expect(await index.getAssetBody('asset_alpha')).toBe('remember the code_verifier');
+    // Missing, not empty: an asset whose body is absent is a broken index, and
+    // an empty string would be indistinguishable from a body that says nothing.
+    expect(await index.getAssetBody('asset_missing')).toBeUndefined();
+    index.close();
+  });
+
   it('returns solution sets ordered by id', async () => {
     const index = await SqliteKnowledgeIndex.open(
       buildFixture({

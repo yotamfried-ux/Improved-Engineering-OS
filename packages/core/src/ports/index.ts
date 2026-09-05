@@ -75,6 +75,16 @@ export interface KnowledgeIndex {
    */
   searchAssets(query: string, limit: number): Promise<readonly AssetSearchHit[]>;
 
+  /**
+   * The asset's body text (D20.1: `inspect` returns metadata + body, `resolve`
+   * returns metadata + `summary` only).
+   *
+   * Separate from `getAsset` rather than a field on the record, because the two
+   * have different costs and different callers: `resolve` must never pay for a
+   * body it is contractually forbidden to return.
+   */
+  getAssetBody(id: string): Promise<string | undefined>;
+
   /** Every solution set in the index, ordered by id. */
   listSolutionSets(): Promise<readonly SolutionSetRecord[]>;
 

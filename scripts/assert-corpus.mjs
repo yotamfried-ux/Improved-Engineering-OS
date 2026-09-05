@@ -43,14 +43,15 @@ export const WINDOWS_SMOKE_PROJECTS = [
   'sqlite-qualification',
   'releases',
   'store-sqlite',
+  'mcp',
 ];
 
 /** Floors. Raise them when a whole area of the suite lands, never lower them to go green. */
 const MINIMUMS = {
-  fullTestFiles: 20,
-  fullTests: 560,
-  windowsTestFiles: 11,
-  windowsTests: 300,
+  fullTestFiles: 29,
+  fullTests: 700,
+  windowsTestFiles: 14,
+  windowsTests: 340,
   cruisedModules: 60,
   cruisedDependencies: 150,
 };

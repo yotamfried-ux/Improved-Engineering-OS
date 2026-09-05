@@ -156,6 +156,12 @@ jobs:
         # This is precisely the class of defect the Windows job exists to catch.
         run: pnpm vitest run --project releases --project store-sqlite
 
+      - name: MCP 2026-07-28 conformance smoke on win32
+        # The protocol layer has no filesystem in it, but the runtime that
+        # serves it does run here, and Stage 0 already caught two defects on
+        # win32 that Linux structurally cannot show.
+        run: pnpm vitest run --project mcp
+
       - name: Guard against a vacuous test run
         shell: bash
         run: node scripts/assert-corpus.mjs --windows-smoke
@@ -185,7 +191,7 @@ jobs:
         run: |
           set -euo pipefail
           pnpm report:collect qualification/evidence/platforms/win32.json \
-            --projects core,snapshot-emit,sqlite-qualification,releases,store-sqlite \
+            --projects core,snapshot-emit,sqlite-qualification,releases,store-sqlite,mcp \
             --commit "${{ github.sha }}" \
             --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           echo '--- win32 platform record (verbatim) ---'

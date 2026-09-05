@@ -162,6 +162,20 @@ export class SqliteKnowledgeIndex implements KnowledgeIndex {
     return parse(assetSchema, row['record_json'], `asset ${id}`);
   }
 
+  /**
+   * The body text, read from the FTS table.
+   *
+   * The body is stored once, in `assets_fts`, where the builder put it so it
+   * would be searchable. Reading it back from there rather than duplicating it
+   * into `assets` keeps one copy: two copies is how a body and its own search
+   * index start disagreeing.
+   */
+  async getAssetBody(id: string): Promise<string | undefined> {
+    const row = this.#db.prepare('select body from assets_fts where asset_id = ?').get(id);
+    if (row === undefined) return undefined;
+    return String(row['body']);
+  }
+
   async getSolutionSet(id: string): Promise<SolutionSetRecord | undefined> {
     const row = this.#db.prepare('select record_json from solution_sets where id = ?').get(id);
     if (row === undefined) return undefined;

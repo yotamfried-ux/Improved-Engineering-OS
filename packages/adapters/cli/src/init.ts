@@ -29,6 +29,18 @@ import { sha256Text } from '@ieos/core';
 export const BEGIN_MARKER = '<!-- ieos:begin -->';
 export const END_MARKER = '<!-- ieos:end -->';
 
+/**
+ * The MCP server entry, relative to the EOS source checkout.
+ *
+ * Named here rather than inline at the call site because it is a path into
+ * another package that nothing type-checks: `ieos init` writes it into the
+ * project's `.mcp.json` and `.codex/config.toml`, and a path that no longer
+ * exists produces a footprint that looks correct and launches nothing. The
+ * first version of this constant named a file that had been called something
+ * else. `test/init.test.ts` now asserts the file is really there.
+ */
+export const MCP_SERVER_ENTRY = 'packages/adapters/mcp/src/server-cli.ts';
+
 export interface FootprintInput {
   /** Absolute path to the EOS source checkout (Stages 0-3; a release later). */
   readonly sourceCheckout: string;

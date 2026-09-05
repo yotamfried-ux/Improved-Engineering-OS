@@ -23,7 +23,13 @@ import {
 import { IndexUnavailableError, SqliteKnowledgeIndex } from '@ieos/store-sqlite';
 import { buildRuntimeReport, formatRuntimeReport, type RuntimeObservations } from './doctor.ts';
 import { COMMANDS, describeCommand, isCommand } from './commands.ts';
-import { mergeCodexToml, mergeMcpJson, planFootprint, spliceMarkedBlock } from './init.ts';
+import {
+  MCP_SERVER_ENTRY,
+  mergeCodexToml,
+  mergeMcpJson,
+  planFootprint,
+  spliceMarkedBlock,
+} from './init.ts';
 
 /**
  * The composition root supplies the real clock and randomness.
@@ -138,7 +144,10 @@ async function runInit(): Promise<number> {
     installationId: mintId('inst', systemClock, systemRandom),
     projectId: mintId('proj', systemClock, systemRandom),
     mcpCommand: process.execPath,
-    mcpArgs: [join(repoRoot, 'packages/adapters/mcp/src/server-cli.ts')],
+    // The project root travels in the arguments: the MCP server binds every
+    // context snapshot to the project's HEAD commit, and it must not infer that
+    // from whatever directory the agent happened to launch it in.
+    mcpArgs: [join(repoRoot, MCP_SERVER_ENTRY), '--eos-root', repoRoot, '--project', projectRoot],
   });
 
   for (const file of files) {

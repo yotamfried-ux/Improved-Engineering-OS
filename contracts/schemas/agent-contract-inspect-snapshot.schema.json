@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "repo_sha": {
+      "type": "string",
+      "minLength": 1
+    },
+    "profile_status_digest": {
+      "type": "string",
+      "minLength": 1
+    },
+    "change_scope": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "capability_snapshot_hash": {
+      "type": "string",
+      "minLength": 1
+    },
+    "index_digest": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ranking_mode": {
+      "type": "string",
+      "enum": [
+        "live_overlay",
+        "recorded"
+      ]
+    },
+    "effective_score_view_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "score_source": {
+      "type": "string",
+      "enum": [
+        "overlay",
+        "snapshot"
+      ]
+    },
+    "eos_release": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "repo_sha",
+    "profile_status_digest",
+    "change_scope",
+    "capability_snapshot_hash",
+    "index_digest",
+    "ranking_mode",
+    "effective_score_view_id",
+    "score_source",
+    "eos_release"
+  ],
+  "additionalProperties": false
+}
