@@ -62,7 +62,9 @@ function usage(): string {
   lines.push('', 'options:');
   lines.push('  --eos-root <path>  the EOS source checkout (default: cwd)');
   lines.push('  --index <path>     the compiled knowledge index');
-  lines.push('  --project <path>   target project root, for `init` and project checks in `doctor`');
+  lines.push(
+    '  --project <path>   target project root, for `init` and project checks in `doctor`',
+  );
   return `${lines.join('\n')}\n`;
 }
 
@@ -177,9 +179,9 @@ async function runDoctor(): Promise<number> {
   return report.ok ? 0 : 1;
 }
 
-function existingIdentity(projectRoot: string):
-  | { readonly installationId: string; readonly projectId: string }
-  | null {
+function existingIdentity(
+  projectRoot: string,
+): { readonly installationId: string; readonly projectId: string } | null {
   const installationPath = join(projectRoot, '.ieos', 'installation.json');
   if (!existsSync(installationPath)) return null;
 
@@ -253,7 +255,13 @@ async function runInit(): Promise<number> {
     // The project root travels in the arguments: the MCP server binds every
     // context snapshot to the project's HEAD commit, and it must not infer that
     // from whatever directory the agent happened to launch it in.
-    mcpArgs: [join(repoRoot, MCP_SERVER_ENTRY), '--eos-root', repoRoot, '--project', projectRoot],
+    mcpArgs: [
+      join(repoRoot, MCP_SERVER_ENTRY),
+      '--eos-root',
+      repoRoot,
+      '--project',
+      projectRoot,
+    ],
   });
 
   for (const file of files) {
