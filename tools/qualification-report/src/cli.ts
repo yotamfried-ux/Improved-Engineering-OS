@@ -340,6 +340,8 @@ function report(evidenceDir: string, target: string): void {
     presentDormancySubjects: presentDormancySubjects(),
     fitnessSuitePassed: fitness.allPassed,
     minimumTestsPerPlatform: MINIMUM_TESTS_PER_PLATFORM,
+    // Every platform record must describe the tree this report is about.
+    expectedCommit: flag('--commit') ?? git('rev-parse', 'HEAD'),
   };
 
   const gate =
@@ -366,14 +368,17 @@ function report(evidenceDir: string, target: string): void {
 
 /** The Stage 0 rows need three measurements Stage 1's do not. */
 function stage0(shared: Stage1GateInput): GateInput {
+  // The named property tests as this run observed them, not "the core project
+  // was green, so presumably". See `CHAMPION_PROPERTY_TESTS`.
   const champion = runSuites(['core']);
   return {
     ...shared,
     contractsUpToDate: contractsUpToDate(),
     decisionsWithoutAdr: decisionsWithoutAdr(),
-    championProperty: champion.allPassed
-      ? { passed: true, cases: 2000 }
-      : { passed: false, cases: 0 },
+    championProperty: champion.assertions.map((assertion) => ({
+      name: assertion.name,
+      status: assertion.status === 'missing' ? 'skipped' : assertion.status,
+    })),
   };
 }
 

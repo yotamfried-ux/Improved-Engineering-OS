@@ -22,7 +22,14 @@
 
 import type { NamedTestStatus, PlatformEvidence } from './evidence.ts';
 import type { FitnessInput, GateReport, GateRow, PlatformSet, RowStatus } from './gate.ts';
-import { digestRow, fitnessRow, missingPlatforms, row, usablePlatforms } from './gate.ts';
+import {
+  describeProblems,
+  digestRow,
+  fitnessRow,
+  missingPlatforms,
+  row,
+  usablePlatforms,
+} from './gate.ts';
 
 /**
  * The empty bootstrap snapshot's digest, as the Stage 0 report recorded it on
@@ -145,7 +152,7 @@ function commandsRow(input: Stage1GateInput): GateRow {
   const requirement = '`pnpm ieos` runs from a source checkout: doctor, init and build:index';
   const missing = missingPlatforms(input);
   if (missing.length > 0) {
-    return row('G1', requirement, 'unproven', `no usable record for ${missing.join(', ')}`);
+    return row('G1', requirement, 'unproven', `no usable record for ${describeProblems(input)}`);
   }
 
   const problems: string[] = [];
@@ -185,7 +192,7 @@ function determinismRow(input: Stage1GateInput): GateRow {
   const requirement = 'the index build is deterministic: two builds of one tree agree (F8)';
   const missing = missingPlatforms(input);
   if (missing.length > 0) {
-    return row('G7', requirement, 'unproven', `no usable record for ${missing.join(', ')}`);
+    return row('G7', requirement, 'unproven', `no usable record for ${describeProblems(input)}`);
   }
 
   const problems: string[] = [];

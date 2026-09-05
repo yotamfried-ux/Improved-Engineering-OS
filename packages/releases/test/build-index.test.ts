@@ -17,6 +17,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { stringify as toYaml } from 'yaml';
+import { hashFileSet } from '@ieos/core';
 import {
   buildIndex,
   knowledgeTreeDigest,
@@ -86,7 +87,18 @@ afterEach(() => {
 });
 
 interface TreeSpec {
-  readonly assets?: { record: Record<string, unknown>; slugDir: string; body?: string }[];
+  readonly assets?: {
+    record: Record<string, unknown>;
+    slugDir: string;
+    body?: string;
+    /** Extra files under `files/`, so `content_hash` covers more than the body. */
+    files?: Record<string, string>;
+    /**
+     * Keep the record's declared `content_hash` instead of computing the real
+     * one. Only the test that proves a false hash is rejected sets this.
+     */
+    keepContentHash?: boolean;
+  }[];
   readonly solutionSets?: Record<string, unknown>[];
 }
 
@@ -97,8 +109,24 @@ function writeTree(spec: TreeSpec = {}): string {
   for (const entry of assets) {
     const dir = join(root, 'assets', entry.slugDir);
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'asset.yaml'), toYaml(entry.record), 'utf8');
-    writeFileSync(join(dir, 'body.md'), entry.body ?? '# Body\n\nUse a code_verifier.\n', 'utf8');
+    const body = entry.body ?? '# Body\n\nUse a code_verifier.\n';
+    writeFileSync(join(dir, 'body.md'), body, 'utf8');
+
+    const fileSet = [{ path: 'body.md', bytes: new TextEncoder().encode(body) }];
+    for (const [name, content] of Object.entries(entry.files ?? {})) {
+      const target = join(dir, 'files', name);
+      mkdirSync(join(target, '..'), { recursive: true });
+      writeFileSync(target, content, 'utf8');
+      fileSet.push({ path: `files/${name}`, bytes: new TextEncoder().encode(content) });
+    }
+
+    // The builder verifies `content_hash` against what is on disk (D19), so the
+    // fixture computes the real one. The only test that does not is the one
+    // proving a false hash is rejected.
+    const record = entry.keepContentHash
+      ? entry.record
+      : { ...entry.record, content_hash: hashFileSet(fileSet) };
+    writeFileSync(join(dir, 'asset.yaml'), toYaml(record), 'utf8');
   }
   const sets = spec.solutionSets ?? [aSolutionSet()];
   mkdirSync(join(root, 'solution-sets'), { recursive: true });
@@ -176,6 +204,38 @@ describe('the tree is validated at the boundary, with the file named', () => {
     expect(() => readKnowledgeTree(root)).toThrow(/duplicate asset id/u);
   });
 
+  it('rejects an asset whose declared content_hash is not the one its files produce', () => {
+    // `content_hash` is an addressing key (D19): equal hashes mean "the same
+    // content" to the importer and the resolver. Until it was checked it was
+    // just a string somebody typed, and a wrong one silently claims identity
+    // with content it does not have.
+    expect(() =>
+      readKnowledgeTree(
+        writeTree({
+          assets: [
+            {
+              record: anAsset({ content_hash: `sha256:${'f'.repeat(64)}` }),
+              slugDir: 'p/a',
+              keepContentHash: true,
+            },
+          ],
+        }),
+      ),
+    ).toThrow(KnowledgeTreeError);
+  });
+
+  it('counts files/ in content_hash, not just the body', () => {
+    // D19 says body.md *plus anything under* files/. A verification that only
+    // covered the body would accept an asset whose attachments had been swapped.
+    const withoutFiles = readKnowledgeTree(writeTree());
+    const withFiles = readKnowledgeTree(
+      writeTree({ assets: [{ record: anAsset(), slugDir: 'p/a', files: { 'a.md': 'attached' } }] }),
+    );
+    expect(withFiles.assets[0]?.asset.content_hash).not.toBe(
+      withoutFiles.assets[0]?.asset.content_hash,
+    );
+  });
+
   it('rejects an asset whose body cannot be read', () => {
     // A missing body is a broken asset, not an asset with an empty body: it
     // would silently become unsearchable while looking perfectly valid.
@@ -198,11 +258,91 @@ describe('determinism (fitness F8)', () => {
     expect(build(a).digest).toBe(build(b).digest);
   });
 
-  it('changes the digest when an asset record changes', () => {
+  it('changes the digest when the asset content changes', () => {
+    // `content_hash` is now computed from the files rather than declared, so
+    // this changes the files -- which is what "the content changed" means.
     const before = build(writeTree()).digest;
     const after = build(
       writeTree({
-        assets: [{ record: anAsset({ content_hash: `sha256:${'c'.repeat(64)}` }), slugDir: 'p/a' }],
+        assets: [{ record: anAsset(), slugDir: 'p/a', files: { 'extra.md': 'more' } }],
+      }),
+    ).digest;
+    expect(after).not.toBe(before);
+  });
+
+  // --- The metadata the index actually stores ------------------------------
+  //
+  // `content_hash` covers `body.md` and `files/` (D19). It says nothing about
+  // title, summary, capabilities, status or problem id -- all of which the
+  // builder writes into SQLite and the Stage 2 resolver will rank on. A digest
+  // that moved only with `content_hash` would let the index change underneath a
+  // `context_snapshot_id` that claims to identify it.
+
+  it('changes the digest when only the TITLE changes', () => {
+    const before = build(writeTree()).digest;
+    const after = build(
+      writeTree({
+        assets: [{ record: anAsset({ title: 'A different title entirely' }), slugDir: 'p/a' }],
+      }),
+    ).digest;
+    expect(after).not.toBe(before);
+  });
+
+  it('changes the digest when only a CAPABILITY changes', () => {
+    const before = build(writeTree()).digest;
+    const after = build(
+      writeTree({
+        assets: [
+          {
+            record: anAsset({
+              problem: { id: 'problem.auth.browser-login', capabilities: ['auth.oauth.device'] },
+            }),
+            slugDir: 'p/a',
+          },
+        ],
+      }),
+    ).digest;
+    expect(after).not.toBe(before);
+  });
+
+  it('changes the digest when only the STATUS changes', () => {
+    const before = build(writeTree()).digest;
+    const after = build(
+      writeTree({ assets: [{ record: anAsset({ status: 'deprecated' }), slugDir: 'p/a' }] }),
+    ).digest;
+    expect(after).not.toBe(before);
+  });
+
+  it('changes the digest when only SOLUTION SET metadata changes', () => {
+    const before = build(writeTree()).digest;
+    const after = build(
+      writeTree({ solutionSets: [aSolutionSet({ why_unresolved: 'a different reason' })] }),
+    ).digest;
+    expect(after).not.toBe(before);
+  });
+
+  it('changes the digest when only the SUMMARY changes', () => {
+    const before = build(writeTree()).digest;
+    const after = build(
+      writeTree({
+        assets: [{ record: anAsset({ summary: 'Something else entirely.' }), slugDir: 'p/a' }],
+      }),
+    ).digest;
+    expect(after).not.toBe(before);
+  });
+
+  it('changes the digest when only the PROBLEM ID changes', () => {
+    const before = build(writeTree()).digest;
+    const after = build(
+      writeTree({
+        assets: [
+          {
+            record: anAsset({
+              problem: { id: 'problem.other', capabilities: ['auth.oauth.pkce'] },
+            }),
+            slugDir: 'p/a',
+          },
+        ],
       }),
     ).digest;
     expect(after).not.toBe(before);

@@ -8,7 +8,7 @@
  * that reports success for a check it never ran.
  */
 
-import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -25,12 +25,15 @@ import {
   RunRegistry,
   runTrial,
   LateRegistrationError,
+  type AgentDriver,
+  type DriverResult,
   type IsolationPolicy,
   type Trial,
 } from '../src/index.ts';
 
 const EVALUATOR_ROOT = join(tmpdir(), 'ieos-evaluator-fixture');
 const open: Trial[] = [];
+const scratchDirs: string[] = [];
 
 function trialWith(policy: IsolationPolicy, sourceEnvironment = {}): Trial {
   const trial = createTrial({ trialId: 't1', policy, sourceEnvironment });
@@ -43,6 +46,9 @@ const basePolicy = (): IsolationPolicy =>
 
 afterEach(() => {
   for (const trial of open.splice(0)) trial.dispose();
+  for (const dir of scratchDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  }
 });
 
 describe('what a directory sandbox genuinely proves', () => {
@@ -297,5 +303,101 @@ describe('run classification gates a trial too (D36)', () => {
 
     expect(outcome.qualificationEligible).toBe(false);
     expect(outcome.reasons.join(' ')).toContain('unproven');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a probe taken BEFORE the agent ran cannot tell you
+// ---------------------------------------------------------------------------
+
+/** A driver that escapes the workspace while it runs, the way a real one could. */
+class EscapingDriver implements AgentDriver {
+  readonly kind = 'fake:escaping';
+  readonly #outside: string;
+
+  constructor(outside: string) {
+    this.#outside = outside;
+  }
+
+  async run(trial: Trial): Promise<DriverResult> {
+    // Exactly the move the whole boundary exists to stop: a link out of the
+    // workspace, created after the workspace was inspected and found clean.
+    symlinkSync(this.#outside, join(trial.workspaceRoot, 'escape'), 'dir');
+    return { completed: true, toolCalls: [], transcriptRef: null };
+  }
+}
+
+describe('isolation is judged on the workspace the agent left behind', () => {
+  const task = {
+    taskId: 'task-escape',
+    prompt: 'anything',
+    budget: { wallClockSeconds: 60, maxToolCalls: 20 },
+  };
+
+  function registeredRegistry(): RunRegistry {
+    const registry = new RunRegistry();
+    registry.register({
+      run_id: 'run_q',
+      origin_class: 'qualification',
+      eval_set_version: 'v1',
+      holdout_state: null,
+      simulation_id: null,
+    });
+    return registry;
+  }
+
+  it('catches a symlink the driver created during the trial', async () => {
+    const outside = mkdtempSync(join(tmpdir(), 'ieos-outside-'));
+    scratchDirs.push(outside);
+    const trial = trialWith({ ...basePolicy(), requiredBoundaries: ['filesystem', 'environment'] });
+
+    // Clean before the run: this is precisely the state the old probe recorded
+    // and then reported as the trial's isolation.
+    expect(findingFor(probe(trial), 'filesystem')?.verdict).toBe('proven');
+
+    const outcome = await runTrial({
+      trial,
+      task,
+      driver: new EscapingDriver(outside),
+      registry: registeredRegistry(),
+      runId: 'run_q',
+    });
+
+    expect(findingFor(outcome.isolation, 'filesystem')?.verdict).toBe('violated');
+    expect(outcome.qualificationEligible).toBe(false);
+    expect(outcome.reasons.join(' ')).toMatch(/escape/u);
+  });
+
+  it('still says proven for a trial the driver left alone (control)', async () => {
+    const trial = trialWith({ ...basePolicy(), requiredBoundaries: ['filesystem', 'environment'] });
+    const outcome = await runTrial({
+      trial,
+      task,
+      driver: new FakeAgentDriver(),
+      registry: registeredRegistry(),
+      runId: 'run_q',
+    });
+    expect(findingFor(outcome.isolation, 'filesystem')?.verdict).toBe('proven');
+    expect(outcome.qualificationEligible).toBe(true);
+  });
+});
+
+describe('containment is physical, not spelling', () => {
+  it('refuses a write that reaches outside through a symlink already in the workspace', () => {
+    const outside = mkdtempSync(join(tmpdir(), 'ieos-outside-'));
+    scratchDirs.push(outside);
+    const trial = trialWith(basePolicy());
+    symlinkSync(outside, join(trial.workspaceRoot, 'link'), 'dir');
+
+    // `link/notes.md` never leaves the workspace lexically. It leaves it in
+    // every sense that matters.
+    expect(() => writeIntoTrial(trial, 'link/notes.md', 'secret')).toThrow(/outside/u);
+    expect(existsSync(join(outside, 'notes.md'))).toBe(false);
+  });
+
+  it('still allows an ordinary write into a real subdirectory (control)', () => {
+    const trial = trialWith(basePolicy());
+    const written = writeIntoTrial(trial, 'nested/notes.md', 'fine');
+    expect(existsSync(written)).toBe(true);
   });
 });

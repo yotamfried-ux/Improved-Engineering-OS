@@ -7,10 +7,12 @@
  * written and, more importantly, that nothing the project already had is lost.
  */
 
+import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { AGENT_CONTRACT_COMMANDS, COMMANDS, isImplemented } from '../src/commands.ts';
 import {
   BEGIN_MARKER,
   END_MARKER,
@@ -78,11 +80,26 @@ describe('the footprint is exactly the closed list D18.4 names', () => {
 });
 
 describe('the bootstrap paragraph says what EOS is and nothing about the task', () => {
-  it('names the four tools and both transports', () => {
+  it('names the four tools', () => {
     const text = bootstrapParagraph(input);
-    for (const tool of ['resolve', 'inspect', 'expand', 'observe']) expect(text).toContain(tool);
-    expect(text).toContain('MCP');
-    expect(text).toContain('ieos');
+    for (const tool of AGENT_CONTRACT_COMMANDS) expect(text).toContain(tool);
+  });
+
+  it('claims the CLI serves the Agent Contract only when it actually does', () => {
+    // The test this replaces asserted that the strings "MCP" and "ieos" appear
+    // in the paragraph. Both did -- "ieos" appears in the Installation line --
+    // while the sentence around them said the four tools were available over
+    // the CLI and every CLI verb exited 3. A substring is not a claim.
+    //
+    // This branches on the same declaration the paragraph derives from, so it
+    // follows the implementation instead of having to be remembered.
+    const text = bootstrapParagraph(input);
+    if (AGENT_CONTRACT_COMMANDS.every(isImplemented)) {
+      expect(text).toContain('over MCP and over the `ieos` CLI');
+    } else {
+      expect(text).toContain('does not serve them yet');
+      expect(text).not.toContain('over MCP and over the `ieos` CLI');
+    }
   });
 
   it('does not instruct the agent to call anything', () => {
@@ -172,4 +189,36 @@ describe('the footprint points at a server that exists', () => {
     // this constant named a file that had been called something else.
     expect(existsSync(join(REPO_ROOT, MCP_SERVER_ENTRY))).toBe(true);
   });
+});
+
+describe('the declared implementation status is the real one', () => {
+  // `IMPLEMENTED_COMMANDS` is a claim about behaviour, and two places read it:
+  // the dispatcher and the paragraph written into a user's repository. A claim
+  // nothing checks is how the paragraph came to be wrong in the first place.
+  const cli = join(REPO_ROOT, 'packages/adapters/cli/src/cli.ts');
+
+  function run(...argv: string[]): { code: number; stderr: string } {
+    const result = spawnSync(process.execPath, [cli, ...argv], {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+    });
+    return { code: result.status ?? -1, stderr: result.stderr };
+  }
+
+  for (const command of COMMANDS.filter((name) => !isImplemented(name))) {
+    it(`\`ieos ${command}\` really is not implemented`, () => {
+      const { code, stderr } = run(command);
+      expect(code, stderr).toBe(3);
+      expect(stderr).toContain('not implemented yet');
+    });
+  }
+
+  for (const command of COMMANDS.filter(isImplemented)) {
+    it(`\`ieos ${command}\` really is implemented`, () => {
+      // Exit 0 or 1 -- 1 means it ran and found a fault or refused, which is
+      // still running. 3 is the "not implemented" code, and is what a command
+      // this list calls implemented must never produce.
+      expect(run(command).code).not.toBe(3);
+    });
+  }
 });

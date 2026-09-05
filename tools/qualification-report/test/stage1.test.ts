@@ -232,6 +232,34 @@ describe('missing evidence is never a pass', () => {
     );
   });
 
+  it('is not a pass when two platform records describe different commits', () => {
+    const report = evaluateStage1(
+      healthy({
+        expectedCommit: 'abc1234',
+        platforms: [
+          platform('linux', { commit: 'abc1234' }),
+          platform('win32', { commit: 'def5678' }),
+        ],
+      }),
+    );
+    expect(report.verdict).toBe('NOT PASSED');
+    expect(report.rows.find((row) => row.id === 'G1')?.evidence).toContain('def5678');
+  });
+
+  it('is a pass when both records describe the report commit (control)', () => {
+    expect(
+      evaluateStage1(
+        healthy({
+          expectedCommit: 'abc1234',
+          platforms: [
+            platform('linux', { commit: 'abc1234' }),
+            platform('win32', { commit: 'abc1234' }),
+          ],
+        }),
+      ).verdict,
+    ).toBe('PASS');
+  });
+
   it('is not a pass when the fitness suite did not pass', () => {
     expect(evaluateStage1(healthy({ fitnessSuitePassed: false })).verdict).toBe('NOT PASSED');
   });

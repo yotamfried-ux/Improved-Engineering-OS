@@ -24,6 +24,7 @@ import { parse as parseYaml } from 'yaml';
 import {
   assetSchema,
   solutionSetSchema,
+  hashFileSet,
   sha256Canonical,
   sha256Text,
   INDEX_META_KEYS,
@@ -85,6 +86,27 @@ function walk(root: string): string[] {
   return out.sort();
 }
 
+/**
+ * The files `content_hash` is taken over: the body, plus everything under
+ * `files/`, addressed relative to the asset directory.
+ *
+ * Paths are relative and `/`-separated, because a digest that embedded an
+ * absolute path or a backslash would differ between machines -- which is the
+ * failure D35's manifest rules exist to prevent.
+ */
+function assetFileSet(assetDir: string, bodyName: string): { path: string; bytes: Uint8Array }[] {
+  const entries: { path: string; bytes: Uint8Array }[] = [
+    { path: bodyName, bytes: new Uint8Array(readFileSync(join(assetDir, bodyName))) },
+  ];
+  for (const relPath of walk(join(assetDir, 'files'))) {
+    entries.push({
+      path: `files/${relPath}`,
+      bytes: new Uint8Array(readFileSync(join(assetDir, 'files', relPath))),
+    });
+  }
+  return entries;
+}
+
 function parseRecord<T>(
   schema: {
     safeParse(v: unknown): {
@@ -138,13 +160,29 @@ export function readKnowledgeTree(root: string): KnowledgeTree {
     // `body` is a relative path (D20.1), not the text. Reading it here is what
     // makes the body searchable; a missing body is a broken asset, not an
     // asset with an empty body.
-    const bodyPath = join(dirname(join(root, 'assets', relPath)), asset.body);
+    const assetDir = dirname(join(root, 'assets', relPath));
+    const bodyPath = join(assetDir, asset.body);
     let body: string;
     try {
       body = readFileSync(bodyPath, 'utf8');
-    } catch (cause) {
+    } catch {
       throw new KnowledgeTreeError(`names a body ${asset.body} that cannot be read`, at);
     }
+
+    // D19 defines `content_hash` as the D35 file-set digest over `body.md` plus
+    // anything under `files/`. Nothing recomputed it, so until now the field was
+    // whatever the author typed -- and it is an addressing key: two assets with
+    // the same `content_hash` are treated as the same content. A key nobody
+    // checks is a key that will eventually be wrong.
+    const observed = hashFileSet(assetFileSet(assetDir, asset.body));
+    if (observed !== asset.content_hash) {
+      throw new KnowledgeTreeError(
+        `declares content_hash ${asset.content_hash} but its ${asset.body} and files/ hash to ` +
+          `${observed} (D19, D35)`,
+        at,
+      );
+    }
+
     assets.push({ asset, body });
   }
 
@@ -171,28 +209,52 @@ export function readKnowledgeTree(root: string): KnowledgeTree {
 }
 
 /**
+ * Order-normalize the fields the builder itself treats as sets.
+ *
+ * `problem.capabilities` is written to `asset_capabilities` sorted, and to the
+ * FTS `tags` column sorted, so two trees that differ only in the order those
+ * were authored compile to the same index and must digest the same. Everything
+ * else is hashed exactly as written.
+ */
+function normalizedAsset(asset: AssetRecord): Record<string, unknown> {
+  return {
+    ...asset,
+    problem: { ...asset.problem, capabilities: [...asset.problem.capabilities].sort() },
+  };
+}
+
+function normalizedSolutionSet(set: SolutionSetRecord): Record<string, unknown> {
+  return { ...set, members: [...set.members].sort() };
+}
+
+/**
  * The D35 digest of a knowledge tree's logical content.
  *
  * Over structure, never over the database file. Stage 0's SQLite check 7
  * recorded that raw page bytes are not something to rely on, and D35 is
  * explicit that an index digest is taken over canonical structure.
+ *
+ * It covers the **whole record**, not a summary of it. The earlier version
+ * hashed `{id, content_hash, body_hash}` per asset, which was wrong in a way
+ * that a green build could never surface: `content_hash` is defined over
+ * `body.md` and `files/` (D19), so `title`, `summary`, `status`, `problem_id`
+ * and `problem.capabilities` could all change -- changing what is written to
+ * SQLite, and what the Stage 2 resolver ranks on -- while the digest stood
+ * still. `index_digest` is an input to every `context_snapshot_id` (T-05), so
+ * that meant a decision could cite an index state it did not actually see.
+ *
+ * The rule now is simply: if it reaches the index, it reaches the digest.
  */
 export function knowledgeTreeDigest(tree: KnowledgeTree): string {
   return sha256Canonical({
     schema_version: INDEX_SCHEMA_VERSION,
     assets: tree.assets.map((entry) => ({
-      id: entry.asset.id,
-      content_hash: entry.asset.content_hash,
+      record: normalizedAsset(entry.asset),
       // The body is part of what was compiled, so a body edit changes the
       // index digest even when the record around it does not.
       body_hash: sha256Text(entry.body),
     })),
-    solution_sets: tree.solutionSets.map((set) => ({
-      id: set.id,
-      canonical_state: set.canonical_state,
-      champion_id: set.champion_id,
-      members: [...set.members].sort(),
-    })),
+    solution_sets: tree.solutionSets.map(normalizedSolutionSet),
   });
 }
 

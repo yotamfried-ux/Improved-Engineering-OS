@@ -12,6 +12,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ASSET_TREE_FIXTURE,
+  CHAMPION_PROPERTY_TESTS,
   collectPlatformEvidence,
   evaluateStage0,
   renderReport,
@@ -44,7 +45,10 @@ const healthyInput = (over: Partial<GateInput> = {}): GateInput => ({
   fitnessSuitePassed: true,
   contractsUpToDate: true,
   decisionsWithoutAdr: [],
-  championProperty: { passed: true, cases: 100 },
+  championProperty: CHAMPION_PROPERTY_TESTS.map((name: string) => ({
+    name,
+    status: 'passed' as const,
+  })),
   minimumTestsPerPlatform: 200,
   ...over,
 });
@@ -246,11 +250,63 @@ describe('negative controls: the report can withhold a pass', () => {
     expect(report.verdict).toBe('NOT PASSED');
   });
 
-  it('is NOT PASSED when the champion property test ran zero cases', () => {
-    // A property test that generated nothing proves nothing, and exits 0.
-    const report = evaluateStage0(healthyInput({ championProperty: { passed: true, cases: 0 } }));
-    expect(report.rows.find((row) => row.id === 'G3')?.status).toBe('unproven');
+  it('is NOT PASSED when a named champion property test is missing from the run', () => {
+    // The failure this design exists for: rename or delete
+    // `champion.property.test.ts` and the `core` project stays green. A row
+    // that read "core passed, so the property held over 2000 cases" would keep
+    // saying so about a property nobody checked.
+    const [dropped, ...rest] = CHAMPION_PROPERTY_TESTS;
+    const report = evaluateStage0(
+      healthyInput({
+        championProperty: rest.map((name: string) => ({ name, status: 'passed' as const })),
+      }),
+    );
+    const g3 = report.rows.find((row) => row.id === 'G3');
+    expect(g3?.status).toBe('unproven');
+    expect(g3?.evidence).toContain(dropped);
     expect(report.verdict).toBe('NOT PASSED');
+  });
+
+  it('is NOT PASSED when a named champion property test failed', () => {
+    const report = evaluateStage0(
+      healthyInput({
+        championProperty: CHAMPION_PROPERTY_TESTS.map((name: string, index: number) => ({
+          name,
+          status: index === 0 ? ('failed' as const) : ('passed' as const),
+        })),
+      }),
+    );
+    expect(report.rows.find((row) => row.id === 'G3')?.status).toBe('fail');
+    expect(report.verdict).toBe('NOT PASSED');
+  });
+
+  it('is NOT PASSED when two platform records describe different commits', () => {
+    // Both green, both non-vacuous, and comparing them proves nothing: a digest
+    // "identical on 2 platforms" would be comparing two different trees.
+    const report = evaluateStage0(
+      healthyInput({
+        expectedCommit: 'abc1234',
+        platforms: [
+          platform({ platform: 'linux', commit: 'abc1234' }),
+          platform({ platform: 'win32', commit: 'def5678' }),
+        ],
+      }),
+    );
+    expect(report.verdict).toBe('NOT PASSED');
+    expect(report.rows.find((row) => row.id === 'G2')?.evidence).toContain('def5678');
+  });
+
+  it('passes when both records describe the commit the report is about (control)', () => {
+    const report = evaluateStage0(
+      healthyInput({
+        expectedCommit: 'abc1234',
+        platforms: [
+          platform({ platform: 'linux', commit: 'abc1234' }),
+          platform({ platform: 'win32', commit: 'abc1234' }),
+        ],
+      }),
+    );
+    expect(report.verdict).toBe('PASS');
   });
 
   it('is NOT PASSED when no fitness rules were supplied at all', () => {

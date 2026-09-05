@@ -22,7 +22,7 @@ import {
 } from '@ieos/core';
 import { IndexUnavailableError, SqliteKnowledgeIndex } from '@ieos/store-sqlite';
 import { buildRuntimeReport, formatRuntimeReport, type RuntimeObservations } from './doctor.ts';
-import { COMMANDS, describeCommand, isCommand } from './commands.ts';
+import { COMMANDS, describeCommand, isCommand, isImplemented } from './commands.ts';
 import {
   MCP_SERVER_ENTRY,
   mergeCodexToml,
@@ -197,13 +197,22 @@ const exitCode = await (async (): Promise<number> => {
     process.stderr.write(`unknown command ${JSON.stringify(command)}\n\n${usage()}`);
     return 2;
   }
+  // The declaration is checked against the dispatch rather than trusted:
+  // `IMPLEMENTED_COMMANDS` is what `ieos init` writes into a user's repository,
+  // so a command listed there but not wired here would put a false claim in
+  // someone else's AGENTS.md.
+  if (!isImplemented(command)) return notYetImplemented(command);
   switch (command) {
     case 'doctor':
       return await runDoctor();
     case 'init':
       return await runInit();
     default:
-      return notYetImplemented(command);
+      process.stderr.write(
+        `\`ieos ${command}\` is listed as implemented but has no handler. ` +
+          'That is a defect in this build, not a missing feature.\n',
+      );
+      return 70;
   }
 })();
 

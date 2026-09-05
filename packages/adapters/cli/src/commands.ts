@@ -24,6 +24,32 @@ export const COMMANDS = [
 
 export type Command = (typeof COMMANDS)[number];
 
+/**
+ * The commands that actually run today.
+ *
+ * Declared here, in one place, because two things read it and must not
+ * disagree: `cli.ts` dispatches on it, and `init.ts` writes a paragraph into
+ * someone else's repository describing what this installation offers. The
+ * paragraph used to say the Agent Contract was "available over MCP and over the
+ * `ieos` CLI" while every CLI verb exited 3 -- a claim in a user's `AGENTS.md`
+ * that was simply untrue. Deriving the sentence from this list means the text
+ * corrects itself when the commands land, instead of waiting for someone to
+ * notice.
+ */
+export const IMPLEMENTED_COMMANDS: readonly Command[] = ['doctor', 'init'];
+
+export function isImplemented(command: Command): boolean {
+  return IMPLEMENTED_COMMANDS.includes(command);
+}
+
+/** The Agent Contract's four verbs (guide section 5.6). */
+export const AGENT_CONTRACT_COMMANDS: readonly Command[] = [
+  'resolve',
+  'inspect',
+  'expand',
+  'observe',
+];
+
 export function isCommand(value: string): value is Command {
   return (COMMANDS as readonly string[]).includes(value);
 }

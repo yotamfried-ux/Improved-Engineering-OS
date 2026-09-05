@@ -30,6 +30,28 @@
 import type { PlatformEvidence } from './evidence.ts';
 import { failures, totalPassed } from './evidence.ts';
 
+/** One named test as the runner reported it. */
+export interface NamedTestOutcome {
+  readonly name: string;
+  readonly status: 'passed' | 'failed' | 'skipped';
+}
+
+/**
+ * The tests row G3 rests on, by the runner's full name.
+ *
+ * Includes the property's own vacuity control: a generator that produced no
+ * valid Champion would make every property above it hold for the wrong reason,
+ * which is a mistake this repository has already made once.
+ */
+export const CHAMPION_PROPERTY_TESTS: readonly string[] = [
+  'champion_id: null never yields a Champion (gate row G3) never returns a Champion when champion_id is null, whatever else is true',
+  'champion_id: null never yields a Champion (gate row G3) never returns a Champion for an unresolved set, even one carrying a champion_id',
+  'champion_id: null never yields a Champion (gate row G3) never returns an id that is not a member of the set',
+  'champion_id: null never yields a Champion (gate row G3) returns a Champion only for a pinned set, and then exactly champion_id',
+  'the property is not vacuous the generator actually produces both null and non-null champions',
+  'the property is not vacuous a pinned set with a valid member does yield that Champion',
+];
+
 export type RowStatus = 'pass' | 'fail' | 'unproven';
 
 export interface GateRow {
@@ -54,6 +76,15 @@ export interface PlatformSet {
   readonly requiredPlatforms: readonly string[];
   /** Minimum tests a platform must have run for its record to count. */
   readonly minimumTestsPerPlatform: number;
+  /**
+   * The commit every platform record must describe.
+   *
+   * Cross-platform agreement is only evidence if both platforms looked at the
+   * same tree. Nothing enforced that before: two green records from different
+   * commits would have produced a PASS, and a digest "identical on 2 platforms"
+   * would have been comparing two different pieces of software.
+   */
+  readonly expectedCommit?: string | undefined;
 }
 
 /** The fitness half, shared by Stage 0 row G1 and Stage 1 row G9. */
@@ -72,8 +103,17 @@ export interface GateInput extends PlatformSet, FitnessInput {
   readonly contractsUpToDate: boolean;
   /** Decisions D18-D36 with no ADR covering them. */
   readonly decisionsWithoutAdr: readonly string[];
-  /** Did the champion/Solution-Set property test pass, and how many cases? */
-  readonly championProperty: { readonly passed: boolean; readonly cases: number } | null;
+  /**
+   * What the runner said about each named Champion-property test, in this run.
+   *
+   * Named rather than counted. The earlier version asserted
+   * `{ passed: true, cases: 2000 }` whenever the whole `core` project was
+   * green, which claimed two things it had not observed: that the property test
+   * still existed, and that it had run 2000 cases. Deleting
+   * `champion.property.test.ts` would have left `core` green and G3 still
+   * reporting a property that held over 2000 cases nobody generated.
+   */
+  readonly championProperty: readonly NamedTestOutcome[] | null;
 }
 
 export interface GateReport {
@@ -102,15 +142,65 @@ export function row(id: string, requirement: string, status: RowStatus, evidence
  *   wrong in the safe direction is still wrong.
  */
 export function usablePlatforms(input: PlatformSet): PlatformEvidence[] {
-  return input.platforms.filter(
-    (platform) =>
-      totalPassed(platform) >= input.minimumTestsPerPlatform && failures(platform).length === 0,
-  );
+  return input.platforms.filter((platform) => unusableReason(input, platform) === null);
+}
+
+/** Why this record cannot stand for its platform, or `null` if it can. */
+function unusableReason(input: PlatformSet, platform: PlatformEvidence): string | null {
+  if (input.expectedCommit !== undefined && platform.commit !== input.expectedCommit) {
+    return (
+      `its record is at commit ${platform.commit}, but this report is about ` +
+      `${input.expectedCommit}; evidence from two different trees is not cross-platform evidence`
+    );
+  }
+  const passed = totalPassed(platform);
+  if (passed < input.minimumTestsPerPlatform) {
+    return (
+      `only ${String(passed)} test(s) passed, below the ${String(input.minimumTestsPerPlatform)} ` +
+      'a record must show to stand for a platform'
+    );
+  }
+  const failed = failures(platform);
+  if (failed.length > 0) {
+    return `${String(failed.length)} test(s) failed there: ${failed.join(', ')}`;
+  }
+  return null;
+}
+
+/**
+ * Required platforms with no usable record, each with the reason.
+ *
+ * The reason matters: "no usable record for win32" sends someone looking for a
+ * missing artifact, when the truth may be that the artifact arrived and
+ * described a different commit.
+ */
+export function platformProblems(input: PlatformSet): { platform: string; reason: string }[] {
+  const problems: { platform: string; reason: string }[] = [];
+  for (const required of input.requiredPlatforms) {
+    const records = input.platforms.filter((platform) => platform.platform === required);
+    if (records.length === 0) {
+      problems.push({ platform: required, reason: 'no record was supplied' });
+      continue;
+    }
+    const reasons = records.map((record) => unusableReason(input, record));
+    if (reasons.some((reason) => reason === null)) continue;
+    problems.push({
+      platform: required,
+      reason: reasons.filter((reason): reason is string => reason !== null).join('; '),
+    });
+  }
+  return problems;
 }
 
 export function missingPlatforms(input: PlatformSet): string[] {
-  const usable = new Set(usablePlatforms(input).map((platform) => platform.platform));
-  return input.requiredPlatforms.filter((required) => !usable.has(required));
+  return platformProblems(input).map((problem) => problem.platform);
+}
+
+/** `win32 (no record was supplied)`, for a row's evidence. */
+export function describeProblems(input: PlatformSet): string {
+  return platformProblems(input)
+    .map((problem) => `${problem.platform} (${problem.reason})`)
+    .join('; ');
 }
 
 /** Row 2 and row 4: a named digest must agree across every required platform. */
@@ -126,8 +216,8 @@ export function digestRow(
       id,
       requirement,
       'unproven',
-      `no usable record for ${missing.join(', ')}; a digest cannot be compared across ` +
-        'platforms that were never observed',
+      `no usable record for ${describeProblems(input)}; a digest cannot be compared across ` +
+        'platforms that were not usably observed',
     );
   }
 
@@ -197,7 +287,7 @@ export function fitnessRow(
       id,
       requirement,
       'unproven',
-      `the fitness suite passed, but ${missing.join(', ')} produced no usable record`,
+      `the fitness suite passed, but ${describeProblems(input)}`,
     );
   }
   return row(
@@ -207,6 +297,39 @@ export function fitnessRow(
     `${String(enforced.length)} of ${String(input.fitness.length)} rules enforced and green; ` +
       `${String(dormant.length)} dormant, each naming an absent subject and guarded by ` +
       'fitness/checks/dormancy.test.ts (owner reading C-10)',
+  );
+}
+
+/** Row G3, backed by the named property tests rather than by a suite's colour. */
+function championRow(input: GateInput): GateRow {
+  const requirement = 'champion_id: null never yields a Champion in any resolver path';
+  const observed = input.championProperty;
+  if (observed === null) {
+    return row('G3', requirement, 'unproven', 'the property suite was not run');
+  }
+
+  const byName = new Map(observed.map((outcome) => [outcome.name, outcome.status]));
+  const failed = CHAMPION_PROPERTY_TESTS.filter((name) => byName.get(name) === 'failed');
+  if (failed.length > 0) {
+    return row('G3', requirement, 'fail', `failed: ${failed.join('; ')}`);
+  }
+  const absent = CHAMPION_PROPERTY_TESTS.filter((name) => byName.get(name) !== 'passed');
+  if (absent.length > 0) {
+    return row(
+      'G3',
+      requirement,
+      'unproven',
+      `not observed: ${absent.join('; ')}. A named test the run does not mention has been ` +
+        'renamed or removed; the row is not passing on a property nobody checked.',
+    );
+  }
+  return row(
+    'G3',
+    requirement,
+    'pass',
+    `${String(CHAMPION_PROPERTY_TESTS.length)} named property tests passed, including the ` +
+      'vacuity control that proves the generator produces real Champions. At Stage 0 the ' +
+      'guarantee is contract-level, since no resolver exists yet (its code path is F11, dormant).',
   );
 }
 
@@ -227,47 +350,7 @@ export function evaluateStage0(input: GateInput): GateReport {
   );
 
   // --- Row 3: champion_id: null never yields a Champion ---------------------
-  {
-    const property = input.championProperty;
-    if (property === null) {
-      rows.push(
-        row(
-          'G3',
-          'champion_id: null never yields a Champion in any resolver path',
-          'unproven',
-          'the property test was not run',
-        ),
-      );
-    } else if (!property.passed) {
-      rows.push(
-        row(
-          'G3',
-          'champion_id: null never yields a Champion in any resolver path',
-          'fail',
-          'the property test failed',
-        ),
-      );
-    } else if (property.cases < 1) {
-      rows.push(
-        row(
-          'G3',
-          'champion_id: null never yields a Champion in any resolver path',
-          'unproven',
-          'the property test reported zero cases, so it proved nothing',
-        ),
-      );
-    } else {
-      rows.push(
-        row(
-          'G3',
-          'champion_id: null never yields a Champion in any resolver path',
-          'pass',
-          `property held over ${String(property.cases)} generated cases; at Stage 0 the ` +
-            'guarantee is contract-level, since no resolver exists yet (its code path is F11, dormant)',
-        ),
-      );
-    }
-  }
+  rows.push(championRow(input));
 
   // --- Row 4: the UNPROVEN bootstrap snapshot ------------------------------
   rows.push(
