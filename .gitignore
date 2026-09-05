@@ -8,3 +8,9 @@ coverage/
 # Platform qualification records are produced by CI, never by a laptop.
 # The report cites them inline; a stale local copy would only invite confusion.
 qualification/evidence/platforms/
+
+# The Stage 0 report is committed only when CI generated it from BOTH platform
+# records. A locally generated one is made from one platform, so it can only
+# ever say NOT PASSED for a reason that is about this laptop rather than about
+# the stage -- exactly the confusion the report exists to remove.
+qualification/reports/stage-00-report.md
