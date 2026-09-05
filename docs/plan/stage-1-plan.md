@@ -1,11 +1,11 @@
 # Stage 1 implementation plan — minimal runtime from source
 
-| Field     | Value                                                                                                                                                                         |
-| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status    | Active. Stage 1 in progress; **no Stage 1 gate has passed**. The gate is closed only by a harness-generated report, as Stage 0's was.                                         |
-| Written   | 2026-09-05                                                                                                                                                                    |
-| Base      | Stage 0, merged at `c436c1f`, gate PASSED by `qualification/reports/stage-00-2026-09-05.md`.                                                                                  |
-| Authority | `docs/source/Improved-Engineering-OS_Architecture_Report.pdf` (constitution) > `docs/source/Improved-Engineering-OS-Build-Guide-FROZEN-v1.4.1.md` (frozen guide) > this plan. |
+| Field     | Value                                                                                                                                                                                                                                                 |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status    | **Gate PASSED** — `qualification/reports/stage-01-2026-09-05.md`, 9 pass / 0 fail / 0 unproven on `linux` and `win32`. The report is the authority, not this document. Stage 1 closes procedurally when PR #2 is reviewed and merged, as Stage 0 did. |
+| Written   | 2026-09-05                                                                                                                                                                                                                                            |
+| Base      | Stage 0, merged at `c436c1f`, gate PASSED by `qualification/reports/stage-00-2026-09-05.md`.                                                                                                                                                          |
+| Authority | `docs/source/Improved-Engineering-OS_Architecture_Report.pdf` (constitution) > `docs/source/Improved-Engineering-OS-Build-Guide-FROZEN-v1.4.1.md` (frozen guide) > this plan.                                                                         |
 
 ## 1. What the guide asks for
 
@@ -142,7 +142,8 @@ F5 (`packages/launcher`), F10 (`simulations/`), F4 and F11 (`packages/resolver`,
 ## 5. Exit gate
 
 Read the same way Stage 0's was, and closed the same way — by a harness-generated
-report in `qualification/reports/`, never by this document.
+report in `qualification/reports/`, never by this document. **All nine rows passed
+on both platforms**; the report is `qualification/reports/stage-01-2026-09-05.md`.
 
 | Row | Requirement                                                                                                                                                                                              |
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
