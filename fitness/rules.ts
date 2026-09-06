@@ -95,10 +95,12 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
     status: 'partial',
     mechanisms: ['dependency-graph'],
     note:
-      'Enforced for packages/resolver, which exists from Stage 2 and talks to the ' +
-      'KnowledgeIndex port rather than to store-sqlite. assurance and ' +
-      'evidence-derivation do not exist yet, so the rule stays partial and their ' +
-      'guards stay armed.',
+      'Enforced for packages/resolver and packages/telemetry, which exist from Stage 2 and ' +
+      'talk to the KnowledgeIndex, Outbox and Ingest ports rather than to store-sqlite. ' +
+      "telemetry is not in F4's literal wording; the guide's dependency-direction table " +
+      'puts it in the same class (telemetry -> core), and covering it here is narrower than ' +
+      'writing a thirteenth rule for one package. assurance and evidence-derivation do not ' +
+      'exist yet, so the rule stays partial and their guards stay armed.',
     dormantWhileAbsent: ['packages/assurance', 'packages/evidence-derivation'],
   },
   {

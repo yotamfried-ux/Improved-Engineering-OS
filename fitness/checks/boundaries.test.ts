@@ -16,6 +16,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { championsOf } from '@ieos/resolver';
+import { SECRET_SHAPES } from '@ieos/core';
 import type { SolutionSetRecord } from '@ieos/core';
 import {
   describe as render,
@@ -196,17 +197,50 @@ describe('F6 -- no target-project names or absolute paths in runtime paths', () 
 
 describe('F9 -- no key-shaped secret values anywhere', () => {
   // Values, not identifier words: "supabase" in a comment is fine, a key is not.
-  const SECRET_SHAPES = [
-    /sb_secret_[A-Za-z0-9]{20,}/u,
-    /sb_publishable_[A-Za-z0-9]{20,}/u,
-    /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\./u, // JWT
-    /-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----/u,
-    /gh[pousr]_[A-Za-z0-9]{30,}/u,
-    /AKIA[0-9A-Z]{16}/u,
+  //
+  // The list is imported rather than restated. The same shapes are what the
+  // telemetry sanitizer rejects at runtime and what the ingest function rejects
+  // at the boundary, and three copies of a regex list drift by default. A shape
+  // this scan knows and the sanitizer does not is the gap a key travels
+  // through.
+
+  /**
+   * The runtime rejecter's own negative controls.
+   *
+   * `fitness/checks` is already excluded from every scan, for the reason stated
+   * at BASE_EXCLUDE: a file that defines a scan necessarily contains the pattern
+   * it looks for. These two files are the same case one level out. They prove
+   * the telemetry sanitizer refuses a credential-shaped attribute value, and a
+   * control for a rejecter has to contain what it rejects or it proves nothing.
+   *
+   * Named file by file rather than as `packages/telemetry/test/**`, so the hole
+   * is exactly two files wide, and kept honest by the test below: each must
+   * exist and each must still be asserting rejection. The moment one stops
+   * being a control, its exclusion fails rather than quietly covering a key.
+   */
+  const F9_CONTROL_FILES = [
+    'packages/telemetry/test/attributes.test.ts',
+    'packages/telemetry/test/emitter.test.ts',
   ];
 
   const scanned = readSourceFiles(['packages', 'tools', 'contracts', 'fitness', 'supabase'], {
-    exclude: BASE_EXCLUDE,
+    exclude: [...BASE_EXCLUDE, ...F9_CONTROL_FILES],
+  });
+
+  it('excludes exactly those two files and nothing else in the package', () => {
+    // The hole is two files wide. If someone later widens it to a directory,
+    // this fails rather than the scan quietly stopping at the package boundary.
+    const paths = new Set(scanned.map((file) => file.path));
+    for (const control of F9_CONTROL_FILES) expect(paths.has(control)).toBe(false);
+    expect(paths.has('packages/telemetry/src/attributes.ts')).toBe(true);
+    expect(paths.has('packages/telemetry/test/flush.test.ts')).toBe(true);
+  });
+
+  it.each(F9_CONTROL_FILES)('control file %s exists and still asserts rejection', (path) => {
+    const text = readFileSync(join(REPO_ROOT, path), 'utf8');
+    // Not "mentions a secret" -- asserts that one was refused. The exclusion is
+    // justified by the assertion, so the assertion is what is checked.
+    expect(text).toMatch(/secret_shaped|EmitterError/u);
   });
 
   it.each(SECRET_SHAPES.map((pattern, index) => [index, pattern] as const))(

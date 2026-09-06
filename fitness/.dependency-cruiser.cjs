@@ -95,10 +95,25 @@ module.exports = {
       comment:
         'F4: resolver, assurance and evidence-derivation talk to ports, not to a storage ' +
         'implementation. This is what keeps local evaluation working when the Evidence ' +
-        'Plane is down (R-05). Armed before those packages exist.',
+        'Plane is down (R-05). Armed before those packages exist. telemetry and curator are ' +
+        'in the same class by the guide dependency-direction table (telemetry -> core), so ' +
+        'they are covered here rather than left to a rule nobody wrote.',
       severity: 'error',
-      from: { path: '^packages/(resolver|assurance|evidence-derivation|curator)/' },
+      from: { path: '^packages/(resolver|assurance|evidence-derivation|curator|telemetry)/' },
       to: { path: '^packages/store-' },
+    },
+    {
+      name: 'f4-domain-imports-no-store-by-name',
+      comment:
+        'F4, by specifier rather than by resolved path -- the same gap ADR-0004 records for ' +
+        "F1a. pnpm's strict node_modules makes an undeclared workspace import unresolvable, " +
+        'so it never acquires a resolved path for the rule above to match, and the only ' +
+        'thing that fires is no-unresolvable. A domain package that DID declare the ' +
+        'dependency would resolve and be caught by the path rule; this catches the one that ' +
+        'did not, and names it for what it is rather than as a typo.',
+      severity: 'error',
+      from: { path: '^packages/(resolver|assurance|evidence-derivation|curator|telemetry)/' },
+      to: { path: '^@ieos/store-' },
     },
     {
       name: 'f5-launcher-imports-only-node-builtins',

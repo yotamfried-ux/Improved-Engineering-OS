@@ -121,6 +121,15 @@ export default defineConfig({
       },
       {
         test: {
+          name: 'telemetry',
+          root: './packages/telemetry',
+          include: ['test/**/*.test.ts'],
+          environment: 'node',
+          ...REAL_IO,
+        },
+      },
+      {
+        test: {
           name: 'store-sqlite',
           root: './packages/store-sqlite',
           include: ['test/**/*.test.ts'],
