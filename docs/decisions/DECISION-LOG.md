@@ -389,6 +389,41 @@ outer shape is the same and there was no content for the change to affect. That
 is the correct behaviour, and it means the Stage 1 report's recorded value is
 still the value this code produces.
 
+### H-7 A platform record named a failing test but not why it failed
+
+On the Stage 2 branch a win32 record read `428 | 427 | 0 | 1` with one name:
+`determinism (fitness F8) changes the digest when only a CAPABILITY changes`.
+Three things about that observation matter.
+
+The Windows job itself passed, including step 11, which runs that same test in
+its own vitest invocation. It failed only in the evidence collector, which runs
+eight projects in one invocation — among them `sqlite-qualification`, which
+deliberately spawns writer processes and holds a real SQLite lock for over a
+second. The same commit passed in the sibling CI run. Re-running the eight
+projects on Linux, including pinned to a single core, did not reproduce it.
+
+Those facts are consistent with the test losing on wall clock rather than on its
+assertion: `packages/releases` carried no `testTimeout`, so its filesystem and
+SQLite tests inherited vitest's 5s default, sized for an idle Linux machine and
+not for a contended two-core Windows runner where the same suite already costs
+30s. That is a hypothesis, not a measurement, and it is stated as one.
+
+The reason it can only be a hypothesis is the actual defect. `--reporter=json`
+replaces the reporter that would have printed the failure, and the collector read
+only test names out of the JSON, so the runner's own explanation reached neither
+the log nor the record and then expired with the log. A record that says a
+determinism test failed, without saying whether the digest moved or the runner
+stopped waiting, cannot be acted on — the same argument that already required
+carrying the names rather than a count, one level down.
+
+Both are fixed. `SuiteResult.failures` carries the reason next to the name, the
+collector prints it, and the report renders it; the field is optional so records
+collected earlier still parse. The projects that drive the real filesystem, real
+SQLite files or real subprocesses now declare explicit 30s test and hook
+timeouts. A timeout is a liveness backstop, not an assertion: raising it weakens
+no claim these suites make, and leaving it where scheduling pressure decides the
+verdict was reporting a schedule as a determinism defect.
+
 ## 4b. Owner decisions
 
 | Item                                   | Decision                                                                                                                                                                                                                                                            | Date       | Consequence                                                                                                                                                                                                                                                                                                                                                                                |

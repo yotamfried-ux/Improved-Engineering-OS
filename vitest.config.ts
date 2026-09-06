@@ -5,6 +5,29 @@ import { defineConfig } from 'vitest/config';
  * it explicitly: no concurrency inside a file, no shuffling, and no retries that
  * could turn a flaky result into a pass.
  */
+
+/**
+ * Timeouts for the projects whose tests drive the real filesystem, real SQLite
+ * files or real subprocesses.
+ *
+ * A timeout is a liveness backstop -- it answers "is this hung?" -- and it is
+ * the one part of a test that is not a claim about the code. Vitest's 5s default
+ * is sized for an idle Linux machine. These suites create temp trees, build
+ * SQLite databases with FTS5 shadow tables and then delete them again, and on a
+ * two-core Windows runner with a virus scanner in the path that work costs an
+ * order of magnitude more. When such a suite is scheduled alongside
+ * `sqlite-qualification` -- which deliberately spawns writer processes and holds
+ * a real lock for over a second -- the default leaves no headroom, and a test
+ * that asserts a digest property can lose on wall clock instead of on its
+ * assertion. That is a false failure: it reports scheduling pressure as a
+ * determinism defect, which is exactly the kind of untrue signal this repository
+ * exists to keep out of its evidence.
+ *
+ * Raising the backstop weakens no assertion. Every digest, ordering and
+ * containment claim these suites make is checked identically; only the point at
+ * which the runner gives up waiting moves.
+ */
+const REAL_IO = { testTimeout: 30_000, hookTimeout: 30_000 } as const;
 export default defineConfig({
   test: {
     projects: [
@@ -22,6 +45,7 @@ export default defineConfig({
           root: './tools/harness',
           include: ['test/**/*.test.ts'],
           environment: 'node',
+          ...REAL_IO,
         },
       },
       {
@@ -48,6 +72,7 @@ export default defineConfig({
           environment: 'node',
           // Check 4 spawns a second writer process and waits out a real lock.
           testTimeout: 60_000,
+          hookTimeout: REAL_IO.hookTimeout,
         },
       },
       {
@@ -56,6 +81,7 @@ export default defineConfig({
           root: './tools/snapshot-emit',
           include: ['test/**/*.test.ts'],
           environment: 'node',
+          ...REAL_IO,
         },
       },
       {
@@ -64,6 +90,7 @@ export default defineConfig({
           root: './packages/adapters/cli',
           include: ['test/**/*.test.ts'],
           environment: 'node',
+          ...REAL_IO,
         },
       },
       {
@@ -72,6 +99,7 @@ export default defineConfig({
           root: './packages/adapters/mcp',
           include: ['test/**/*.test.ts'],
           environment: 'node',
+          ...REAL_IO,
         },
       },
       {
@@ -88,6 +116,7 @@ export default defineConfig({
           root: './packages/releases',
           include: ['test/**/*.test.ts'],
           environment: 'node',
+          ...REAL_IO,
         },
       },
       {
@@ -96,6 +125,7 @@ export default defineConfig({
           root: './packages/store-sqlite',
           include: ['test/**/*.test.ts'],
           environment: 'node',
+          ...REAL_IO,
         },
       },
       {
@@ -104,6 +134,7 @@ export default defineConfig({
           root: './tools/seed-import',
           include: ['test/**/*.test.ts'],
           environment: 'node',
+          ...REAL_IO,
         },
       },
       {
@@ -112,6 +143,7 @@ export default defineConfig({
           root: './tools/qualification-report',
           include: ['test/**/*.test.ts'],
           environment: 'node',
+          ...REAL_IO,
         },
       },
       {

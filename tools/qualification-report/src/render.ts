@@ -109,12 +109,24 @@ export function renderReport(input: RenderInput): string {
       lines.push('');
 
       const failures = platform.suites.flatMap((suite) => suite.failed);
+      // Reasons are keyed by name so a record collected before the reason field
+      // existed still renders -- as names alone, which is what it holds.
+      const reasons = new Map(
+        platform.suites.flatMap((suite) =>
+          (suite.failures ?? []).map((failure) => [failure.name, failure.reason] as const),
+        ),
+      );
       if (failures.length > 0) {
         // A record with failures does not satisfy a platform requirement, so the
-        // report must say what failed rather than only that something did.
+        // report must say what failed rather than only that something did -- and
+        // why, because "assertion" and "timeout" are different defects with
+        // different fixes and the log that once distinguished them has expired.
         lines.push(`**Failing tests on \`${platform.platform}\`:**`);
         lines.push('');
-        for (const name of failures) lines.push(`- \`${name}\``);
+        for (const name of failures) {
+          const reason = reasons.get(name);
+          lines.push(reason === undefined ? `- \`${name}\`` : `- \`${name}\` — ${reason}`);
+        }
         lines.push('');
       }
     }

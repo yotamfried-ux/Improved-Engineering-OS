@@ -20,6 +20,33 @@ export const ASSET_TREE_FIXTURE: readonly { path: string; bytes: Uint8Array }[] 
   { path: 'files/a.md', bytes: new TextEncoder().encode('a') },
 ];
 
+/** A failing test and the runner's explanation, trimmed to the actionable part. */
+export interface SuiteFailure {
+  readonly name: string;
+  readonly reason: string;
+}
+
+/**
+ * The actionable part of a runner failure message.
+ *
+ * The full message is a stack trace with colour codes; what tells a reader
+ * whether they are looking at a broken assertion or an exhausted timeout is the
+ * first line or two. Kept short deliberately: this goes into a committed
+ * evidence record, and a record nobody reads is no better than a log.
+ */
+export function failureReason(messages: readonly string[] | undefined): string {
+  const text = (messages ?? []).join('\n');
+  const lines = text
+    // Strip ANSI so the record stays readable as plain text.
+    .replace(/\u001B\[[0-9;]*m/gu, '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  if (lines.length === 0) return 'the runner reported no message';
+  const head = lines.slice(0, 2).join(' / ');
+  return head.length > 400 ? `${head.slice(0, 397)}...` : head;
+}
+
 export interface SuiteResult {
   readonly project: string;
   readonly files: number;
@@ -35,6 +62,22 @@ export interface SuiteResult {
    * names were nowhere at all.
    */
   readonly failed: readonly string[];
+  /**
+   * Why each failing test failed, in the runner's own words.
+   *
+   * The argument for carrying the names applies one level down. A record that
+   * says a determinism test failed, without saying whether it failed on its
+   * assertion or on a five-second timeout, is not evidence anyone can act on:
+   * the first is a defect in the code, the second is a defect in the schedule,
+   * and no amount of re-reading the record distinguishes them. That is not
+   * hypothetical either -- a win32 record carrying one bare test name is what
+   * made this field necessary, after the runner's own explanation had already
+   * expired with the log.
+   *
+   * Optional, because records collected before this field existed are still
+   * legitimate evidence and must keep parsing.
+   */
+  readonly failures?: readonly SuiteFailure[];
   /**
    * Tests the runner skipped, typically because their precondition is absent
    * (a checkout that only exists on one machine, say).

@@ -15,6 +15,7 @@ import {
   CHAMPION_PROPERTY_TESTS,
   collectPlatformEvidence,
   evaluateStage0,
+  failureReason,
   renderReport,
   type GateInput,
   type PlatformEvidence,
@@ -381,8 +382,97 @@ describe('the rendered report tells the reader what it rests on', () => {
     expect(text).toContain('core > hashing > pins a digest');
   });
 
+  it('says WHY a test failed, so a timeout is not read as a broken assertion', () => {
+    // A win32 record that named one failing determinism test, and nothing else,
+    // is what motivated this: on the record alone there was no way to tell a
+    // digest that genuinely moved from a test the runner stopped waiting for.
+    // Those are different defects with different fixes.
+    const text = render(
+      healthyInput({
+        platforms: [
+          platform({ platform: 'linux' }),
+          platform({
+            platform: 'win32',
+            suites: [
+              {
+                project: 'releases',
+                files: 10,
+                tests: 300,
+                passed: 299,
+                failed: [
+                  'determinism (fitness F8) changes the digest when only a CAPABILITY changes',
+                ],
+                failures: [
+                  {
+                    name: 'determinism (fitness F8) changes the digest when only a CAPABILITY changes',
+                    reason: 'Error: Test timed out in 5000ms.',
+                  },
+                ],
+                skipped: 0,
+              },
+            ],
+          }),
+        ],
+      }),
+    );
+    expect(text).toContain('Test timed out in 5000ms');
+  });
+
+  it('still renders a record collected before reasons were carried', () => {
+    // The committed evidence predates the field. Older records are legitimate
+    // evidence, and a report that could not read them would be discarding
+    // observations to suit its own schema.
+    const text = render(
+      healthyInput({
+        platforms: [
+          platform({ platform: 'linux' }),
+          platform({
+            platform: 'win32',
+            suites: [
+              {
+                project: 'core',
+                files: 10,
+                tests: 300,
+                passed: 299,
+                failed: ['core > hashing > pins a digest'],
+                skipped: 0,
+              },
+            ],
+          }),
+        ],
+      }),
+    );
+    expect(text).toContain('- `core > hashing > pins a digest`');
+    expect(text).not.toContain('undefined');
+  });
+
   it('says plainly when it rests on nothing', () => {
     const text = render(healthyInput({ platforms: [] }));
     expect(text).toContain('No platform records were supplied');
+  });
+});
+
+describe('the reason a test failed', () => {
+  it('keeps the line that says a timeout was a timeout', () => {
+    expect(failureReason(['Error: Test timed out in 5000ms.\n    at foo (bar.ts:1:1)'])).toBe(
+      'Error: Test timed out in 5000ms. / at foo (bar.ts:1:1)',
+    );
+  });
+
+  it('strips colour codes, because the record is read as plain text', () => {
+    expect(failureReason(['\u001B[31mAssertionError\u001B[39m: expected 1 to be 2'])).toBe(
+      'AssertionError: expected 1 to be 2',
+    );
+  });
+
+  it('says so when the runner gave no message, rather than inventing one', () => {
+    expect(failureReason(undefined)).toBe('the runner reported no message');
+    expect(failureReason([])).toBe('the runner reported no message');
+  });
+
+  it('truncates rather than pasting a whole stack into the record', () => {
+    const reason = failureReason([`${'x'.repeat(1000)}\nsecond line`]);
+    expect(reason.length).toBe(400);
+    expect(reason.endsWith('...')).toBe(true);
   });
 });

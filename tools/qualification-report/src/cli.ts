@@ -27,6 +27,7 @@ import { fileURLToPath } from 'node:url';
 import { FITNESS_RULES } from '@ieos/fitness';
 import {
   collectPlatformEvidence,
+  failureReason,
   type CommandResult,
   type NamedTestResult,
   type NamedTestStatus,
@@ -67,6 +68,7 @@ function git(...argv: string[]): string {
 }
 
 /** Run vitest and read the machine-readable result, rather than parsing prose. */
+
 function runSuites(projects: readonly string[]): {
   suites: SuiteResult[];
   allPassed: boolean;
@@ -99,20 +101,30 @@ function runSuites(projects: readonly string[]): {
       numPassedTests?: number;
       testResults?: {
         name?: string;
-        assertionResults?: { status?: string; fullName?: string }[];
+        assertionResults?: { status?: string; fullName?: string; failureMessages?: string[] }[];
       }[];
     };
     const tests = report.numTotalTests ?? 0;
     const passed = report.numPassedTests ?? 0;
 
-    const failed = (report.testResults ?? []).flatMap((file) =>
+    const failures = (report.testResults ?? []).flatMap((file) =>
       (file.assertionResults ?? [])
         .filter((assertion) => assertion.status === 'failed')
-        .map((assertion) => assertion.fullName ?? '(unnamed test)'),
+        .map((assertion) => ({
+          name: assertion.fullName ?? '(unnamed test)',
+          reason: failureReason(assertion.failureMessages),
+        })),
     );
-    if (failed.length > 0) {
+    const failed = failures.map((failure) => failure.name);
+    if (failures.length > 0) {
       allPassed = false;
-      process.stderr.write(`\nfailing tests in this run:\n  ${failed.join('\n  ')}\n\n`);
+      // The reason goes to the log beside the name, because `--reporter=json`
+      // replaces the reporter that would otherwise have printed it, and a name
+      // on its own does not distinguish a broken assertion from a timeout.
+      const rendered = failures
+        .map((failure) => `  ${failure.name}\n      ${failure.reason}`)
+        .join('\n');
+      process.stderr.write(`\nfailing tests in this run:\n${rendered}\n\n`);
     }
     // Whatever is neither passed nor failed was skipped. Kept as its own number
     // rather than folded into either: skipped is unproven, not failed.
@@ -139,6 +151,7 @@ function runSuites(projects: readonly string[]): {
           tests,
           passed,
           failed,
+          failures,
           skipped,
         },
       ],

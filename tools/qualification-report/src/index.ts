@@ -1,12 +1,14 @@
 export {
   ASSET_TREE_FIXTURE,
   collectPlatformEvidence,
+  failureReason,
   failures,
   totalPassed,
   totalSkipped,
   totalTests,
   type CollectOptions,
   type PlatformEvidence,
+  type SuiteFailure,
   type SuiteResult,
 } from './evidence.ts';
 export {
