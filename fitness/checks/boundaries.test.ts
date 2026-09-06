@@ -12,13 +12,18 @@
  *     the same as a rule deleted silently.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { championsOf } from '@ieos/resolver';
+import type { SolutionSetRecord } from '@ieos/core';
 import {
   describe as render,
   exists,
   findMatches,
   readSourceFiles,
   stripAllComments,
+  REPO_ROOT,
   type SourceFile,
 } from './scan.ts';
 
@@ -406,3 +411,69 @@ describe('F2: adapters deliver the contract, they do not own knowledge', () => {
     ).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// F11 -- Champion selection reads the release index, never the score overlay
+// ---------------------------------------------------------------------------
+
+/** Any reach for a score, a snapshot or an overlay inside the selector. */
+const CONSULTS_A_SCORE = /\b(scores?|snapshot|overlay)\b/iu;
+
+describe('F11: a Champion cannot be chosen by score', () => {
+  // Armed at Stage 2, when `packages/resolver` first existed and the dormancy
+  // guard fired. The rule's whole risk is a scorer doing the natural thing:
+  // when `champion_id` is null, promote the best-scoring member. D34 and P-01
+  // forbid it, and the defence is structural rather than careful -- the
+  // selection function is not given the scores.
+
+  it('championsOf takes exactly one parameter, so a score cannot reach it', () => {
+    // Arity is the enforcement. Adding a scores parameter to consult them would
+    // change this number, and this test, and the reviewer would see both.
+    expect(championsOf.length).toBe(1);
+  });
+
+  it('the champion-selection function body references no score', () => {
+    const source = readFileSync(join(REPO_ROOT, 'packages/resolver/src/rank.ts'), 'utf8');
+    const start = source.indexOf('export function championsOf');
+    expect(start, 'championsOf not found; this check has lost its subject').toBeGreaterThan(-1);
+    // Comments stripped: the doc comment above the function explains at length
+    // why it must not consult a score, and matching on that would make the
+    // check pass for the wrong reason.
+    const body = stripAllComments([
+      { path: 'championsOf', content: source.slice(start, source.indexOf('\n}', start)) },
+    ])[0];
+    expect(body?.content, 'the function body could not be isolated').toBeDefined();
+    expect(CONSULTS_A_SCORE.test(body?.content ?? '')).toBe(false);
+  });
+
+  it('the scan can fire (control)', () => {
+    // A body that did consult scores would be caught by the same expression.
+    const planted = 'const best = scores.assets[0]; return best;';
+    expect(CONSULTS_A_SCORE.test(planted)).toBe(true);
+  });
+
+  it('behaviourally: the best-scoring member of an unresolved set is not a Champion', () => {
+    // The property test in packages/core covers the selector over generated
+    // input. This is the specific substitution F11 names, stated once here so
+    // the rule has a behavioural assertion of its own.
+    expect(championsOf([UNRESOLVED_SET_FIXTURE]).size).toBe(0);
+  });
+});
+
+/** An unresolved set whose members would score well if anything let them. */
+const UNRESOLVED_SET_FIXTURE = {
+  schema_version: '1',
+  stability: 'development',
+  introduced_in: '0.1.0',
+  deprecated_in: null,
+  replacement: null,
+  migration_path: null,
+  id: 'solset_f11',
+  problem_id: 'problem.f11',
+  compatibility_key: 'web',
+  members: ['asset_high', 'asset_low'],
+  champion_id: null,
+  canonical_state: 'unresolved',
+  champion_since_release: null,
+  why_unresolved: 'no evidence at corroborated or better',
+} as SolutionSetRecord;

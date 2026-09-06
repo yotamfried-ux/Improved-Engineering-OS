@@ -162,6 +162,12 @@ jobs:
         # path handling are exactly what differs between platforms.
         run: pnpm vitest run --project cli
 
+      - name: Deterministic ranking on win32
+        # D20.3's ordering must be identical on both platforms: it feeds
+        # `context_snapshot_id`, so a locale- or order-dependent sort would make
+        # a decision unreproducible across machines.
+        run: pnpm vitest run --project resolver
+
       - name: MCP 2026-07-28 conformance smoke on win32
         # The protocol layer has no filesystem in it, but the runtime that
         # serves it does run here, and Stage 0 already caught two defects on
@@ -198,7 +204,7 @@ jobs:
           set -euo pipefail
           pnpm report:collect qualification/evidence/platforms/win32.json \
             --stage 1 \
-            --projects core,snapshot-emit,sqlite-qualification,releases,store-sqlite,mcp,cli \
+            --projects core,snapshot-emit,sqlite-qualification,releases,store-sqlite,mcp,cli,resolver \
             --commit "${{ github.sha }}" \
             --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           echo '--- win32 platform record (verbatim) ---'

@@ -76,6 +76,14 @@ export default defineConfig({
       },
       {
         test: {
+          name: 'resolver',
+          root: './packages/resolver',
+          include: ['test/**/*.test.ts'],
+          environment: 'node',
+        },
+      },
+      {
+        test: {
           name: 'releases',
           root: './packages/releases',
           include: ['test/**/*.test.ts'],

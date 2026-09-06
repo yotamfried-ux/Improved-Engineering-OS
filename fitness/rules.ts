@@ -94,8 +94,12 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
     invariant: 'resolver, assurance and evidence-derivation import no store-* package',
     status: 'partial',
     mechanisms: ['dependency-graph'],
-    note: 'None of those packages exists yet. The rule is armed.',
-    dormantWhileAbsent: ['packages/resolver', 'packages/assurance', 'packages/evidence-derivation'],
+    note:
+      'Enforced for packages/resolver, which exists from Stage 2 and talks to the ' +
+      'KnowledgeIndex port rather than to store-sqlite. assurance and ' +
+      'evidence-derivation do not exist yet, so the rule stays partial and their ' +
+      'guards stay armed.',
+    dormantWhileAbsent: ['packages/assurance', 'packages/evidence-derivation'],
   },
   {
     id: 'F5',
@@ -160,13 +164,16 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
   {
     id: 'F11',
     invariant: 'Champion selection reads only the release index, never the live score overlay',
-    status: 'not-yet-enforceable',
-    mechanisms: ['behavioural'],
+    status: 'enforced',
+    mechanisms: ['behavioural', 'source-scan'],
     note:
-      'No resolver exists. The contract-level half IS enforced today: challenge_state is ' +
-      'unrepresentable in a canonical Solution Set, and a null champion_id cannot coexist with ' +
-      'canonical_state "pinned". The code-path half needs a resolver, at Stage 2.',
-    dormantWhileAbsent: ['packages/resolver'],
+      'Enforced structurally from Stage 2: packages/resolver selects Champions in ' +
+      '`championsOf`, whose signature takes Solution Sets and nothing else, so no code ' +
+      'path inside it can consult a score without changing its arity -- which a fitness ' +
+      'check asserts. The contract half also still holds: challenge_state is ' +
+      'unrepresentable in a canonical Solution Set, and a null champion_id cannot coexist ' +
+      'with canonical_state "pinned".',
+    dormantWhileAbsent: [],
   },
   {
     id: 'F12',

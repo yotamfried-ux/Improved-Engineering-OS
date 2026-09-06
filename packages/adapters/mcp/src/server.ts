@@ -29,7 +29,7 @@ import {
   observeRequestSchema,
   resolveRequestSchema,
 } from '@ieos/core';
-import { AgentContractError, expand, inspect, observe, resolve } from './handlers.ts';
+import { expand, inspect, isRefusal, observe, resolve } from './handlers.ts';
 import type { AgentContractDeps, SnapshotStore } from './handlers.ts';
 
 export const SERVER_NAME = 'ieos';
@@ -70,10 +70,9 @@ function errorResult(error: unknown): {
   content: { type: 'text'; text: string }[];
   isError: true;
 } {
-  const text =
-    error instanceof AgentContractError
-      ? `${error.code}: ${error.message}`
-      : `internal_error: ${String(error)}`;
+  const text = isRefusal(error)
+    ? `${error.code}: ${error.message}`
+    : `internal_error: ${String(error)}`;
   return { content: [{ type: 'text', text }], isError: true };
 }
 

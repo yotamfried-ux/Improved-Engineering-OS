@@ -9,9 +9,9 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { AgentContractError, expand, inspect, observe, resolve } from '../src/handlers.ts';
+import { expand, inspect, isRefusal, observe, resolve } from '../src/handlers.ts';
 import type { AgentContractDeps, SnapshotStore } from '../src/handlers.ts';
-import { isUnobserved, type ContextSnapshot } from '../src/context.ts';
+import { isUnobserved, type ContextSnapshot } from '@ieos/resolver';
 import type { Observation, Staging } from '@ieos/core';
 import {
   ASSET_ID,
@@ -33,7 +33,8 @@ async function code(run: () => Promise<unknown>): Promise<string> {
   try {
     await run();
   } catch (error) {
-    if (error instanceof AgentContractError) return error.code;
+    // Any refusal, from this adapter or from the resolver behind it.
+    if (isRefusal(error)) return error.code;
     throw error;
   }
   throw new Error('expected a refusal, got a result');
@@ -50,9 +51,25 @@ describe('resolve', () => {
     expect(response['ranking_mode']).toBe('live_overlay');
   });
 
-  it('refuses to order a corpus it cannot rank', async () => {
+  it('ranks a real corpus now that the resolver exists', async () => {
+    // At Stage 1 this exact call refused with `ranking_not_available`, because
+    // the adapter had no ranking policy and returning index order would have
+    // been an ordering it could not justify. The refusal existed to be removed
+    // by `packages/resolver`, and this asserts it was.
     const index = new MemoryIndex([{ asset: anAsset(), body: '# body' }], [anUnresolvedSet()]);
-    expect(await code(() => resolve(deps(index), store(), REQUEST))).toBe('ranking_not_available');
+    const response = (await resolve(deps(index), store(), REQUEST)) as Record<string, unknown>;
+
+    // The one asset belongs to an UNRESOLVED set, so P-01 applies: it is
+    // reported as coverage, never promoted to a temporary winner.
+    expect(response['items']).toEqual([]);
+    expect(response['coverage']).toEqual([
+      {
+        solution_set_id: SOLSET_ID,
+        unresolved_solution_set: true,
+        member_count: 1,
+        problem_id: 'problem.auth.browser-login',
+      },
+    ]);
   });
 
   it('refuses a recorded score view it cannot reproduce', async () => {
@@ -80,11 +97,11 @@ describe('resolve', () => {
 
 describe('expand', () => {
   it('carries the reason the search was widened', async () => {
-    const response = await expand(deps(), store(), {
+    const response = (await expand(deps(), store(), {
       ...REQUEST,
       reason: 'nothing matched the capability',
       beyond: 'corpus',
-    });
+    })) as { expansion_reason: string; items: unknown[] };
     expect(response.expansion_reason).toContain('nothing matched the capability');
     expect(response.expansion_reason).toContain('corpus');
     expect(response.items).toEqual([]);

@@ -230,6 +230,13 @@ importers:
         version: 2.9.0
 
   fitness:
+    dependencies:
+      '@ieos/core':
+        specifier: workspace:*
+        version: link:../packages/core
+      '@ieos/resolver':
+        specifier: workspace:*
+        version: link:../packages/resolver
     devDependencies:
       '@types/node':
         specifier: 24.13.3
@@ -256,6 +263,9 @@ importers:
       '@ieos/core':
         specifier: workspace:*
         version: link:../../core
+      '@ieos/resolver':
+        specifier: workspace:*
+        version: link:../../resolver
       '@ieos/store-sqlite':
         specifier: workspace:*
         version: link:../../store-sqlite
@@ -288,6 +298,16 @@ importers:
       yaml:
         specifier: 2.9.0
         version: 2.9.0
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
+  packages/resolver:
+    dependencies:
+      '@ieos/core':
+        specifier: workspace:*
+        version: link:../core
     devDependencies:
       '@types/node':
         specifier: 24.13.3

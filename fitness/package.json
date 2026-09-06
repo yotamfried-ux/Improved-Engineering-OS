@@ -10,5 +10,9 @@
   },
   "devDependencies": {
     "@types/node": "24.13.3"
+  },
+  "dependencies": {
+    "@ieos/core": "workspace:*",
+    "@ieos/resolver": "workspace:*"
   }
 }

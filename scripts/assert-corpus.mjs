@@ -45,6 +45,7 @@ export const WINDOWS_SMOKE_PROJECTS = [
   'store-sqlite',
   'mcp',
   'cli',
+  'resolver',
 ];
 
 /** Floors. Raise them when a whole area of the suite lands, never lower them to go green. */

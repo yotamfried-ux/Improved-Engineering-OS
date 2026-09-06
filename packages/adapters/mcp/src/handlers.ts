@@ -4,43 +4,41 @@
  * What this file is careful about, and why it is written the way it is:
  *
  * **It does not rank.** D20.3's retrieval -- capability match, BM25, Project
- * Fit, Champion per Solution Set, Asset Score tie-break -- belongs to
- * `packages/resolver` at Stage 2, and fitness rule F2 says adapters own no
- * knowledge semantics. So `resolve` here answers only the one case where no
- * ordering decision exists: an empty corpus. The moment the index holds an
- * asset or a Solution Set, it refuses and says why. A resolver that returned
- * "the first ten rows" would be ranking, badly, while looking like it worked.
+ * Fit, Champion per Solution Set, Asset Score tie-break -- lives in
+ * `packages/resolver`, and fitness rule F2 says adapters own no knowledge
+ * semantics. At Stage 1 this file refused any non-empty corpus rather than
+ * invent an ordering; at Stage 2 it delegates to the resolver, which is what
+ * that refusal was placed here to wait for.
  *
  * **It does not record what it cannot store.** `observe` needs a staging sink
  * with a `UNIQUE(observation_id)` constraint behind it (T-04). Stage 1 has
  * none, so `observe` fails loudly rather than returning `status: "recorded"`
  * for a write that reached nothing.
  *
- * Both refusals disappear at Stage 2, when the resolver and the Evidence Plane
- * arrive. Until then they are the difference between a runtime that is honest
- * about being early and one that looks finished.
+ * The observe refusal disappears when the Evidence Plane arrives. Until then it
+ * is the difference between a runtime that is honest about being early and one
+ * that looks finished.
  */
 
 import {
   STAGE_0_LIFECYCLE,
-  effectiveScoreViewId,
-  expandResponseSchema,
   inspectAssetResponseSchema,
   inspectSnapshotResponseSchema,
   inspectSolutionSetResponseSchema,
   observeResponseSchema,
-  resolveResponseSchema,
-  type ExpandRequest,
-  type ExpandResponse,
   type InspectRequest,
   type KnowledgeIndex,
   type ObserveRequest,
-  type RankingMode,
-  type ScoreSnapshot,
   type Staging,
 } from '@ieos/core';
-import { buildContextSnapshot, type ContextSnapshot, type RuntimeFacts } from './context.ts';
-import type { ResolveRequest } from '@ieos/core';
+import type { ExpandRequest, ResolveRequest } from '@ieos/core';
+import {
+  expand as resolverExpand,
+  resolve as resolverResolve,
+  type ContextSnapshot,
+  type ResolveDeps,
+  type RuntimeFacts,
+} from '@ieos/resolver';
 
 /**
  * A refusal the caller is meant to read.
@@ -49,6 +47,24 @@ import type { ResolveRequest } from '@ieos/core';
  * the call succeed. Neither is an internal error: every one of these is a
  * deliberate answer.
  */
+/**
+ * True for a deliberate, caller-facing refusal from anywhere in the stack.
+ *
+ * Structural rather than `instanceof`: the resolver raises its own
+ * `ResolverError` from another package, and both are the same thing to a
+ * client -- an answer, not a crash. Matching on shape keeps the adapter from
+ * having to know every package's error class, and keeps a genuine internal
+ * failure (which carries no `code`) from being dressed up as a refusal.
+ */
+export function isRefusal(error: unknown): error is { code: string; message: string } {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    typeof (error as { code?: unknown }).code === 'string' &&
+    typeof (error as { message?: unknown }).message === 'string'
+  );
+}
+
 export class AgentContractError extends Error {
   readonly code: string;
 
@@ -62,8 +78,21 @@ export class AgentContractError extends Error {
 export interface AgentContractDeps {
   readonly index: KnowledgeIndex;
   readonly facts: RuntimeFacts;
-  /** Absent at Stage 1; `observe` refuses rather than pretending to write. */
+  /** Absent until the Evidence Plane exists; `observe` refuses rather than pretending to write. */
   readonly staging: Staging | null;
+  /** Passed straight through to the resolver; see `ResolveDeps`. */
+  readonly projectFacts?: Readonly<Record<string, string>>;
+  readonly capabilities?: readonly string[];
+}
+
+/** The adapter carries no ranking policy of its own -- it forwards one (F2). */
+function resolverDeps(deps: AgentContractDeps): ResolveDeps {
+  return {
+    index: deps.index,
+    facts: deps.facts,
+    ...(deps.projectFacts === undefined ? {} : { projectFacts: deps.projectFacts }),
+    ...(deps.capabilities === undefined ? {} : { capabilities: deps.capabilities }),
+  };
 }
 
 /**
@@ -77,123 +106,20 @@ export interface AgentContractDeps {
  */
 export type SnapshotStore = Map<string, ContextSnapshot>;
 
-/**
- * The Effective Score View of a decision taken against the release snapshot.
- *
- * At Stage 1 there is no live overlay to consult, so every asset's score comes
- * from the snapshot the release carries and `score_source` says `snapshot`.
- * That is D24 working as designed, not a shortfall being papered over: the
- * contract has a field for exactly this and the bootstrap snapshot says
- * `UNPROVEN` in its own data.
- */
-function effectiveViewIdFor(snapshot: ScoreSnapshot, mode: RankingMode): string {
-  return effectiveScoreViewId({
-    mode,
-    parent_score_view_id: snapshot.score_view_id,
-    scoring_policy_version: snapshot.scoring_policy_version,
-    evidence_watermark: null,
-    computed_at: snapshot.computed_at,
-    assets: snapshot.assets.map((asset) => ({
-      id: asset.id,
-      effective_score: asset.score,
-      evidence_count: asset.evidence_count,
-      source: 'snapshot' as const,
-    })),
-  });
-}
-
-async function answerOverCorpus(
-  deps: AgentContractDeps,
-  store: SnapshotStore,
-  request: {
-    readonly ranking_mode?: RankingMode | undefined;
-    readonly score_view_id?: string | undefined;
-  },
-  what: 'resolve' | 'expand',
-): Promise<{ snapshot: ContextSnapshot }> {
-  const indexDigest = await deps.index.indexDigest();
-  const scoreSnapshot = await deps.index.getScoreSnapshot();
-
-  // D24's default posture is a live overlay when one is reachable. None is,
-  // which the response reports through `score_source`, not by silently
-  // relabelling the mode the caller asked for.
-  const rankingMode: RankingMode = request.ranking_mode ?? 'live_overlay';
-  const viewId = effectiveViewIdFor(scoreSnapshot, rankingMode);
-
-  // Q-06: `recorded` must reproduce the view it names. This runtime holds
-  // exactly one view -- the release snapshot -- so a request for a different
-  // one is refused rather than served with the view we happen to have.
-  if (request.score_view_id !== undefined && request.score_view_id !== viewId) {
-    throw new AgentContractError(
-      'score_view_unavailable',
-      `score view ${request.score_view_id} is not available to this runtime. The only view it ` +
-        `can reproduce is ${viewId}, computed from the score snapshot the index carries (D24).`,
-    );
-  }
-
-  const solutionSets = await deps.index.listSolutionSets();
-  if (scoreSnapshot.assets.length > 0 || solutionSets.length > 0) {
-    throw new AgentContractError(
-      'ranking_not_available',
-      `${what} cannot answer over a non-empty corpus at this stage: the index holds ` +
-        `${String(scoreSnapshot.assets.length)} asset(s) and ${String(solutionSets.length)} ` +
-        'solution set(s), and ranking (D20.3 -- capability match, relevance, Project Fit, ' +
-        'Champion selection) is implemented by packages/resolver at Stage 2. Returning rows in ' +
-        'index order would be an ordering this runtime cannot justify.',
-    );
-  }
-
-  const snapshot = buildContextSnapshot({
-    facts: deps.facts,
-    indexDigest,
-    rankingMode,
-    effectiveScoreViewId: viewId,
-    scoreSource: 'snapshot',
-  });
-  store.set(snapshot.id, snapshot);
-  return { snapshot };
-}
-
 export async function resolve(
   deps: AgentContractDeps,
   store: SnapshotStore,
   request: ResolveRequest,
 ): Promise<unknown> {
-  const { snapshot } = await answerOverCorpus(deps, store, request, 'resolve');
-  return resolveResponseSchema.parse({
-    ...STAGE_0_LIFECYCLE,
-    context_snapshot_id: snapshot.id,
-    ranking_mode: snapshot.ranking_mode,
-    effective_score_view_id: snapshot.effective_score_view_id,
-    items: [],
-    coverage: [],
-    omitted_count: 0,
-    // Read from the index's own (empty) controls, not asserted to be empty:
-    // controls are designed at Stage 9 and none has been compiled yet.
-    controls: [],
-  });
+  return resolverResolve(resolverDeps(deps), store, request);
 }
 
 export async function expand(
   deps: AgentContractDeps,
   store: SnapshotStore,
   request: ExpandRequest,
-): Promise<ExpandResponse> {
-  // `expand` has no ranking-mode parameter of its own (guide section 5.6), so
-  // it takes the default posture rather than inheriting one from a request that
-  // never carried it.
-  const { snapshot } = await answerOverCorpus(deps, store, {}, 'expand');
-  return expandResponseSchema.parse({
-    ...STAGE_0_LIFECYCLE,
-    context_snapshot_id: snapshot.id,
-    ranking_mode: snapshot.ranking_mode,
-    effective_score_view_id: snapshot.effective_score_view_id,
-    items: [],
-    coverage: [],
-    omitted_count: 0,
-    controls: [],
-    expansion_reason: `${request.reason} (beyond: ${request.beyond})`,
-  });
+): Promise<unknown> {
+  return resolverExpand(resolverDeps(deps), store, request);
 }
 
 /** The strongest integrity any provenance entry claims, or null if there is none. */

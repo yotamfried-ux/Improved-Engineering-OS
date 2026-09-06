@@ -30,7 +30,7 @@ import { describe, expect, it } from 'vitest';
 import { InMemoryTransport, createMcpHandler } from '@modelcontextprotocol/server';
 import { serveIeosMcp } from '../src/serve.ts';
 import { createIeosMcpServer, SERVER_NAME, TOOL_LIST_CACHE, TOOL_NAMES } from '../src/server.ts';
-import type { ContextSnapshot } from '../src/context.ts';
+import type { ContextSnapshot } from '@ieos/resolver';
 import { FIXTURE_FACTS, MODERN_VERSION, MemoryIndex, RawClient, metaEnvelope } from './fixtures.ts';
 
 function session(): { client: RawClient; close: () => Promise<void> } {
