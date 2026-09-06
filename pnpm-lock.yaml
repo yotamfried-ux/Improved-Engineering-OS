@@ -372,6 +372,19 @@ importers:
         specifier: 24.13.3
         version: 24.13.3
 
+  tools/seed-import:
+    dependencies:
+      '@ieos/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
   tools/snapshot-emit:
     dependencies:
       '@ieos/core':

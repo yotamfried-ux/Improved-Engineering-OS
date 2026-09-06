@@ -196,7 +196,7 @@ describe('the honest summary', () => {
     // constrain. F4 stays partial -- the resolver exists, assurance and
     // evidence-derivation do not. Each stage's own documents still record the
     // mix at that stage, correctly: they are history, not a claim about now.
-    expect(summarize()).toBe('8 enforced, 4 partial, 1 not yet enforceable');
+    expect(summarize()).toBe('9 enforced, 3 partial, 1 not yet enforceable');
   });
 
   it('does not claim all thirteen rule entries are green', () => {

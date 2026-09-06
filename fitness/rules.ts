@@ -135,12 +135,14 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
   {
     id: 'F8',
     invariant: 'deterministic builds: the same inputs produce the same digests',
-    status: 'partial',
+    status: 'enforced',
     mechanisms: ['behavioural'],
     note:
-      'Proven for canonical hashing, deterministic identities and schema emission. The knowledge ' +
-      'index it ultimately covers is Stage 1.',
-    dormantWhileAbsent: ['knowledge'],
+      'Proven for canonical hashing, deterministic identities and schema emission since Stage 0, ' +
+      'and from Stage 2 for the knowledge index over a real corpus: two builds of the seeded ' +
+      'tree agree, on both platforms, and the digest covers every field written to the index ' +
+      'rather than content_hash alone.',
+    dormantWhileAbsent: [],
   },
   {
     id: 'F9',

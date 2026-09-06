@@ -1,0 +1,64 @@
+schema_version: '1'
+kind: bootstrap_seed
+stage: 2
+generated_by: tools/seed-import
+source:
+  repository: yotamfried-ux/Engineering-OS
+  revision: 4d517840f18d8c1699a95110e0790d6919450ba4
+  selection_digest: sha256:bb50a1a15e9fa53f65199109ccaccdbdd33a46376fff869c88b719ae12b59bff
+counts:
+  assets: 13
+  solution_sets: 1
+  unresolved_solution_sets: 1
+assets:
+  - id: asset_01K4V8Q2R7N3X5M9B2T6W1Y401
+    path: knowledge/assets/pattern/oauth-social-login
+    legacy: patterns/auth/README.md
+  - id: asset_01K4V8Q2R7N3X5M9B2T6W1Y402
+    path: knowledge/assets/pattern/session-based-auth
+    legacy: patterns/auth/README.md
+  - id: asset_01K4V8Q2R7N3X5M9B2T6W1Y403
+    path: knowledge/assets/pattern/jwt-authentication
+    legacy: patterns/auth/README.md
+  - id: asset_01K4V8Q2R7N3X5M9B2T6W1Y404
+    path: knowledge/assets/pattern/contract-testing
+    legacy: patterns/testing/README.md
+  - id: asset_01K4V8Q2R7N3X5M9B2T6W1Y405
+    path: knowledge/assets/pattern/regression-test-on-every-bug
+    legacy: patterns/testing/README.md
+  - id: asset_01K4V8Q2R7N3X5M9B2T6W1Y406
+    path: knowledge/assets/pattern/structured-logging
+    legacy: patterns/observability/README.md
+  - id: asset_01K4V8Q2R7N3X5M9B2T6W1Y407
+    path: knowledge/assets/lesson/negative-test-passing-for-the-wrong-reason
+    legacy: lessons-learned/bugs/negative-test-passing-for-the-wrong-reason.md
+  - id: asset_01K4V8Q2R7N3X5M9B2T6W1Y408
+    path: knowledge/assets/lesson/guard-precondition-weaker-than-the-operation
+    legacy: lessons-learned/bugs/guard-precondition-weaker-than-the-operation.md
+  - id: asset_01K4V8Q2R7N3X5M9B2T6W1Y409
+    path: knowledge/assets/lesson/unit-contract-passing-while-wiring-violates-it
+    legacy: lessons-learned/bugs/unit-level-contract-passing-while-wiring-violates-it.md
+  - id: asset_01K4V8Q2R7N3X5M9B2T6W1Y410
+    path: knowledge/assets/lesson/ci-environment-dependent-fixture-premise
+    legacy: lessons-learned/bugs/ci-environment-dependent-fixture-premise.md
+  - id: asset_01K4V8Q2R7N3X5M9B2T6W1Y411
+    path: knowledge/assets/lesson/remote-workspace-telemetry-durable-handoff
+    legacy: lessons-learned/bugs/remote-workspace-telemetry-requires-durable-handoff.md
+  - id: asset_01K4V8Q2R7N3X5M9B2T6W1Y412
+    path: knowledge/assets/failed_solution/slash-command-from-bash
+    legacy: failed-solutions/claude-slash-command-from-bash.md
+  - id: asset_01K4V8Q2R7N3X5M9B2T6W1Y413
+    path: knowledge/assets/control_guidance/quality-gates
+    legacy: core/quality-gates.md
+solution_sets:
+  - id: solset_01K4V8Q2R7N3X5M9B2T6W1Y4ZA
+    canonical_state: unresolved
+    champion_id: null
+    members:
+      - asset_01K4V8Q2R7N3X5M9B2T6W1Y401
+      - asset_01K4V8Q2R7N3X5M9B2T6W1Y402
+not_done:
+  - 'No Champion was chosen. Every set is unresolved with champion_id: null (D34, P-01).'
+  - No evidence was imported or implied. Assets are active and unproven (R-04).
+  - No branch was created and nothing was pushed. The owner opens the PR (C-04).
+  - No capability id was invented. Assets declare only ids already in contracts/capabilities.yaml.

@@ -1,0 +1,47 @@
+schema_version: '1'
+stability: development
+introduced_in: 0.1.0
+deprecated_in: null
+replacement: null
+migration_path: null
+id: asset_01K4V8Q2R7N3X5M9B2T6W1Y406
+type: pattern
+slug: structured-logging
+title: Structured logging
+summary: Emit machine-readable log records so they can be queried rather than grepped.
+status: active
+content_hash: sha256:3cb8ab79cfcbeec0eeba50eade42b73338176be6c8ec0c976aaba0e408758d91
+legacy_ids:
+  - patterns/observability/README.md
+problem:
+  id: problem.observability.log-queryability
+  capabilities: []
+solution_set_id: null
+applicability:
+  conditions: []
+compatibility:
+  platforms: []
+  providers: []
+  constraints: []
+provenance:
+  - source_type: existing_eos
+    source_identity: yotamfried-ux/Engineering-OS
+    source_revision: 4d517840f18d8c1699a95110e0790d6919450ba4
+    observed_at: 2026-09-06T00:00:00.000Z
+    integrity: verified
+freshness:
+  class: normal
+  last_verified_at: null
+risk:
+  execution_authority: data_only
+  blast_radius: read_only
+relationships:
+  supersedes: []
+  superseded_by: []
+  related_to: []
+evidence_policy:
+  eligible_origins:
+    - qualification
+    - operational
+body: body.md
+files: []

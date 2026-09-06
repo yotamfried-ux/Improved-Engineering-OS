@@ -1,0 +1,48 @@
+schema_version: '1'
+stability: development
+introduced_in: 0.1.0
+deprecated_in: null
+replacement: null
+migration_path: null
+id: asset_01K4V8Q2R7N3X5M9B2T6W1Y407
+type: lesson
+slug: negative-test-passing-for-the-wrong-reason
+title: A negative test that asserts only failure can pass for the wrong reason
+summary: Asserting that an operation failed does not establish which check refused it.
+status: active
+content_hash: sha256:3e3dbd32242032f90707e0e752f9fb25ce57f42dc6d9443bf0a8649578638d78
+legacy_ids:
+  - lessons-learned/bugs/negative-test-passing-for-the-wrong-reason.md
+problem:
+  id: problem.testing.assertion-validity
+  capabilities:
+    - validation.review-checked
+solution_set_id: null
+applicability:
+  conditions: []
+compatibility:
+  platforms: []
+  providers: []
+  constraints: []
+provenance:
+  - source_type: existing_eos
+    source_identity: yotamfried-ux/Engineering-OS
+    source_revision: 4d517840f18d8c1699a95110e0790d6919450ba4
+    observed_at: 2026-09-06T00:00:00.000Z
+    integrity: verified
+freshness:
+  class: normal
+  last_verified_at: null
+risk:
+  execution_authority: data_only
+  blast_radius: read_only
+relationships:
+  supersedes: []
+  superseded_by: []
+  related_to: []
+evidence_policy:
+  eligible_origins:
+    - qualification
+    - operational
+body: body.md
+files: []

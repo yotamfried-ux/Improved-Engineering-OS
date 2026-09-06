@@ -1,0 +1,16 @@
+schema_version: '1'
+stability: development
+introduced_in: 0.1.0
+deprecated_in: null
+replacement: null
+migration_path: null
+id: solset_01K4V8Q2R7N3X5M9B2T6W1Y4ZA
+problem_id: problem.auth.browser-user-login
+compatibility_key: web
+members:
+  - asset_01K4V8Q2R7N3X5M9B2T6W1Y401
+  - asset_01K4V8Q2R7N3X5M9B2T6W1Y402
+canonical_state: unresolved
+champion_id: null
+champion_since_release: null
+why_unresolved: both members imported unproven; no evidence at corroborated or better (D34, P-01)

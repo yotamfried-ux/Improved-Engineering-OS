@@ -76,6 +76,48 @@ export async function openReadOnly(path: string): Promise<ReadOnlyDatabase> {
 }
 
 /**
+ * Turn a caller's free text into an FTS5 query.
+ *
+ * The port takes a *user query*; translating it into a storage engine's query
+ * language is this adapter's job, which is also why the resolver never sees
+ * FTS5 syntax (F4 keeps it away from store internals, and this keeps the
+ * dialect away from it in return).
+ *
+ * Two things went wrong when the raw text was passed straight to `MATCH`, and
+ * both were silent in different ways:
+ *
+ *   **Implicit AND.** FTS5 joins bare terms with AND, so
+ *   `a test that passes without proving what it claims` required every one of
+ *   those words in one document and matched nothing. `resolve` answered "no
+ *   relevant knowledge" for a corpus that held exactly that lesson -- an empty
+ *   result is indistinguishable from an honest miss.
+ *
+ *   **Operator characters.** `:` is FTS5's column filter, so a hint like
+ *   `auth: login` raised `no such column: auth` and the query threw rather than
+ *   returning anything. A task hint is prose from an agent; it will contain
+ *   colons, quotes and hyphens.
+ *
+ * So the text is split on everything that is not a letter, digit or underscore
+ * -- which is what removes the operators, since none of them survives
+ * tokenization -- and each surviving token is quoted as an FTS5 string literal
+ * before the tokens are joined with OR. Ranking, not matching, decides which of
+ * them wins: BM25 already rewards documents matching more of the query, and the
+ * resolver orders on that.
+ *
+ * Note there is deliberately no quote-escaping here. A token cannot contain a
+ * double quote, because the split removes it first; adding an escape would be a
+ * second mechanism that can never fire, which reads like defence and is not.
+ */
+export function toFtsQuery(text: string): string | null {
+  const tokens = text
+    .split(/[^\p{L}\p{N}_]+/u)
+    // Single characters are noise in prose and match almost everything.
+    .filter((token) => token.length > 1)
+    .map((token) => `"${token}"`);
+  return tokens.length === 0 ? null : tokens.join(' OR ');
+}
+
+/**
  * Read-only view of a compiled index.
  *
  * Every record is revalidated against its contract on the way out. That looks
@@ -198,7 +240,11 @@ export class SqliteKnowledgeIndex implements KnowledgeIndex {
    * `context_snapshot_id`.
    */
   async searchAssets(query: string, limit: number): Promise<readonly AssetSearchHit[]> {
-    if (query.trim().length === 0 || limit <= 0) return [];
+    if (limit <= 0) return [];
+    const match = toFtsQuery(query);
+    // A query with no usable token matches nothing. That is a real answer, and
+    // it is reached without asking FTS5 to parse something it would reject.
+    if (match === null) return [];
 
     const rows = this.#db
       .prepare(
@@ -209,7 +255,7 @@ export class SqliteKnowledgeIndex implements KnowledgeIndex {
           order by rank, f.asset_id
           limit ?`,
       )
-      .all(query, limit);
+      .all(match, limit);
 
     return rows.map((row) => ({
       asset: parse(assetSchema, row['record_json'], `asset ${String(row['id'])}`),

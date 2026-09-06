@@ -100,6 +100,14 @@ export default defineConfig({
       },
       {
         test: {
+          name: 'seed-import',
+          root: './tools/seed-import',
+          include: ['test/**/*.test.ts'],
+          environment: 'node',
+        },
+      },
+      {
+        test: {
           name: 'qualification-report',
           root: './tools/qualification-report',
           include: ['test/**/*.test.ts'],
