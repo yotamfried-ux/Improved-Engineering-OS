@@ -1,0 +1,48 @@
+schema_version: "1"
+stability: development
+introduced_in: 0.1.0
+deprecated_in: null
+replacement: null
+migration_path: null
+id: asset_01K4V8Q2R7N3X5M9B2T6W1Y409
+type: lesson
+slug: unit-contract-passing-while-wiring-violates-it
+title: A unit-level contract test passing while the wiring violates the same contract
+summary: A contract held at the unit and broken at the seam passes every test that never crosses the seam.
+status: active
+content_hash: sha256:166a3caeeea2321db71bdee76107ac7312e3a0c8537c7a4604140655d63b71e0
+legacy_ids:
+  - lessons-learned/bugs/unit-level-contract-passing-while-wiring-violates-it.md
+problem:
+  id: problem.testing.assertion-validity
+  capabilities:
+    - validation.review-checked
+solution_set_id: null
+applicability:
+  conditions: []
+compatibility:
+  platforms: []
+  providers: []
+  constraints: []
+provenance:
+  - source_type: existing_eos
+    source_identity: yotamfried-ux/Engineering-OS
+    source_revision: 4d517840f18d8c1699a95110e0790d6919450ba4
+    observed_at: 2026-09-06T00:00:00.000Z
+    integrity: verified
+freshness:
+  class: normal
+  last_verified_at: null
+risk:
+  execution_authority: data_only
+  blast_radius: read_only
+relationships:
+  supersedes: []
+  superseded_by: []
+  related_to: []
+evidence_policy:
+  eligible_origins:
+    - qualification
+    - operational
+body: body.md
+files: []

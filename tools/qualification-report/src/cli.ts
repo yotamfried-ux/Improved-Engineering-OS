@@ -20,22 +20,33 @@
 
 import { execFileSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FITNESS_RULES } from '@ieos/fitness';
 import {
   collectPlatformEvidence,
+  failureReason,
   type CommandResult,
   type NamedTestResult,
   type NamedTestStatus,
   type PlatformEvidence,
   type Stage1Evidence,
+  type Stage2Evidence,
   type SuiteResult,
 } from './evidence.ts';
 import { evaluateStage0, type GateInput } from './gate.ts';
 import { evaluateStage1, REQUIRED_TESTS, type Stage1GateInput } from './stage1.ts';
+import { evaluateStage2, STAGE_2_TESTS, type Stage2GateInput } from './stage2.ts';
 import { renderReport } from './render.ts';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -67,6 +78,7 @@ function git(...argv: string[]): string {
 }
 
 /** Run vitest and read the machine-readable result, rather than parsing prose. */
+
 function runSuites(projects: readonly string[]): {
   suites: SuiteResult[];
   allPassed: boolean;
@@ -99,20 +111,30 @@ function runSuites(projects: readonly string[]): {
       numPassedTests?: number;
       testResults?: {
         name?: string;
-        assertionResults?: { status?: string; fullName?: string }[];
+        assertionResults?: { status?: string; fullName?: string; failureMessages?: string[] }[];
       }[];
     };
     const tests = report.numTotalTests ?? 0;
     const passed = report.numPassedTests ?? 0;
 
-    const failed = (report.testResults ?? []).flatMap((file) =>
+    const failures = (report.testResults ?? []).flatMap((file) =>
       (file.assertionResults ?? [])
         .filter((assertion) => assertion.status === 'failed')
-        .map((assertion) => assertion.fullName ?? '(unnamed test)'),
+        .map((assertion) => ({
+          name: assertion.fullName ?? '(unnamed test)',
+          reason: failureReason(assertion.failureMessages),
+        })),
     );
-    if (failed.length > 0) {
+    const failed = failures.map((failure) => failure.name);
+    if (failures.length > 0) {
       allPassed = false;
-      process.stderr.write(`\nfailing tests in this run:\n  ${failed.join('\n  ')}\n\n`);
+      // The reason goes to the log beside the name, because `--reporter=json`
+      // replaces the reporter that would otherwise have printed it, and a name
+      // on its own does not distinguish a broken assertion from a timeout.
+      const rendered = failures
+        .map((failure) => `  ${failure.name}\n      ${failure.reason}`)
+        .join('\n');
+      process.stderr.write(`\nfailing tests in this run:\n${rendered}\n\n`);
     }
     // Whatever is neither passed nor failed was skipped. Kept as its own number
     // rather than folded into either: skipped is unproven, not failed.
@@ -139,6 +161,7 @@ function runSuites(projects: readonly string[]): {
           tests,
           passed,
           failed,
+          failures,
           skipped,
         },
       ],
@@ -148,6 +171,76 @@ function runSuites(projects: readonly string[]): {
   } finally {
     rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
+}
+
+/**
+ * The Stage 2 half of this platform's record.
+ *
+ * The corpus is counted from the committed tree, on this machine, rather than
+ * read from a manifest -- the same reason the digests above are computed rather
+ * than transcribed: a record that quoted a manifest would agree with it even
+ * after the tree stopped matching.
+ */
+function collectStage2(assertions: readonly NamedTestResult[]): Stage2Evidence {
+  const wanted = new Set(Object.values(STAGE_2_TESTS).flat());
+  return {
+    knowledge: measureKnowledge(join(repoRoot, 'knowledge')),
+    namedTests: assertions.filter((assertion) => wanted.has(assertion.name)),
+  };
+}
+
+/** Count what the committed knowledge tree holds. */
+function measureKnowledge(knowledgeRoot: string): Stage2Evidence['knowledge'] {
+  const byType: Record<string, number> = {};
+  let assetCount = 0;
+  let withProvenance = 0;
+
+  const assetsRoot = join(knowledgeRoot, 'assets');
+  for (const type of listDirectories(assetsRoot)) {
+    for (const slug of listDirectories(join(assetsRoot, type))) {
+      const file = join(assetsRoot, type, slug, 'asset.yaml');
+      if (!existsSync(file)) continue;
+      assetCount += 1;
+      byType[type] = (byType[type] ?? 0) + 1;
+      const text = readFileSync(file, 'utf8');
+      // Read as text rather than parsed: this is a count, and pulling in a YAML
+      // parser here would make the measurement depend on the same library the
+      // thing being measured is written with.
+      if (/\n\s*-\s*source_type:/u.test(text)) withProvenance += 1;
+    }
+  }
+
+  let solutionSetCount = 0;
+  let setsWithAlternatives = 0;
+  let unresolvedSets = 0;
+  const setsRoot = join(knowledgeRoot, 'solution-sets');
+  if (existsSync(setsRoot)) {
+    for (const name of readdirSync(setsRoot)) {
+      if (!name.endsWith('.yaml')) continue;
+      solutionSetCount += 1;
+      const text = readFileSync(join(setsRoot, name), 'utf8');
+      const members = text.match(/\n\s*-\s*asset_[A-Z0-9]+/gu) ?? [];
+      if (members.length > 1) setsWithAlternatives += 1;
+      if (/canonical_state:\s*['"]?unresolved/u.test(text)) unresolvedSets += 1;
+    }
+  }
+
+  return {
+    assetCount,
+    byType,
+    solutionSetCount,
+    setsWithAlternatives,
+    unresolvedSets,
+    withProvenance,
+  };
+}
+
+function listDirectories(path: string): string[] {
+  if (!existsSync(path)) return [];
+  return readdirSync(path, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
 }
 
 /**
@@ -250,6 +343,7 @@ function collect(target: string): void {
     runUrl: flag('--run-url') ?? null,
     suites,
     stage1: stage() >= 1 ? collectStage1(assertions) : null,
+    stage2: stage() >= 2 ? collectStage2(assertions) : null,
   });
 
   mkdirSync(dirname(target), { recursive: true });
@@ -345,9 +439,11 @@ function report(evidenceDir: string, target: string): void {
   };
 
   const gate =
-    stage() >= 1
-      ? evaluateStage1(shared satisfies Stage1GateInput)
-      : evaluateStage0(stage0(shared));
+    stage() >= 2
+      ? evaluateStage2(shared satisfies Stage2GateInput)
+      : stage() >= 1
+        ? evaluateStage1(shared satisfies Stage1GateInput)
+        : evaluateStage0(stage0(shared));
 
   const text = renderReport({
     gate,

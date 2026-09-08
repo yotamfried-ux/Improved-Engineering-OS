@@ -1,0 +1,47 @@
+schema_version: "1"
+stability: development
+introduced_in: 0.1.0
+deprecated_in: null
+replacement: null
+migration_path: null
+id: asset_01K4V8Q2R7N3X5M9B2T6W1Y408
+type: lesson
+slug: guard-precondition-weaker-than-the-operation
+title: A fail-closed guard that tests a weaker precondition than the operation it protects
+summary: A guard admitting more states than its operation can handle reopens the gap it was added to close.
+status: active
+content_hash: sha256:188c65a62282450a9772fc321df7f6f8ff03547debc69d57afa5a33791886235
+legacy_ids:
+  - lessons-learned/bugs/guard-precondition-weaker-than-the-operation.md
+problem:
+  id: problem.safety.guard-precondition
+  capabilities: []
+solution_set_id: null
+applicability:
+  conditions: []
+compatibility:
+  platforms: []
+  providers: []
+  constraints: []
+provenance:
+  - source_type: existing_eos
+    source_identity: yotamfried-ux/Engineering-OS
+    source_revision: 4d517840f18d8c1699a95110e0790d6919450ba4
+    observed_at: 2026-09-06T00:00:00.000Z
+    integrity: verified
+freshness:
+  class: normal
+  last_verified_at: null
+risk:
+  execution_authority: data_only
+  blast_radius: read_only
+relationships:
+  supersedes: []
+  superseded_by: []
+  related_to: []
+evidence_policy:
+  eligible_origins:
+    - qualification
+    - operational
+body: body.md
+files: []

@@ -29,6 +29,33 @@ jobs:
     name: linux (primary)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
+    # The Evidence Plane's guarantees -- D36's classification authority, D22's
+    # credential boundary, RLS denying by default -- are enforced by the
+    # database, so they are tested by executing the migration against a real
+    # PostgreSQL rather than by reading the SQL. Without this service the suite
+    # reports itself SKIPPED, which the qualification gate counts as unproven;
+    # it never reports a pass it did not earn.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ieos_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Local to the runner and thrown away with it. Not a credential in any
+      # sense F9 is about, but it is still the only connection string in the
+      # repository, so it is a throwaway password on a container that accepts
+      # connections from this job alone.
+      IEOS_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ieos_test
+
     steps:
       - uses: actions/checkout@v5
 
@@ -70,11 +97,33 @@ jobs:
         # corpus, so "all tests passed" cannot mean "no tests ran".
         run: node scripts/assert-corpus.mjs
 
+      - name: The Evidence Plane suite really ran here
+        # It skips itself when no database is reachable, which is the honest
+        # answer on a developer's laptop and the wrong one in CI: this job
+        # provides a database, so a skip here means the service or the client
+        # is missing and the D22/D36 guarantees went unchecked while the job
+        # stayed green. Fails closed on exactly that.
+        run: |
+          set -euo pipefail
+          psql "$IEOS_TEST_DATABASE_URL" -tAc 'select 1' > /dev/null
+          node node_modules/vitest/vitest.mjs run --project evidence-plane \
+            --reporter=json --outputFile=/tmp/evidence-plane.json > /dev/null
+          node -e '
+            const r = require("/tmp/evidence-plane.json");
+            const passed = r.numPassedTests ?? 0;
+            const pending = (r.numTotalTests ?? 0) - passed - (r.numFailedTests ?? 0);
+            if (pending > 0 || passed < 20) {
+              console.error(`Evidence Plane suite did not run: ${passed} passed, ${pending} skipped`);
+              process.exit(1);
+            }
+            console.log(`Evidence Plane: ${passed} tests executed against PostgreSQL`);
+          '
+
       - name: Collect this platform's qualification evidence
         run: |
           set -euo pipefail
           pnpm report:collect qualification/evidence/platforms/linux.json \
-            --stage 1 \
+            --stage 2 \
             --commit "${{ github.sha }}" \
             --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
@@ -162,6 +211,34 @@ jobs:
         # path handling are exactly what differs between platforms.
         run: pnpm vitest run --project cli
 
+      - name: Deterministic ranking on win32
+        # D20.3's ordering must be identical on both platforms: it feeds
+        # `context_snapshot_id`, so a locale- or order-dependent sort would make
+        # a decision unreproducible across machines.
+        run: pnpm vitest run --project resolver
+
+      - name: Telemetry, derivation and the agent hooks on win32
+        # All three drive real files, real SQLite and real subprocesses, which
+        # is exactly where the two platforms differ. The hook adapter especially:
+        # its exit-code rule has to hold identically wherever the agent runs.
+        run: pnpm vitest run --project telemetry --project evidence-derivation --project claude-code
+
+      - name: The seed importer and the trial harness on win32
+        # Both were linux-only, and the Stage 2 gate said so: H1 and H9 came
+        # back `unproven` because two of their named tests had never been
+        # observed here. Declaring those tests platform-independent would have
+        # been the cheap way out; running them is the honest one. The harness
+        # especially -- its containment probes resolve real paths and follow
+        # real symlinks, which is exactly the kind of thing that differs.
+        run: pnpm vitest run --project seed-import --project harness
+
+      - name: The Evidence Plane suite on win32
+        # No PostgreSQL service here, so this SKIPS -- and recording the skip is
+        # the point. The win32 record then says "unproven on this platform"
+        # rather than omitting the tests, and the Stage 2 gate reads H5 from the
+        # platform that did run them.
+        run: pnpm vitest run --project evidence-plane
+
       - name: MCP 2026-07-28 conformance smoke on win32
         # The protocol layer has no filesystem in it, but the runtime that
         # serves it does run here, and Stage 0 already caught two defects on
@@ -197,8 +274,8 @@ jobs:
         run: |
           set -euo pipefail
           pnpm report:collect qualification/evidence/platforms/win32.json \
-            --stage 1 \
-            --projects core,snapshot-emit,sqlite-qualification,releases,store-sqlite,mcp,cli \
+            --stage 2 \
+            --projects core,snapshot-emit,sqlite-qualification,releases,store-sqlite,mcp,cli,resolver,telemetry,evidence-derivation,claude-code,evidence-plane,seed-import,harness \
             --commit "${{ github.sha }}" \
             --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           echo '--- win32 platform record (verbatim) ---'
@@ -288,6 +365,16 @@ jobs:
             --evidence-dir platforms \
             --out qualification/reports/stage-01-report.md
 
+      - name: Generate the Stage 2 qualification report
+        # Same reason as Stage 1's `always()`: a NOT PASSED report is the
+        # artifact either way, and the exit code still carries the verdict.
+        if: always()
+        run: |
+          set -euo pipefail
+          pnpm --silent report:stage2 \
+            --evidence-dir platforms \
+            --out qualification/reports/stage-02-report.md
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -295,4 +382,5 @@ jobs:
           path: |
             qualification/reports/stage-00-report.md
             qualification/reports/stage-01-report.md
+            qualification/reports/stage-02-report.md
           if-no-files-found: error

@@ -20,7 +20,13 @@
  * compares is produced by exactly this code.
  */
 
-import { buildUnprovenSnapshot, sha256Canonical, type ScoreSnapshot } from '@ieos/core';
+import {
+  buildUnprovenSnapshot,
+  scoreSnapshotSchema,
+  sha256Canonical,
+  UNIFORM_PRIOR,
+  type ScoreSnapshot,
+} from '@ieos/core';
 
 export interface EmittedSnapshot {
   readonly snapshot: ScoreSnapshot;
@@ -60,3 +66,148 @@ export function emitUnprovenSnapshot(assetIds: readonly string[]): EmittedSnapsh
  * rather than an environment artefact.
  */
 export const EMPTY_SNAPSHOT_DIGEST = emitUnprovenSnapshot([]).digest;
+
+// ---------------------------------------------------------------------------
+// From Stage 2: the Evidence Plane read (D24)
+// ---------------------------------------------------------------------------
+
+/**
+ * The overlay `read_minimal('score_overlay')` returns.
+ *
+ * Typed loosely on purpose. It arrives from a server this build does not
+ * control, and pretending otherwise here would move the validation boundary to
+ * whoever called this instead of keeping it in the one place that checks.
+ */
+export interface ScoreOverlay {
+  readonly state?: unknown;
+  readonly scores?: unknown;
+  readonly computed_at?: unknown;
+  readonly scoring_policy_version?: unknown;
+  readonly score_view_id?: unknown;
+}
+
+/** Where a snapshot's numbers came from. Recorded, never inferred. */
+export type SnapshotSource = 'bootstrap' | 'evidence_plane';
+
+export interface SnapshotBuild extends EmittedSnapshot {
+  readonly source: SnapshotSource;
+  /** Why the Evidence Plane was not used, when it was not. */
+  readonly fallbackReason: string | null;
+}
+
+/**
+ * Build the score snapshot the release ships (D24).
+ *
+ * From Stage 2 the build queries the Evidence Plane through `read.minimal` and
+ * writes what it returns. Two properties matter more than the query:
+ *
+ *   **A failed read falls back to the bootstrap snapshot rather than failing
+ *   the build.** D24's whole reason for a snapshot is that `resolve` must work
+ *   offline; a build that could not run without the plane would have inverted
+ *   that. The fallback is UNPROVEN, so nothing claims to be measured.
+ *
+ *   **The source is recorded either way.** A bootstrap snapshot and a derived
+ *   one that happens to contain the same numbers are different facts, and at
+ *   Stage 2 they contain exactly the same numbers -- the plane answers UNPROVEN
+ *   because scoring is Stage 10. Without `source`, the day the plane starts
+ *   returning real scores would be indistinguishable from the day before it,
+ *   and a silent fallback would look like a working read forever.
+ *
+ * The Champion is deliberately absent from all of this. It is part of the
+ * release index (D34, C-01), and a snapshot that carried one would let a live
+ * score move a canonical answer that only a promotion may move.
+ */
+export async function buildScoreSnapshot(options: {
+  readonly assetIds: readonly string[];
+  /** Null when no Evidence Plane is configured for this build. */
+  readonly readOverlay: (() => Promise<unknown>) | null;
+}): Promise<SnapshotBuild> {
+  const bootstrap = emitUnprovenSnapshot(options.assetIds);
+  if (options.readOverlay === null) {
+    return {
+      ...bootstrap,
+      source: 'bootstrap',
+      fallbackReason: 'no Evidence Plane is configured for this build',
+    };
+  }
+
+  let overlay: unknown;
+  try {
+    overlay = await options.readOverlay();
+  } catch (error) {
+    return {
+      ...bootstrap,
+      source: 'bootstrap',
+      fallbackReason: `the Evidence Plane read failed: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    };
+  }
+
+  const derived = snapshotFromOverlay(overlay, options.assetIds);
+  if (derived === null) {
+    return {
+      ...bootstrap,
+      source: 'bootstrap',
+      fallbackReason: 'the Evidence Plane returned an overlay this build could not read',
+    };
+  }
+  return { ...derived, source: 'evidence_plane', fallbackReason: null };
+}
+
+/**
+ * Turn an overlay into a snapshot, or null when it cannot be trusted.
+ *
+ * Assets the overlay does not mention keep the uniform prior with
+ * `evidence_count: 0`. Dropping them would shrink the corpus `resolve` can see
+ * because the scorer had nothing to say about them, which is the opposite of
+ * what "no evidence yet" should mean.
+ */
+export function snapshotFromOverlay(
+  overlay: unknown,
+  assetIds: readonly string[],
+): EmittedSnapshot | null {
+  if (overlay === null || typeof overlay !== 'object') return null;
+  const value = overlay as ScoreOverlay;
+  const state = value.state;
+  if (state !== 'UNPROVEN' && state !== 'DERIVED') return null;
+
+  const byId = new Map<string, { score: number; evidence_count: number }>();
+  if (Array.isArray(value.scores)) {
+    for (const entry of value.scores) {
+      if (entry === null || typeof entry !== 'object') continue;
+      const row = entry as { id?: unknown; score?: unknown; evidence_count?: unknown };
+      if (typeof row.id !== 'string') continue;
+      const score = typeof row.score === 'number' ? row.score : UNIFORM_PRIOR;
+      const count = typeof row.evidence_count === 'number' ? Math.trunc(row.evidence_count) : 0;
+      // A score outside [0,1] is not a score. Refusing the whole overlay rather
+      // than clamping: a clamp would silently accept a scorer that had gone
+      // wrong, and the release would ship its output.
+      if (!Number.isFinite(score) || score < 0 || score > 1 || count < 0) return null;
+      byId.set(row.id, { score, evidence_count: count });
+    }
+  }
+
+  const snapshot = scoreSnapshotSchema.parse({
+    schema_version: '1',
+    stability: 'development',
+    introduced_in: '0.1.0',
+    deprecated_in: null,
+    replacement: null,
+    migration_path: null,
+    state,
+    score_view_id: typeof value.score_view_id === 'string' ? value.score_view_id : null,
+    scoring_policy_version:
+      typeof value.scoring_policy_version === 'string' ? value.scoring_policy_version : '0',
+    computed_at: typeof value.computed_at === 'string' ? value.computed_at : null,
+    assets: [...assetIds]
+      .sort()
+      .map((id) => ({ id, ...(byId.get(id) ?? { score: UNIFORM_PRIOR, evidence_count: 0 }) })),
+  }) as ScoreSnapshot;
+
+  return {
+    snapshot,
+    content: `${JSON.stringify(snapshot, null, 2)}\n`,
+    digest: sha256Canonical(snapshot as unknown as Parameters<typeof sha256Canonical>[0]),
+  };
+}

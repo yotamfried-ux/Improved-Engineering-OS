@@ -1,0 +1,51 @@
+schema_version: "1"
+stability: development
+introduced_in: 0.1.0
+deprecated_in: null
+replacement: null
+migration_path: null
+id: asset_01K4V8Q2R7N3X5M9B2T6W1Y402
+type: pattern
+slug: session-based-auth
+title: Server-side sessions for browser users
+summary: Authenticate browser users with a server-side session and an opaque cookie.
+status: active
+content_hash: sha256:586cb62042c8a5f2e63bac393ee28a485759deaaa9544aae05ad042dc1bfbf6a
+legacy_ids:
+  - patterns/auth/README.md
+problem:
+  id: problem.auth.browser-user-login
+  capabilities: []
+solution_set_id: solset_01K4V8Q2R7N3X5M9B2T6W1Y4ZA
+applicability:
+  conditions:
+    - fact: platform
+      in:
+        - web
+compatibility:
+  platforms:
+    - web
+  providers: []
+  constraints: []
+provenance:
+  - source_type: existing_eos
+    source_identity: yotamfried-ux/Engineering-OS
+    source_revision: 4d517840f18d8c1699a95110e0790d6919450ba4
+    observed_at: 2026-09-06T00:00:00.000Z
+    integrity: verified
+freshness:
+  class: normal
+  last_verified_at: null
+risk:
+  execution_authority: data_only
+  blast_radius: read_only
+relationships:
+  supersedes: []
+  superseded_by: []
+  related_to: []
+evidence_policy:
+  eligible_origins:
+    - qualification
+    - operational
+body: body.md
+files: []

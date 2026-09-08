@@ -84,6 +84,24 @@ attributes:
     max_length: 64
     note: A taxonomy value from the report's failure taxonomy, never a message.
 
+  - key: session.startup_reason
+    type: string
+    sensitivity: public
+    max_length: 16
+    note: >-
+      startup | resume | clear | compact | fork, as the primary agent's SessionStart hook
+      reports it. A resumed or compacted session is a continuation rather than a new run, and
+      an investigation that could not tell them apart would read one session as several.
+
+  - key: session.exit_reason
+    type: string
+    sensitivity: public
+    max_length: 24
+    note: >-
+      How the session ended, from the SessionEnd hook. Separates a deliberate exit from a
+      session that simply stopped being there -- which is the difference between a complete
+      run and one whose last events may never have been flushed (D23).
+
 forbidden:
   # Named rather than merely absent, so a future contributor finds a decision.
   - key: prompt.text

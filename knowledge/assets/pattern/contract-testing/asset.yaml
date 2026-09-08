@@ -1,0 +1,48 @@
+schema_version: "1"
+stability: development
+introduced_in: 0.1.0
+deprecated_in: null
+replacement: null
+migration_path: null
+id: asset_01K4V8Q2R7N3X5M9B2T6W1Y404
+type: pattern
+slug: contract-testing
+title: Contract testing across a service boundary
+summary: Pin the agreement between two sides of a boundary so either can change without silent breakage.
+status: active
+content_hash: sha256:256b025c9221592a12e49f05dbbb7a952f5fe3f7710fbba4df82724b9042572c
+legacy_ids:
+  - patterns/testing/README.md
+problem:
+  id: problem.testing.boundary-agreement
+  capabilities:
+    - validation.review-checked
+solution_set_id: null
+applicability:
+  conditions: []
+compatibility:
+  platforms: []
+  providers: []
+  constraints: []
+provenance:
+  - source_type: existing_eos
+    source_identity: yotamfried-ux/Engineering-OS
+    source_revision: 4d517840f18d8c1699a95110e0790d6919450ba4
+    observed_at: 2026-09-06T00:00:00.000Z
+    integrity: verified
+freshness:
+  class: normal
+  last_verified_at: null
+risk:
+  execution_authority: data_only
+  blast_radius: read_only
+relationships:
+  supersedes: []
+  superseded_by: []
+  related_to: []
+evidence_policy:
+  eligible_origins:
+    - qualification
+    - operational
+body: body.md
+files: []

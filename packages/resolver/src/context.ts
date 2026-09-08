@@ -1,6 +1,10 @@
 /**
  * The situation a `resolve` happened in (D25, T-05, P-03).
  *
+ * Moved here from `adapters/mcp` at Stage 2. It sat in the adapter only while
+ * no resolver existed; a context snapshot records *why a decision came out the
+ * way it did*, which is knowledge semantics, and F2 says adapters own none.
+ *
  * `context_snapshot_id` is a hash of eight inputs. Some of them -- the Project
  * Profile digest, the capability snapshot -- belong to stages that have not
  * arrived, and the temptation is to hash a zero or an empty string in their

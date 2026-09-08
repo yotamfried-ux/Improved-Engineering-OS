@@ -52,6 +52,7 @@ function cruise(): CruiseSummary {
 }
 
 const PROBE = join(REPO_ROOT, 'packages/core/src/__fitness-probe.ts');
+const TELEMETRY_PROBE = join(REPO_ROOT, 'packages/telemetry/src/__fitness-probe.ts');
 
 /** Write a deliberate violation into core, cruise, and report what fired. */
 function cruiseWithProbe(source: string): readonly string[] {
@@ -59,8 +60,15 @@ function cruiseWithProbe(source: string): readonly string[] {
   return cruise().summary.violations.map((violation) => violation.rule.name);
 }
 
+/** The same, for a domain package that must reach storage only through a port. */
+function cruiseWithTelemetryProbe(source: string): readonly string[] {
+  writeFileSync(TELEMETRY_PROBE, source, 'utf8');
+  return cruise().summary.violations.map((violation) => violation.rule.name);
+}
+
 afterEach(() => {
   rmSync(PROBE, { force: true });
+  rmSync(TELEMETRY_PROBE, { force: true });
 });
 
 const result = cruise();
@@ -118,6 +126,52 @@ describe('the rules can actually fire (control)', () => {
     // pass over it. That has to be an error in its own right.
     const fired = cruiseWithProbe("export { thing } from 'no-such-package-anywhere';\n");
     expect(fired).toContain('no-unresolvable');
+  });
+
+  it('fires when a domain package reaches for a storage implementation', () => {
+    // F4's point is that local evaluation keeps working when the Evidence Plane
+    // is down (R-05), which only holds while domain code talks to ports. The
+    // rule covers telemetry from the commit that created it, so the control is
+    // written against telemetry rather than against a package that has never
+    // had the opportunity to break it.
+    // Two probes, because there are two ways to write the same violation and
+    // only one of them resolves. An undeclared workspace import is unresolvable
+    // under pnpm and never acquires a path for the path rule to match -- the
+    // gap ADR-0004 already records for F1a -- so the by-specifier rule is what
+    // catches it. A relative import into the package resolves and is caught by
+    // the path rule. Both are the same mistake and both must fire as F4.
+    const byName = cruiseWithTelemetryProbe("export { SqliteOutbox } from '@ieos/store-sqlite';\n");
+    expect(byName).toContain('f4-domain-imports-no-store-by-name');
+
+    const byPath = cruiseWithTelemetryProbe(
+      "export { SqliteOutbox } from '../../store-sqlite/src/outbox.ts';\n",
+    );
+    expect(byPath).toContain('f4-domain-imports-no-store');
+  });
+
+  it('fires when an adapter that is NOT the CLI derives evidence (C-11)', () => {
+    // The C-11 exception is one directory wide. Without this control, splitting
+    // F2 into two rules could have quietly widened the composition set for every
+    // adapter, and the suite would have reported the boundary as intact.
+    const probe = join(REPO_ROOT, 'packages/adapters/mcp/src/__fitness-probe.ts');
+    writeFileSync(
+      probe,
+      "export { deriveAttribution } from '@ieos/evidence-derivation';\n",
+      'utf8',
+    );
+    try {
+      const fired = cruise().summary.violations.map((violation) => violation.rule.name);
+      expect(fired).toContain('f2-adapters-do-not-derive-evidence-by-name');
+      writeFileSync(
+        probe,
+        "export { deriveAttribution } from '../../../evidence-derivation/src/index.ts';\n",
+        'utf8',
+      );
+      const byPath = cruise().summary.violations.map((violation) => violation.rule.name);
+      expect(byPath).toContain('f2-adapters-do-not-derive-evidence');
+    } finally {
+      rmSync(probe, { force: true });
+    }
   });
 
   it('the probe leaves no trace, so the clean result above stays clean', () => {

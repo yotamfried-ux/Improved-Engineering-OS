@@ -230,6 +230,29 @@ importers:
         version: 2.9.0
 
   fitness:
+    dependencies:
+      '@ieos/core':
+        specifier: workspace:*
+        version: link:../packages/core
+      '@ieos/resolver':
+        specifier: workspace:*
+        version: link:../packages/resolver
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
+  packages/adapters/claude-code:
+    dependencies:
+      '@ieos/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@ieos/store-sqlite':
+        specifier: workspace:*
+        version: link:../../store-sqlite
+      '@ieos/telemetry':
+        specifier: workspace:*
+        version: link:../../telemetry
     devDependencies:
       '@types/node':
         specifier: 24.13.3
@@ -237,9 +260,15 @@ importers:
 
   packages/adapters/cli:
     dependencies:
+      '@ieos/adapter-claude-code':
+        specifier: workspace:*
+        version: link:../claude-code
       '@ieos/core':
         specifier: workspace:*
         version: link:../../core
+      '@ieos/evidence-derivation':
+        specifier: workspace:*
+        version: link:../../evidence-derivation
       '@ieos/store-sqlite':
         specifier: workspace:*
         version: link:../../store-sqlite
@@ -256,6 +285,9 @@ importers:
       '@ieos/core':
         specifier: workspace:*
         version: link:../../core
+      '@ieos/resolver':
+        specifier: workspace:*
+        version: link:../../resolver
       '@ieos/store-sqlite':
         specifier: workspace:*
         version: link:../../store-sqlite
@@ -280,6 +312,16 @@ importers:
         specifier: 24.13.3
         version: 24.13.3
 
+  packages/evidence-derivation:
+    dependencies:
+      '@ieos/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
   packages/releases:
     dependencies:
       '@ieos/core':
@@ -293,11 +335,34 @@ importers:
         specifier: 24.13.3
         version: 24.13.3
 
+  packages/resolver:
+    dependencies:
+      '@ieos/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
   packages/store-sqlite:
     dependencies:
       '@ieos/core':
         specifier: workspace:*
         version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
+  packages/telemetry:
+    dependencies:
+      '@ieos/core':
+        specifier: workspace:*
+        version: link:../core
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
     devDependencies:
       '@types/node':
         specifier: 24.13.3
@@ -347,6 +412,19 @@ importers:
       '@ieos/snapshot-emit':
         specifier: workspace:*
         version: link:../snapshot-emit
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
+  tools/seed-import:
+    dependencies:
+      '@ieos/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
     devDependencies:
       '@types/node':
         specifier: 24.13.3

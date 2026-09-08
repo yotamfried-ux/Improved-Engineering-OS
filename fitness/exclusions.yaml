@@ -30,6 +30,19 @@ rule_definition_exclusions:
     reason: >-
       Contains every forbidden pattern as a literal, by necessity. The controls in each
       test are what prove these scans can still fire.
+  - path: packages/telemetry/test/attributes.test.ts
+    applies_to: F9 secret-shape scan only
+    reason: >-
+      Negative control for the RUNTIME rejecter: it proves the allowlist sanitizer refuses a
+      credential-shaped attribute value, which requires containing one. Named as a single file
+      rather than a directory, and boundaries.test.ts asserts the file still carries that
+      assertion, so the exclusion cannot outlive its justification.
+  - path: packages/telemetry/test/emitter.test.ts
+    applies_to: F9 secret-shape scan only
+    reason: >-
+      Negative control for the same rejecter at the run-identity level: an emitter refuses a
+      run identity holding a credential-shaped value, which requires containing one. Same
+      single-file scope and same liveness check as the entry above.
 
 f6_absolute_path_scope:
   # F6's own wording scopes it to "runtime/configuration paths". Test fixtures

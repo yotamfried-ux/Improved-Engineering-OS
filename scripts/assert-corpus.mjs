@@ -45,6 +45,17 @@ export const WINDOWS_SMOKE_PROJECTS = [
   'store-sqlite',
   'mcp',
   'cli',
+  'resolver',
+  'telemetry',
+  'evidence-derivation',
+  'claude-code',
+  // Skips on win32 -- no PostgreSQL service there -- and is listed anyway so
+  // the record says "unproven on this platform" rather than omitting the suite.
+  // The floor below counts passing tests, and this project contributes the
+  // ones that need no database.
+  'evidence-plane',
+  'seed-import',
+  'harness',
 ];
 
 /** Floors. Raise them when a whole area of the suite lands, never lower them to go green. */

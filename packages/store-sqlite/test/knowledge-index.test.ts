@@ -20,7 +20,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
 import { INDEX_META_KEYS, INDEX_SCHEMA_VERSION, sha256Canonical } from '@ieos/core';
-import { IndexUnavailableError, SqliteKnowledgeIndex } from '../src/index.ts';
+import { IndexUnavailableError, SqliteKnowledgeIndex, toFtsQuery } from '../src/index.ts';
 
 const LIFECYCLE = {
   schema_version: '1',
@@ -250,6 +250,49 @@ describe('full-text search', () => {
     );
     expect((await index.searchAssets('code_verifier', 10)).length).toBe(1);
     index.close();
+  });
+
+  // --- the two ways a raw hint broke MATCH --------------------------------
+  //
+  // Both were found by driving the real MCP server against the real seeded
+  // index, not by a unit test: one returned an empty result and the other
+  // threw, and an empty result is indistinguishable from an honest miss.
+
+  it('matches a natural-language hint, which FTS5 ANDs by default', async () => {
+    const index = await SqliteKnowledgeIndex.open(
+      buildFixture({ bodies: { asset_alpha: 'remember the code_verifier when redirecting' } }),
+    );
+    // Every one of these words in one document is what bare FTS5 would demand,
+    // and no document has them all. A task hint is prose; it must still match.
+    const hits = await index.searchAssets('how do I remember a verifier during redirect', 10);
+    expect(hits.length).toBeGreaterThan(0);
+    index.close();
+  });
+
+  it('survives FTS5 operator characters in a hint rather than throwing', async () => {
+    const index = await SqliteKnowledgeIndex.open(buildFixture());
+    // `:` is FTS5's column filter. Unquoted, `auth: login` raised
+    // "no such column: auth" and the query threw out of `resolve`.
+    await expect(
+      index.searchAssets('auth: login (browser) "quoted" NOT-a-flag', 10),
+    ).resolves.toBeDefined();
+    index.close();
+  });
+
+  it('treats a query with no usable token as matching nothing', async () => {
+    const index = await SqliteKnowledgeIndex.open(buildFixture());
+    expect(await index.searchAssets('   ?! -- ', 10)).toEqual([]);
+    index.close();
+  });
+
+  it('tokenizes operators away, rather than escaping them', () => {
+    expect(toFtsQuery('auth: login')).toBe('"auth" OR "login"');
+    expect(toFtsQuery('say "hi" NOW')).toBe('"say" OR "hi" OR "NOW"');
+    // A quote cannot reach the literal: the split removed it. This is what
+    // makes the operators safe -- there is no escaping step, and a test
+    // asserting one would be describing code that can never run.
+    expect(toFtsQuery('a"b')).toBeNull();
+    expect(toFtsQuery('   ')).toBeNull();
   });
 
   it('returns nothing for a query that matches nothing', async () => {

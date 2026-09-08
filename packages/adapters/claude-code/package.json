@@ -1,0 +1,19 @@
+{
+  "name": "@ieos/adapter-claude-code",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Hook adapter for the primary agent: SessionStart, PostToolUse, Stop, SessionEnd (Q-09, D23).",
+  "license": "UNLICENSED",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@ieos/core": "workspace:*",
+    "@ieos/store-sqlite": "workspace:*",
+    "@ieos/telemetry": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3"
+  }
+}

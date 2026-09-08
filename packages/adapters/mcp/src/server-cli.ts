@@ -24,9 +24,9 @@ import { join, resolve as resolvePath } from 'node:path';
 import { sha256Text } from '@ieos/core';
 import { IndexUnavailableError, SqliteKnowledgeIndex } from '@ieos/store-sqlite';
 import { serveIeosMcp } from './serve.ts';
-import { unobserved, type RuntimeFacts } from './context.ts';
+import { unobserved, type RuntimeFacts } from '@ieos/resolver';
 import { SERVER_VERSION } from './server.ts';
-import type { ContextSnapshot } from './context.ts';
+import type { ContextSnapshot } from '@ieos/resolver';
 
 const args = process.argv.slice(2);
 const flag = (name: string): string | undefined => {

@@ -17,7 +17,7 @@ import type {
   AssetSearchHit,
 } from '@ieos/core';
 import { buildUnprovenSnapshot } from '@ieos/core';
-import { unobserved, type RuntimeFacts } from '../src/context.ts';
+import { unobserved, type RuntimeFacts } from '@ieos/resolver';
 
 export const FIXTURE_FACTS: RuntimeFacts = {
   repo_sha: '0'.repeat(40),
@@ -62,8 +62,18 @@ export class MemoryIndex implements KnowledgeIndex {
     return [...this.#sets.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   }
 
-  async searchAssets(): Promise<readonly AssetSearchHit[]> {
-    return [];
+  /**
+   * Every asset, in id order, with a synthetic FTS5-shaped rank.
+   *
+   * More negative is more relevant, as SQLite reports it, so the first asset by
+   * id is the best match. Enough to exercise ordering without a database; the
+   * real BM25 behaviour is tested in `store-sqlite` against a real FTS5 table.
+   */
+  async searchAssets(_query: string, limit: number): Promise<readonly AssetSearchHit[]> {
+    return [...this.#assets.values()]
+      .sort((a, b) => (a.asset.id < b.asset.id ? -1 : 1))
+      .slice(0, Math.max(0, limit))
+      .map((entry, position) => ({ asset: entry.asset, rank: -10 + position }));
   }
 
   async getScoreSnapshot(): Promise<ScoreSnapshot> {

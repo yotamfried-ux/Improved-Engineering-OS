@@ -72,9 +72,13 @@ describe('declared status matches what is actually on disk', () => {
     expect(rule('F7').mechanisms).toContain('source-scan');
   });
 
-  it('F11 is not-yet-enforceable because no resolver exists', () => {
-    expect(exists('packages/resolver')).toBe(false);
-    expect(rule('F11').status).toBe('not-yet-enforceable');
+  it('F11 is enforced now that packages/resolver exists', () => {
+    // Stage 2 created the resolver, the dormancy guard fired on all four
+    // assertions that assumed its absence, and the rule was armed rather than
+    // left describing a world that had moved.
+    expect(exists('packages/resolver')).toBe(true);
+    expect(rule('F11').status).toBe('enforced');
+    expect(rule('F11').dormantWhileAbsent).toEqual([]);
   });
 
   it('F10 is partial because no simulations/ directory exists', () => {
@@ -92,24 +96,22 @@ describe('declared status matches what is actually on disk', () => {
     expect(rule('F2').dormantWhileAbsent).toEqual([]);
   });
 
-  it('F4 is partial because its SUBJECTS do not exist, not because no store does', () => {
-    // The earlier wording tied F4 to the store side and fired the moment Stage 1
-    // created `packages/store-sqlite` -- correctly, because the stated reason had
-    // become false. But it was the wrong reason from the start: F4 constrains
-    // `resolver`, `assurance` and `evidence-derivation`, and it is those three
-    // that do not exist yet. A store existing is what gives the rule a real
-    // target; it is not what makes the rule enforceable.
-    for (const subject of [
-      'packages/resolver',
-      'packages/assurance',
-      'packages/evidence-derivation',
-    ]) {
-      expect(exists(subject), `${subject} exists, so F4 must be armed`).toBe(false);
+  it('F4 is partial because ONE of its three subjects still does not exist', () => {
+    // F4 constrains `resolver`, `assurance` and `evidence-derivation`. Stage 2
+    // created the first and then the third, so the rule is enforced for both;
+    // `assurance` is still absent, which is why it stays partial rather than
+    // becoming enforced. The store side is what gives the rule a target -- it
+    // was never what made the rule enforceable, and an earlier wording that
+    // tied it there fired for the wrong reason.
+    for (const armed of ['packages/resolver', 'packages/evidence-derivation']) {
+      expect(exists(armed), `${armed} exists, so F4 is live for it`).toBe(true);
     }
+    expect(
+      exists('packages/assurance'),
+      'packages/assurance exists, so F4 must be armed further',
+    ).toBe(false);
     expect(rule('F4').status).toBe('partial');
-    // And the dependency rule now has something to point at, so the day a
-    // subject appears the rule bites rather than needing to be written first.
-    expect(exists('packages/store-sqlite')).toBe(true);
+    expect(rule('F4').dormantWhileAbsent).toEqual(['packages/assurance']);
   });
 
   it('F1a, F1b, F3, F6, F9 and F12 are enforced, and their subject exists', () => {
@@ -189,9 +191,12 @@ describe('the honest summary', () => {
     // Stage 0 closed at "6 enforced, 4 partial, 3 not yet enforceable".
     // Stage 1 moved two, each when its subject appeared and its dormancy guard
     // fired: F7 to partial (packages/releases), F2 to enforced
-    // (packages/adapters). Stage 0's own documents still record the Stage 0
-    // mix, correctly: they are history, not a claim about now.
-    expect(summarize()).toBe('7 enforced, 4 partial, 2 not yet enforceable');
+    // (packages/adapters). Stage 2 moved one more: F11 to enforced, when
+    // packages/resolver appeared and gave Champion selection a code path to
+    // constrain. F4 stays partial -- the resolver exists, assurance and
+    // evidence-derivation do not. Each stage's own documents still record the
+    // mix at that stage, correctly: they are history, not a claim about now.
+    expect(summarize()).toBe('9 enforced, 3 partial, 1 not yet enforceable');
   });
 
   it('does not claim all thirteen rule entries are green', () => {

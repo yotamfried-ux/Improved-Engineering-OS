@@ -1,0 +1,47 @@
+schema_version: "1"
+stability: development
+introduced_in: 0.1.0
+deprecated_in: null
+replacement: null
+migration_path: null
+id: asset_01K4V8Q2R7N3X5M9B2T6W1Y412
+type: failed_solution
+slug: slash-command-from-bash
+title: Invoking an agent slash command from bash
+summary: "Recorded as failed: a slash command is interpreted by the client, not reachable from a shell."
+status: active
+content_hash: sha256:9b2c73f18c26740135986ac2e3eced3ce29cb3465cf2f648d26743e6c315221b
+legacy_ids:
+  - failed-solutions/claude-slash-command-from-bash.md
+problem:
+  id: problem.agent.programmatic-command-invocation
+  capabilities: []
+solution_set_id: null
+applicability:
+  conditions: []
+compatibility:
+  platforms: []
+  providers: []
+  constraints: []
+provenance:
+  - source_type: existing_eos
+    source_identity: yotamfried-ux/Engineering-OS
+    source_revision: 4d517840f18d8c1699a95110e0790d6919450ba4
+    observed_at: 2026-09-06T00:00:00.000Z
+    integrity: verified
+freshness:
+  class: normal
+  last_verified_at: null
+risk:
+  execution_authority: data_only
+  blast_radius: read_only
+relationships:
+  supersedes: []
+  superseded_by: []
+  related_to: []
+evidence_policy:
+  eligible_origins:
+    - qualification
+    - operational
+body: body.md
+files: []

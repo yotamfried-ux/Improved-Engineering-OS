@@ -87,18 +87,57 @@ module.exports = {
       severity: 'error',
       from: { path: '^packages/adapters' },
       to: {
-        path: '^packages/(releases|curator|evidence-derivation)',
+        path: '^packages/(releases|curator)',
       },
+    },
+    {
+      name: 'f2-adapters-do-not-derive-evidence',
+      comment:
+        "F2, evidence-derivation half. The guide's section 3 composition set for adapters is " +
+        'core, resolver, telemetry, assurance and the store-* packages, and evidence-derivation ' +
+        'is listed for supabase/functions instead. Its own Stage 2 deliverables then require ' +
+        '`ieos investigate <run_id>` to derive attribution LOCALLY from the outbox, which no ' +
+        'other package can do. Deviation C-11 resolves that contradiction as narrowly as the ' +
+        'mechanism can express: the CLI may import it, every other adapter may not.',
+      severity: 'error',
+      from: { path: '^packages/adapters/(?!cli/)' },
+      to: { path: '^packages/evidence-derivation' },
+    },
+    {
+      name: 'f2-adapters-do-not-derive-evidence-by-name',
+      comment:
+        'The by-specifier half of the rule above, for the same reason F1a and F4 need one: an ' +
+        'undeclared workspace import is unresolvable under pnpm and never acquires a resolved ' +
+        'path, so only no-unresolvable would fire and the boundary violation would be reported ' +
+        'as a typo.',
+      severity: 'error',
+      from: { path: '^packages/adapters/(?!cli/)' },
+      to: { path: '^@ieos/evidence-derivation' },
     },
     {
       name: 'f4-domain-imports-no-store',
       comment:
         'F4: resolver, assurance and evidence-derivation talk to ports, not to a storage ' +
         'implementation. This is what keeps local evaluation working when the Evidence ' +
-        'Plane is down (R-05). Armed before those packages exist.',
+        'Plane is down (R-05). Armed before those packages exist. telemetry and curator are ' +
+        'in the same class by the guide dependency-direction table (telemetry -> core), so ' +
+        'they are covered here rather than left to a rule nobody wrote.',
       severity: 'error',
-      from: { path: '^packages/(resolver|assurance|evidence-derivation|curator)/' },
+      from: { path: '^packages/(resolver|assurance|evidence-derivation|curator|telemetry)/' },
       to: { path: '^packages/store-' },
+    },
+    {
+      name: 'f4-domain-imports-no-store-by-name',
+      comment:
+        'F4, by specifier rather than by resolved path -- the same gap ADR-0004 records for ' +
+        "F1a. pnpm's strict node_modules makes an undeclared workspace import unresolvable, " +
+        'so it never acquires a resolved path for the rule above to match, and the only ' +
+        'thing that fires is no-unresolvable. A domain package that DID declare the ' +
+        'dependency would resolve and be caught by the path rule; this catches the one that ' +
+        'did not, and names it for what it is rather than as a typo.',
+      severity: 'error',
+      from: { path: '^packages/(resolver|assurance|evidence-derivation|curator|telemetry)/' },
+      to: { path: '^@ieos/store-' },
     },
     {
       name: 'f5-launcher-imports-only-node-builtins',

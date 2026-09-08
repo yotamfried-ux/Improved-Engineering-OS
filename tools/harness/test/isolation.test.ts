@@ -205,13 +205,16 @@ describe('run classification gates a trial too (D36)', () => {
 
   it('rejects a run registered as operational', async () => {
     const registry = new RunRegistry();
-    registry.register({
-      run_id: 'run_op',
-      origin_class: 'operational',
-      eval_set_version: null,
-      holdout_state: null,
-      simulation_id: null,
-    });
+    registry.register(
+      {
+        run_id: 'run_op',
+        origin_class: 'operational',
+        eval_set_version: null,
+        holdout_state: null,
+        simulation_id: null,
+      },
+      'plane',
+    );
 
     const trial = trialWith({ ...basePolicy(), requiredBoundaries: ['filesystem', 'environment'] });
     const outcome = await runTrial({
@@ -228,13 +231,16 @@ describe('run classification gates a trial too (D36)', () => {
 
   it('accepts a pre-registered qualification run with every required boundary proven', async () => {
     const registry = new RunRegistry();
-    registry.register({
-      run_id: 'run_qual',
-      origin_class: 'qualification',
-      eval_set_version: 'stage-0',
-      holdout_state: null,
-      simulation_id: 'simulation.stage-0',
-    });
+    registry.register(
+      {
+        run_id: 'run_qual',
+        origin_class: 'qualification',
+        eval_set_version: 'stage-0',
+        holdout_state: null,
+        simulation_id: 'simulation.stage-0',
+      },
+      'plane',
+    );
 
     const trial = trialWith({ ...basePolicy(), requiredBoundaries: ['filesystem', 'environment'] });
     const outcome = await runTrial({
@@ -256,41 +262,96 @@ describe('run classification gates a trial too (D36)', () => {
     expect(new RunRegistry().originClassFor('run_unknown')).toBe('operational');
   });
 
+  it('a registration the Evidence Plane never saw is also "operational"', () => {
+    // The plane stamps origin_class from ITS runs table. A registration the
+    // harness made only in memory leaves no row there, so the plane will stamp
+    // the default whatever the harness intended -- and reporting the intended
+    // class would describe evidence that was never produced.
+    const registry = new RunRegistry();
+    registry.register(
+      {
+        run_id: 'run_local',
+        origin_class: 'qualification',
+        eval_set_version: 'stage-2',
+        holdout_state: null,
+        simulation_id: null,
+      },
+      'local_only',
+    );
+    expect(registry.isRegistered('run_local')).toBe(true);
+    expect(registry.isConfirmedByPlane('run_local')).toBe(false);
+    expect(registry.originClassFor('run_local')).toBe('operational');
+  });
+
+  it('refuses a trial whose registration the plane never confirmed', async () => {
+    // Separated from "never registered" because the fix differs: an unenrolled
+    // or unreachable Evidence Plane, not a harness that forgot.
+    const registry = new RunRegistry();
+    registry.register(
+      {
+        run_id: 'run_local2',
+        origin_class: 'qualification',
+        eval_set_version: 'stage-2',
+        holdout_state: null,
+        simulation_id: null,
+      },
+      'local_only',
+    );
+    const outcome = await runTrial({
+      trial: trialWith({ ...basePolicy(), requiredBoundaries: ['filesystem', 'environment'] }),
+      task,
+      driver: new FakeAgentDriver(),
+      registry,
+      runId: 'run_local2',
+    });
+    expect(outcome.qualificationEligible).toBe(false);
+    expect(outcome.reasons.join(' ')).toMatch(/not with the Evidence Plane/u);
+  });
+
   it('rejects registration after the run has produced an event', () => {
     const registry = new RunRegistry();
     registry.markStarted('run_late');
     expect(() =>
-      registry.register({
-        run_id: 'run_late',
-        origin_class: 'qualification',
-        eval_set_version: 'stage-0',
-        holdout_state: null,
-        simulation_id: null,
-      }),
+      registry.register(
+        {
+          run_id: 'run_late',
+          origin_class: 'qualification',
+          eval_set_version: 'stage-0',
+          holdout_state: null,
+          simulation_id: null,
+        },
+        'plane',
+      ),
     ).toThrow(LateRegistrationError);
   });
 
   it('rejects registering a holdout run with no eval set version', () => {
     expect(() =>
-      new RunRegistry().register({
-        run_id: 'run_holdout',
-        origin_class: 'holdout',
-        eval_set_version: null,
-        holdout_state: 'active',
-        simulation_id: null,
-      }),
+      new RunRegistry().register(
+        {
+          run_id: 'run_holdout',
+          origin_class: 'holdout',
+          eval_set_version: null,
+          holdout_state: 'active',
+          simulation_id: null,
+        },
+        'plane',
+      ),
     ).toThrow();
   });
 
   it('a trial cannot be eligible on classification alone if isolation is unproven', async () => {
     const registry = new RunRegistry();
-    registry.register({
-      run_id: 'run_qual2',
-      origin_class: 'qualification',
-      eval_set_version: 'stage-0',
-      holdout_state: null,
-      simulation_id: null,
-    });
+    registry.register(
+      {
+        run_id: 'run_qual2',
+        origin_class: 'qualification',
+        eval_set_version: 'stage-0',
+        holdout_state: null,
+        simulation_id: null,
+      },
+      'plane',
+    );
 
     // The default policy requires network and process, which cannot be proven.
     const outcome = await runTrial({
@@ -336,13 +397,16 @@ describe('isolation is judged on the workspace the agent left behind', () => {
 
   function registeredRegistry(): RunRegistry {
     const registry = new RunRegistry();
-    registry.register({
-      run_id: 'run_q',
-      origin_class: 'qualification',
-      eval_set_version: 'v1',
-      holdout_state: null,
-      simulation_id: null,
-    });
+    registry.register(
+      {
+        run_id: 'run_q',
+        origin_class: 'qualification',
+        eval_set_version: 'v1',
+        holdout_state: null,
+        simulation_id: null,
+      },
+      'plane',
+    );
     return registry;
   }
 

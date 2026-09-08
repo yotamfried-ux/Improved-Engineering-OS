@@ -13,3 +13,11 @@ docs/research/
 # checks compare.
 contracts/capabilities.yaml
 qualification/evidence/
+
+# Admitted knowledge. Every asset body is covered by its `content_hash` (D19,
+# D35) and every asset.yaml carries that hash, so reformatting either breaks the
+# integrity check the build performs -- and, worse, silently stops the body from
+# being byte-identical to the section it was imported from at a pinned revision.
+# Prettier did exactly that once: it rewrote quote style and blank lines in
+# thirteen imported bodies, and `pnpm build:index` refused the whole tree.
+knowledge/

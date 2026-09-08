@@ -41,6 +41,9 @@ export const eventTypeSchema = openEnum([
   'error',
 ]);
 
+/** Open by construction: an older runtime tolerates a newer runtime's event type. */
+export type EventType = z.infer<typeof eventTypeSchema>;
+
 export const traceSchema = z.object({
   trace_id: z.string().min(1),
   span_id: z.string().min(1),

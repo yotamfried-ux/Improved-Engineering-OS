@@ -1,0 +1,192 @@
+# Stage 2 seed selection (guide Stage 2, C-04 bootstrap path).
+#
+# HAND-SELECTED, deliberately. The guide puts the bulk importer at Stage 5 and
+# asks Stage 2 for "10-20 representative assets hand-selected from the legacy
+# corpus". This file IS the hand selection: the tool below performs the
+# mechanical part (reading bytes at an exact revision, extracting the named
+# section, computing content_hash, emitting valid records) and chooses nothing.
+#
+# Ids are minted once and pinned here. D19 minted ids are opaque ULIDs and are
+# deliberately NOT derived from content -- a rename must not change an id --
+# so they cannot be recomputed. Pinning them is what makes a re-run idempotent.
+#
+# Capabilities: only ids that exist in contracts/capabilities.yaml appear here.
+# The legacy registry turned out to be a WORKFLOW taxonomy (validation.*,
+# routing.*, source.*), not a knowledge-domain one, so most of these assets have
+# no capability that honestly covers them and declare none. Inventing
+# `auth.oauth.pkce` and friends is exactly what O-5 refused to do, and D28 says
+# the taxonomy grows only through its own promotion PR.
+
+revision_pin: '4d517840f18d8c1699a95110e0790d6919450ba4'
+
+solution_sets:
+  - id: 'solset_01K4V8Q2R7N3X5M9B2T6W1Y4ZA'
+    problem_id: 'problem.auth.browser-user-login'
+    compatibility_key: 'web'
+    why_unresolved: 'both members imported unproven; no evidence at corroborated or better (D34, P-01)'
+
+assets:
+  # --- Solution Set: two alternative solutions to the same problem ----------
+  - id: 'asset_01K4V8Q2R7N3X5M9B2T6W1Y401'
+    legacy_path: 'patterns/auth/README.md'
+    section: 'Pattern: OAuth 2.0 / Social Login'
+    type: 'pattern'
+    slug: 'oauth-social-login'
+    title: 'OAuth 2.0 / social login for browser users'
+    summary: 'Delegate browser-user authentication to an external identity provider over OAuth 2.0.'
+    problem_id: 'problem.auth.browser-user-login'
+    solution_set_id: 'solset_01K4V8Q2R7N3X5M9B2T6W1Y4ZA'
+    capabilities: []
+    platforms: ['web']
+
+  - id: 'asset_01K4V8Q2R7N3X5M9B2T6W1Y402'
+    legacy_path: 'patterns/auth/README.md'
+    section: 'Pattern: Session-based Auth'
+    type: 'pattern'
+    slug: 'session-based-auth'
+    title: 'Server-side sessions for browser users'
+    summary: 'Authenticate browser users with a server-side session and an opaque cookie.'
+    problem_id: 'problem.auth.browser-user-login'
+    solution_set_id: 'solset_01K4V8Q2R7N3X5M9B2T6W1Y4ZA'
+    capabilities: []
+    platforms: ['web']
+
+  # --- Patterns answering other problems -----------------------------------
+  - id: 'asset_01K4V8Q2R7N3X5M9B2T6W1Y403'
+    legacy_path: 'patterns/auth/README.md'
+    section: 'Pattern: JWT Authentication'
+    type: 'pattern'
+    slug: 'jwt-authentication'
+    title: 'Stateless JWT verification for API callers'
+    summary: "Verify a caller's identity from a signed token without a database lookup per request."
+    problem_id: 'problem.auth.stateless-api-caller'
+    solution_set_id: null
+    capabilities: []
+    platforms: []
+
+  - id: 'asset_01K4V8Q2R7N3X5M9B2T6W1Y404'
+    legacy_path: 'patterns/testing/README.md'
+    section: 'Pattern: Contract Testing'
+    type: 'pattern'
+    slug: 'contract-testing'
+    title: 'Contract testing across a service boundary'
+    summary: 'Pin the agreement between two sides of a boundary so either can change without silent breakage.'
+    problem_id: 'problem.testing.boundary-agreement'
+    solution_set_id: null
+    capabilities: ['validation.review-checked']
+    platforms: []
+
+  - id: 'asset_01K4V8Q2R7N3X5M9B2T6W1Y405'
+    legacy_path: 'patterns/testing/README.md'
+    section: 'Pattern: Regression Test on Every Bug'
+    type: 'pattern'
+    slug: 'regression-test-on-every-bug'
+    title: 'A regression test for every bug fixed'
+    summary: 'Turn each defect into a test that fails before the fix and passes after it.'
+    problem_id: 'problem.testing.defect-recurrence'
+    solution_set_id: null
+    capabilities: []
+    platforms: []
+
+  - id: 'asset_01K4V8Q2R7N3X5M9B2T6W1Y406'
+    legacy_path: 'patterns/observability/README.md'
+    section: 'Pattern: Structured Logging'
+    type: 'pattern'
+    slug: 'structured-logging'
+    title: 'Structured logging'
+    summary: 'Emit machine-readable log records so they can be queried rather than grepped.'
+    problem_id: 'problem.observability.log-queryability'
+    solution_set_id: null
+    capabilities: []
+    platforms: []
+
+  # --- Lessons (guide requires at least one) -------------------------------
+  #
+  # Chosen because each names a failure class this rebuild independently hit.
+  # That is not a coincidence worth hiding: it is the strongest evidence
+  # available that these assets carry value, and the reason they are first.
+  - id: 'asset_01K4V8Q2R7N3X5M9B2T6W1Y407'
+    legacy_path: 'lessons-learned/bugs/negative-test-passing-for-the-wrong-reason.md'
+    section: null
+    type: 'lesson'
+    slug: 'negative-test-passing-for-the-wrong-reason'
+    title: 'A negative test that asserts only failure can pass for the wrong reason'
+    summary: 'Asserting that an operation failed does not establish which check refused it.'
+    problem_id: 'problem.testing.assertion-validity'
+    solution_set_id: null
+    capabilities: ['validation.review-checked']
+    platforms: []
+
+  - id: 'asset_01K4V8Q2R7N3X5M9B2T6W1Y408'
+    legacy_path: 'lessons-learned/bugs/guard-precondition-weaker-than-the-operation.md'
+    section: null
+    type: 'lesson'
+    slug: 'guard-precondition-weaker-than-the-operation'
+    title: 'A fail-closed guard that tests a weaker precondition than the operation it protects'
+    summary: 'A guard admitting more states than its operation can handle reopens the gap it was added to close.'
+    problem_id: 'problem.safety.guard-precondition'
+    solution_set_id: null
+    capabilities: []
+    platforms: []
+
+  - id: 'asset_01K4V8Q2R7N3X5M9B2T6W1Y409'
+    legacy_path: 'lessons-learned/bugs/unit-level-contract-passing-while-wiring-violates-it.md'
+    section: null
+    type: 'lesson'
+    slug: 'unit-contract-passing-while-wiring-violates-it'
+    title: 'A unit-level contract test passing while the wiring violates the same contract'
+    summary: 'A contract held at the unit and broken at the seam passes every test that never crosses the seam.'
+    problem_id: 'problem.testing.assertion-validity'
+    solution_set_id: null
+    capabilities: ['validation.review-checked']
+    platforms: []
+
+  - id: 'asset_01K4V8Q2R7N3X5M9B2T6W1Y410'
+    legacy_path: 'lessons-learned/bugs/ci-environment-dependent-fixture-premise.md'
+    section: null
+    type: 'lesson'
+    slug: 'ci-environment-dependent-fixture-premise'
+    title: 'A fixture whose premise depends on the CI environment'
+    summary: 'A test resting on an unstated property of one machine proves nothing on another.'
+    problem_id: 'problem.testing.environment-dependence'
+    solution_set_id: null
+    capabilities: []
+    platforms: []
+
+  - id: 'asset_01K4V8Q2R7N3X5M9B2T6W1Y411'
+    legacy_path: 'lessons-learned/bugs/remote-workspace-telemetry-requires-durable-handoff.md'
+    section: null
+    type: 'lesson'
+    slug: 'remote-workspace-telemetry-durable-handoff'
+    title: 'Remote workspace telemetry requires a durable handoff'
+    summary: 'Telemetry from an ephemeral workspace is lost unless a boundary flush makes it durable.'
+    problem_id: 'problem.telemetry.ephemeral-session-loss'
+    solution_set_id: null
+    capabilities: []
+    platforms: []
+
+  # --- failed_solution (guide requires at least one) -----------------------
+  - id: 'asset_01K4V8Q2R7N3X5M9B2T6W1Y412'
+    legacy_path: 'failed-solutions/claude-slash-command-from-bash.md'
+    section: null
+    type: 'failed_solution'
+    slug: 'slash-command-from-bash'
+    title: 'Invoking an agent slash command from bash'
+    summary: 'Recorded as failed: a slash command is interpreted by the client, not reachable from a shell.'
+    problem_id: 'problem.agent.programmatic-command-invocation'
+    solution_set_id: null
+    capabilities: []
+    platforms: []
+
+  # --- control_guidance (guide requires at least one) ----------------------
+  - id: 'asset_01K4V8Q2R7N3X5M9B2T6W1Y413'
+    legacy_path: 'core/quality-gates.md'
+    section: null
+    type: 'control_guidance'
+    slug: 'quality-gates'
+    title: 'Quality gates'
+    summary: 'The checks a change passes before it is considered done.'
+    problem_id: 'problem.process.definition-of-done'
+    solution_set_id: null
+    capabilities: ['validation.security-gate-checked', 'validation.review-checked']
+    platforms: []

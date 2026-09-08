@@ -75,7 +75,9 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
       'cannot see -- an adapter that opens the knowledge tree as files imports nothing at all -- ' +
       'plus any adapter that defines ranking rather than passing through a score the score view ' +
       'produced. Controls prove both scans fire, and that they do not fire on an adapter merely ' +
-      'reporting a score.',
+      'reporting a score. The composition set is enforced in two rules rather than one: ' +
+      'evidence-derivation is barred from every adapter EXCEPT packages/adapters/cli, which the ' +
+      "guide's own Stage 2 deliverable requires to derive attribution locally (deviation C-11).",
     dormantWhileAbsent: [],
   },
   {
@@ -94,8 +96,14 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
     invariant: 'resolver, assurance and evidence-derivation import no store-* package',
     status: 'partial',
     mechanisms: ['dependency-graph'],
-    note: 'None of those packages exists yet. The rule is armed.',
-    dormantWhileAbsent: ['packages/resolver', 'packages/assurance', 'packages/evidence-derivation'],
+    note:
+      'Enforced for packages/resolver, packages/evidence-derivation and packages/telemetry, ' +
+      'which exist from Stage 2 and talk to the KnowledgeIndex, Outbox and Ingest ports rather ' +
+      "than to store-sqlite. telemetry is not in F4's literal wording; the guide's " +
+      'dependency-direction table puts it in the same class (telemetry -> core), and covering ' +
+      'it here is narrower than writing a thirteenth rule for one package. assurance does not ' +
+      'exist yet, so the rule stays partial and its guard stays armed.',
+    dormantWhileAbsent: ['packages/assurance'],
   },
   {
     id: 'F5',
@@ -131,12 +139,14 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
   {
     id: 'F8',
     invariant: 'deterministic builds: the same inputs produce the same digests',
-    status: 'partial',
+    status: 'enforced',
     mechanisms: ['behavioural'],
     note:
-      'Proven for canonical hashing, deterministic identities and schema emission. The knowledge ' +
-      'index it ultimately covers is Stage 1.',
-    dormantWhileAbsent: ['knowledge'],
+      'Proven for canonical hashing, deterministic identities and schema emission since Stage 0, ' +
+      'and from Stage 2 for the knowledge index over a real corpus: two builds of the seeded ' +
+      'tree agree, on both platforms, and the digest covers every field written to the index ' +
+      'rather than content_hash alone.',
+    dormantWhileAbsent: [],
   },
   {
     id: 'F9',
@@ -160,13 +170,16 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
   {
     id: 'F11',
     invariant: 'Champion selection reads only the release index, never the live score overlay',
-    status: 'not-yet-enforceable',
-    mechanisms: ['behavioural'],
+    status: 'enforced',
+    mechanisms: ['behavioural', 'source-scan'],
     note:
-      'No resolver exists. The contract-level half IS enforced today: challenge_state is ' +
-      'unrepresentable in a canonical Solution Set, and a null champion_id cannot coexist with ' +
-      'canonical_state "pinned". The code-path half needs a resolver, at Stage 2.',
-    dormantWhileAbsent: ['packages/resolver'],
+      'Enforced structurally from Stage 2: packages/resolver selects Champions in ' +
+      '`championsOf`, whose signature takes Solution Sets and nothing else, so no code ' +
+      'path inside it can consult a score without changing its arity -- which a fitness ' +
+      'check asserts. The contract half also still holds: challenge_state is ' +
+      'unrepresentable in a canonical Solution Set, and a null champion_id cannot coexist ' +
+      'with canonical_state "pinned".',
+    dormantWhileAbsent: [],
   },
   {
     id: 'F12',

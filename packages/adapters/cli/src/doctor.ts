@@ -61,6 +61,32 @@ export interface RuntimeObservations {
     | { readonly state: 'uninstalled' }
     | { readonly state: 'healthy'; readonly detail: string }
     | { readonly state: 'drifted'; readonly detail: string };
+  /**
+   * Whether the primary agent's telemetry hooks are registered (Q-09).
+   *
+   * `ieos init` leaves them off by default, because D18.4 fixes the footprint
+   * and a hook runs on every tool call. That makes "not registered" a normal
+   * state rather than a fault -- but a silent one, and a run nobody observed
+   * looks exactly like a run in which nothing happened. Reported so an owner
+   * who meant to have telemetry finds out here rather than from an empty
+   * investigation.
+   */
+  readonly hooks:
+    | { readonly state: 'unregistered' }
+    | { readonly state: 'registered'; readonly events: readonly string[] }
+    | { readonly state: 'partial'; readonly events: readonly string[] };
+  /**
+   * The most recent runs this machine recorded, newest first (D23).
+   *
+   * The Stage 2 exit gate requires INCOMPLETE runs to be visible here. A run
+   * that lost telemetry must be findable without querying the Evidence Plane,
+   * which is precisely the plane a lossy run may not have reached.
+   */
+  readonly lastRuns: readonly {
+    readonly runId: string;
+    readonly telemetryState: 'COMPLETE' | 'INCOMPLETE';
+    readonly startedAt: string;
+  }[];
 }
 
 export interface DoctorReport {
@@ -169,8 +195,9 @@ export function buildRuntimeReport(observed: RuntimeObservations): DoctorReport 
         name: 'ingest',
         level: 'unknown',
         detail:
-          'no Evidence Plane is configured. Expected at Stage 1: the installation credential ' +
-          'and ingest arrive at Stage 2 (D22).',
+          'no Evidence Plane is configured. Enrol one with `ieos auth enroll` and set ' +
+          'IEOS_INGEST_URL; until then every run is INCOMPLETE and none is qualification ' +
+          'evidence (D22, D23).',
         blocking: false,
       });
   }
@@ -203,7 +230,106 @@ export function buildRuntimeReport(observed: RuntimeObservations): DoctorReport 
       });
   }
 
+  // --- telemetry hooks (Q-09) ----------------------------------------------
+  switch (observed.hooks.state) {
+    case 'registered':
+      findings.push({
+        name: 'hooks',
+        level: 'ok',
+        detail: `primary agent hooks registered: ${observed.hooks.events.join(', ')}`,
+        blocking: false,
+      });
+      break;
+    case 'partial':
+      findings.push({
+        name: 'hooks',
+        level: 'failed',
+        // Blocking, unlike "none registered". Some of four means a run's
+        // timeline has holes at known points -- the terminal flush may never
+        // fire -- and a partial timeline read as whole is the failure D23 names.
+        detail:
+          `only ${observed.hooks.events.join(', ')} are registered; a run needs all four, ` +
+          'or its telemetry ends where the missing hook was',
+        blocking: true,
+      });
+      break;
+    default:
+      findings.push({
+        name: 'hooks',
+        level: 'unknown',
+        detail:
+          'no telemetry hooks are registered. Run `ieos init --with-hooks` to add them; ' +
+          'without them nothing observes a run',
+        blocking: false,
+      });
+  }
+
+  // --- last runs (D23, Stage 2 exit gate) ----------------------------------
+  const incomplete = observed.lastRuns.filter((run) => run.telemetryState === 'INCOMPLETE');
+  if (observed.lastRuns.length === 0) {
+    findings.push({
+      name: 'last-run',
+      level: 'unknown',
+      detail: 'no run has been recorded on this machine yet',
+      blocking: false,
+    });
+  } else if (incomplete.length > 0) {
+    findings.push({
+      name: 'last-run',
+      level: 'failed',
+      // Not blocking: an INCOMPLETE run is a true record, not a broken
+      // installation. Reported at `failed` because it is the one thing about a
+      // run that must never be quiet.
+      detail:
+        `${String(incomplete.length)} of the last ${String(observed.lastRuns.length)} run(s) are ` +
+        `INCOMPLETE: ${incomplete.map((run) => run.runId).join(', ')}. ` +
+        'Their telemetry was lost, so they are not qualification evidence (D23)',
+      blocking: false,
+    });
+  } else {
+    findings.push({
+      name: 'last-run',
+      level: 'ok',
+      detail: `${String(observed.lastRuns.length)} recent run(s), all COMPLETE`,
+      blocking: false,
+    });
+  }
+
   return { findings, ok: findings.every((finding) => !finding.blocking) };
+}
+
+/** Read hook registration out of a project's `.claude/settings.json` content. */
+export function observeHooks(
+  settingsJson: string | null,
+  hookEntry: string,
+  required: readonly string[],
+): RuntimeObservations['hooks'] {
+  if (settingsJson === null) return { state: 'unregistered' };
+  let parsed: { hooks?: Record<string, unknown> };
+  try {
+    parsed = JSON.parse(settingsJson) as typeof parsed;
+  } catch {
+    // Unreadable settings are not evidence of registration. Claiming
+    // `registered` here would be the most expensive kind of wrong answer.
+    return { state: 'unregistered' };
+  }
+  const hooks = parsed.hooks ?? {};
+  const found = required.filter((event) => {
+    const entries = hooks[event];
+    if (!Array.isArray(entries)) return false;
+    return entries.some((entry) => {
+      const inner = (entry as { hooks?: unknown }).hooks;
+      return (
+        Array.isArray(inner) &&
+        inner.some((hook) =>
+          String((hook as { command?: unknown }).command ?? '').includes(hookEntry),
+        )
+      );
+    });
+  });
+  if (found.length === 0) return { state: 'unregistered' };
+  if (found.length === required.length) return { state: 'registered', events: found };
+  return { state: 'partial', events: found };
 }
 
 function uniqueVersions(

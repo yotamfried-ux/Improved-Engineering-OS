@@ -1,0 +1,47 @@
+schema_version: "1"
+stability: development
+introduced_in: 0.1.0
+deprecated_in: null
+replacement: null
+migration_path: null
+id: asset_01K4V8Q2R7N3X5M9B2T6W1Y411
+type: lesson
+slug: remote-workspace-telemetry-durable-handoff
+title: Remote workspace telemetry requires a durable handoff
+summary: Telemetry from an ephemeral workspace is lost unless a boundary flush makes it durable.
+status: active
+content_hash: sha256:babb6316ab3a1038c8a226a596a3564fd54f64474e7c8e7ceb2be875efd51641
+legacy_ids:
+  - lessons-learned/bugs/remote-workspace-telemetry-requires-durable-handoff.md
+problem:
+  id: problem.telemetry.ephemeral-session-loss
+  capabilities: []
+solution_set_id: null
+applicability:
+  conditions: []
+compatibility:
+  platforms: []
+  providers: []
+  constraints: []
+provenance:
+  - source_type: existing_eos
+    source_identity: yotamfried-ux/Engineering-OS
+    source_revision: 4d517840f18d8c1699a95110e0790d6919450ba4
+    observed_at: 2026-09-06T00:00:00.000Z
+    integrity: verified
+freshness:
+  class: normal
+  last_verified_at: null
+risk:
+  execution_authority: data_only
+  blast_radius: read_only
+relationships:
+  supersedes: []
+  superseded_by: []
+  related_to: []
+evidence_policy:
+  eligible_origins:
+    - qualification
+    - operational
+body: body.md
+files: []

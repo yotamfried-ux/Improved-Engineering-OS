@@ -1,0 +1,17 @@
+{
+  "name": "@ieos/resolver",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic retrieval over the knowledge index (D20.3).",
+  "license": "UNLICENSED",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@ieos/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3"
+  }
+}

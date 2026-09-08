@@ -1,0 +1,17 @@
+{
+  "name": "@ieos/evidence-derivation",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Derivers, attribution and investigation over the Evidence contracts (T-03, D32).",
+  "license": "UNLICENSED",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@ieos/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3"
+  }
+}

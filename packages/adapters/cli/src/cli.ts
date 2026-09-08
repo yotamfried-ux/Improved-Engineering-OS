@@ -8,7 +8,15 @@
  * without arranging the world into that state.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import {
@@ -21,14 +29,42 @@ import {
   type RandomSource,
   type SessionKind,
 } from '@ieos/core';
-import { IndexUnavailableError, SqliteKnowledgeIndex } from '@ieos/store-sqlite';
-import { buildRuntimeReport, formatRuntimeReport, type RuntimeObservations } from './doctor.ts';
+import {
+  IndexUnavailableError,
+  openOutbox,
+  SqliteKnowledgeIndex,
+  SqliteOutbox,
+  SqliteRunStateStore,
+} from '@ieos/store-sqlite';
+import { DEFAULT_ORIGIN_CLASS, runSchema, type RunRecord } from '@ieos/core';
+import { deriveAttribution, investigate, renderInvestigation } from '@ieos/evidence-derivation';
+import {
+  buildRuntimeReport,
+  formatRuntimeReport,
+  observeHooks,
+  type RuntimeObservations,
+} from './doctor.ts';
+import { REGISTERED_EVENTS } from '@ieos/adapter-claude-code';
 import { COMMANDS, describeCommand, isCommand, isImplemented } from './commands.ts';
+import {
+  AuthError,
+  CREDENTIALS_MODE,
+  credentialsFor,
+  enrolmentStatement,
+  mintToken,
+  protectionOf,
+  revocationStatement,
+  rotationStatement,
+  tokenHashLiteral,
+  type Credentials,
+} from './auth.ts';
 import {
   BEGIN_MARKER,
   END_MARKER,
+  HOOK_ENTRY,
   MCP_SERVER_ENTRY,
   mergeCodexToml,
+  mergeClaudeSettings,
   mergeMcpJson,
   planFootprint,
   spliceMarkedBlock,
@@ -168,7 +204,40 @@ async function observeRuntime(): Promise<RuntimeObservations> {
     ingest,
     sqliteAvailable,
     bootstrap: observeBootstrap(projectRoot),
+    hooks: observeHooks(readIfPresent(join(projectRoot, '.claude', 'settings.json')), HOOK_ENTRY, [
+      ...REGISTERED_EVENTS,
+    ]),
+    lastRuns: await observeLastRuns(join(projectRoot, '.ieos', 'outbox.sqlite')),
   };
+}
+
+function readIfPresent(path: string): string | null {
+  return existsSync(path) ? readFileSync(path, 'utf8') : null;
+}
+
+/**
+ * The runs this machine recorded, for `doctor`'s last-run row (D23).
+ *
+ * An unreadable store yields no runs rather than an error: doctor exists to
+ * report the state of things, and failing to open one file must not stop it
+ * reporting the other nine.
+ */
+async function observeLastRuns(outboxPath: string): Promise<RuntimeObservations['lastRuns']> {
+  if (!existsSync(outboxPath)) return [];
+  try {
+    const db = await openOutbox(outboxPath);
+    try {
+      return new SqliteRunStateStore(db).recent(5).map((run) => ({
+        runId: run.runId,
+        telemetryState: run.telemetryState,
+        startedAt: run.startedAt,
+      }));
+    } finally {
+      db.close();
+    }
+  } catch {
+    return [];
+  }
 }
 
 async function runDoctor(): Promise<number> {
@@ -253,6 +322,8 @@ async function runInit(): Promise<number> {
     // context snapshot to the project's HEAD commit, and it must not infer that
     // from whatever directory the agent happened to launch it in.
     mcpArgs: [join(repoRoot, MCP_SERVER_ENTRY), '--eos-root', repoRoot, '--project', projectRoot],
+    hookArgs: [join(repoRoot, HOOK_ENTRY), '--eos-root', repoRoot, '--project', projectRoot],
+    withHooks: args.includes('--with-hooks'),
   });
 
   for (const file of files) {
@@ -278,6 +349,9 @@ async function runInit(): Promise<number> {
       case 'merge-json':
         content = mergeMcpJson(existing, file.content);
         break;
+      case 'merge-hooks':
+        content = mergeClaudeSettings(existing, file.content);
+        break;
       case 'merge-toml':
         content = mergeCodexToml(existing, file.content);
         break;
@@ -288,7 +362,238 @@ async function runInit(): Promise<number> {
     process.stdout.write(`  ${file.mode === 'replace' ? 'wrote  ' : 'merged '} ${file.path}\n`);
   }
   process.stdout.write(`\nfootprint written to ${projectRoot}\n`);
+  if (!args.includes('--with-hooks')) {
+    // Named rather than merely absent. Telemetry that nobody knew was optional
+    // produces empty runs and a puzzled owner.
+    process.stdout.write(
+      '\nTelemetry hooks were NOT installed. `ieos init --with-hooks` registers the four\n' +
+        'hooks the primary agent calls (SessionStart, PostToolUse, Stop, SessionEnd) in\n' +
+        '.claude/settings.json. Without them nothing observes a run, and `ieos investigate`\n' +
+        'will have no timeline to show.\n',
+    );
+  }
   return 0;
+}
+
+/**
+ * `ieos investigate <run_id>` (guide Stage 2, T-03).
+ *
+ * Reads the LOCAL outbox and derives attribution from it. Two limits come with
+ * that, and both are printed rather than left for the reader to discover:
+ *
+ *   Events already acknowledged by the Evidence Plane are gone from the outbox,
+ *   because the outbox deletes only on durable acknowledgement. So this shows
+ *   what is still local. Stage 7's server-side investigation reads the plane and
+ *   sees the whole run.
+ *
+ *   `origin_class` is not something this side knows. D36 puts classification in
+ *   a record a service principal writes, and the client is not one, so the run
+ *   is presented as the default (`operational`) with the reason stated. A local
+ *   guess at a stronger class is exactly the claim D36 exists to make
+ *   impossible.
+ */
+async function runInvestigate(): Promise<number> {
+  const runId = args[1];
+  if (runId === undefined || runId.startsWith('-')) {
+    process.stderr.write('usage: ieos investigate <run_id> [--outbox <path>]\n');
+    return 2;
+  }
+  const outboxPath = flag('--outbox') ?? join(repoRoot, '.ieos', 'outbox.sqlite');
+  if (!existsSync(outboxPath)) {
+    // Not an empty success: "no outbox" and "a run with no events" are
+    // different answers, and only one of them means the run happened.
+    process.stderr.write(
+      `no telemetry outbox at ${outboxPath}. Nothing has been recorded on this machine yet, ` +
+        'so there is no run to investigate.\n',
+    );
+    return 4;
+  }
+
+  const db = await openOutbox(outboxPath);
+  try {
+    const outbox = new SqliteOutbox(db);
+    const all = await outbox.pending(Number.MAX_SAFE_INTEGER);
+    const events = all.filter((event) => event.run_id === runId);
+    const localState = new SqliteRunStateStore(db).get(runId);
+
+    if (events.length === 0 && localState === undefined) {
+      process.stderr.write(
+        `run ${runId} is not in the local outbox. It may have been flushed to the ` +
+          'Evidence Plane already, or it may never have run here.\n',
+      );
+      return 4;
+    }
+
+    const run: RunRecord = runSchema.parse({
+      schema_version: '1',
+      stability: 'development',
+      introduced_in: '0.1.0',
+      deprecated_in: null,
+      replacement: null,
+      migration_path: null,
+      run_id: runId,
+      owner_id: 'local',
+      registered_by: null,
+      origin_class: DEFAULT_ORIGIN_CLASS,
+      holdout_state: null,
+      eval_set_version: null,
+      simulation_id: null,
+      registered_at: null,
+      first_event_at: localState?.startedAt ?? events[0]?.time.occurred_at ?? null,
+      telemetry_state: localState?.telemetryState ?? null,
+      qualification_eligible: localState?.qualificationEligible ?? null,
+    });
+
+    const rows = deriveAttribution({ events, run, derivedAt: systemClock.nowIso() });
+    process.stdout.write(renderInvestigation(investigate({ run, events, rows })));
+    process.stdout.write(
+      '\nread from the local outbox only. Events already acknowledged by the Evidence Plane ' +
+        'are no longer here, and origin_class is shown as the D36 default because a client ' +
+        'cannot classify its own run.\n',
+    );
+    return 0;
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * `ieos auth enroll|rotate|revoke` (D22.1).
+ *
+ * The token is minted here, written to a 0600 file, and shown once. What is
+ * NOT here is any call to the Evidence Plane: writing a `principals` row is an
+ * owner-authenticated action, and giving this command a credential able to
+ * perform it would put a privileged key on every machine that runs `ieos` --
+ * the exact thing D22 is built to avoid. So it prints the statement for the
+ * owner to apply, carrying the token HASH and never the token.
+ */
+async function runAuth(): Promise<number> {
+  const subcommand = args[1] ?? '';
+  const credentialsPath = flag('--credentials') ?? join(repoRoot, '.ieos', 'credentials.json');
+  const installationId =
+    flag('--installation') ??
+    readInstallationId(credentialsPath) ??
+    mintId('inst', systemClock, systemRandom);
+
+  try {
+    switch (subcommand) {
+      case 'enroll':
+      case 'rotate': {
+        const ownerId = flag('--owner');
+        if (subcommand === 'enroll' && ownerId === undefined) {
+          // The owner id is a fact about the project, not something a tool may
+          // pick. Refusing is better than emitting a statement with a
+          // placeholder someone would paste unedited.
+          process.stderr.write(
+            'usage: ieos auth enroll --owner <supabase auth user uuid> [--label <name>]\n',
+          );
+          return 2;
+        }
+        if (existsSync(credentialsPath) && subcommand === 'enroll') {
+          process.stderr.write(
+            `${credentialsPath} already exists. Use \`ieos auth rotate\` to replace the token ` +
+              'without minting a second installation identity.\n',
+          );
+          return 4;
+        }
+
+        const token = mintToken(systemRandom);
+        const credentials = credentialsFor({
+          installationId,
+          token,
+          nowIso: systemClock.nowIso(),
+        });
+        mkdirSync(dirname(credentialsPath), { recursive: true });
+        writeFileSync(credentialsPath, `${JSON.stringify(credentials, null, 2)}\n`, {
+          encoding: 'utf8',
+          mode: CREDENTIALS_MODE,
+        });
+        // Written with the mode AND chmodded: `writeFileSync`'s mode applies
+        // only when it creates the file, so a rotation over an existing
+        // world-readable file would keep the old permissions.
+        chmodSync(credentialsPath, CREDENTIALS_MODE);
+
+        const statement =
+          subcommand === 'enroll'
+            ? enrolmentStatement({
+                installationId,
+                ownerId: ownerId as string,
+                tokenHash: tokenHashLiteral(token),
+                expiresAt: credentials.expires_at,
+                label: flag('--label') ?? null,
+              })
+            : rotationStatement({
+                installationId,
+                tokenHash: tokenHashLiteral(token),
+                expiresAt: credentials.expires_at,
+              });
+
+        // Checked, not assumed. On Windows chmod only toggles read-only, so a
+        // file written 0600 reports 0666 and the mode protects nothing; saying
+        // "mode 0600" there would tell the owner they have a guarantee they do
+        // not.
+        const protection = protectionOf(statSync(credentialsPath).mode, process.platform);
+        process.stdout.write(`installation: ${installationId}\n`);
+        process.stdout.write(
+          `credential:   ${credentialsPath}` +
+            (protection.enforced ? ' (mode 0600)' : ' (permissions NOT enforced)') +
+            '\n',
+        );
+        process.stdout.write(`expires:      ${credentials.expires_at}\n\n`);
+        process.stdout.write('Apply this against your Evidence Plane, as the owner:\n\n');
+        process.stdout.write(`${statement}\n\n`);
+        // The token itself is deliberately absent from this output. It is in
+        // the credential file, shown once, and printing it here would put it in
+        // a terminal scrollback and a CI log.
+        process.stdout.write(
+          'The statement carries the token HASH. The token is in the credential file above ' +
+            'and is not printed; copy it from there for a remote environment secret.\n',
+        );
+        if (!protection.enforced) {
+          process.stderr.write(`\nWARNING: ${protection.reason ?? ''}\n`);
+        }
+        return 0;
+      }
+
+      case 'revoke': {
+        process.stdout.write('Apply this against your Evidence Plane, as the owner:\n\n');
+        process.stdout.write(`${revocationStatement(installationId)}\n\n`);
+        if (existsSync(credentialsPath)) {
+          rmSync(credentialsPath, { force: true });
+          process.stdout.write(`removed ${credentialsPath}\n`);
+        }
+        // Revocation is not complete until the statement runs. Saying so is the
+        // difference between a command that revoked and one that prepared a
+        // revocation, and an owner who confuses them believes a token is dead.
+        process.stdout.write(
+          'The local credential is gone. The installation is NOT revoked until the statement ' +
+            'above has run against the Evidence Plane.\n',
+        );
+        return 0;
+      }
+
+      default:
+        process.stderr.write('usage: ieos auth <enroll|rotate|revoke> [options]\n');
+        return 2;
+    }
+  } catch (error) {
+    if (error instanceof AuthError) {
+      process.stderr.write(`${error.message}\n`);
+      return 4;
+    }
+    throw error;
+  }
+}
+
+/** The installation this machine already has, if any. */
+function readInstallationId(credentialsPath: string): string | undefined {
+  if (!existsSync(credentialsPath)) return undefined;
+  try {
+    const parsed = JSON.parse(readFileSync(credentialsPath, 'utf8')) as Partial<Credentials>;
+    return typeof parsed.installation_id === 'string' ? parsed.installation_id : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function notYetImplemented(name: string): number {
@@ -322,6 +627,10 @@ const exitCode = await (async (): Promise<number> => {
       return await runDoctor();
     case 'init':
       return await runInit();
+    case 'investigate':
+      return await runInvestigate();
+    case 'auth':
+      return await runAuth();
     default:
       process.stderr.write(
         `\`ieos ${command}\` is listed as implemented but has no handler. ` +

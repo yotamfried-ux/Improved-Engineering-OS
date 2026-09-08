@@ -41,6 +41,13 @@ export async function runTrial(options: RunTrialOptions): Promise<TrialOutcome> 
       `run ${runId} was never registered, so its evidence is "operational" and cannot ` +
         'count as qualification (D36)',
     );
+  } else if (!registry.isConfirmedByPlane(runId)) {
+    // Separated from "never registered" because the fix differs: this one is an
+    // unenrolled or unreachable Evidence Plane, not a harness that forgot.
+    registrationReasons.push(
+      `run ${runId} was registered locally but not with the Evidence Plane, so the plane will ` +
+        'stamp its events "operational" and this trial is not qualification evidence (D36)',
+    );
   } else if (originClass !== 'qualification' && originClass !== 'holdout') {
     registrationReasons.push(
       `run ${runId} is registered as "${originClass}", which is not a qualification class (D36)`,

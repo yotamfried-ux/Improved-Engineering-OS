@@ -30,10 +30,13 @@ f12_hashing_sites:
         bytes, never a structured domain object, so it cannot mint an EOS identity, and it
         keeps the launcher free of any core import (F5). Stage 4.
     - path: supabase/functions/ingest/**
-      status: not-yet-created
+      status: active
       reason: >-
         Credential verification: SHA-256 of a random opaque installation token (D22, C-02).
-        Also opaque bytes; also never an identity. Stage 2.
+        Also opaque bytes; also never an identity. Active from Stage 2, when the function was
+        written. It hashes with crypto.subtle.digest because a Deno Edge Function has no
+        node:crypto -- so the F12 scan was widened to know that spelling too, rather than
+        letting a second runtime hash outside the rule's sight.
   test_only:
     - path: packages/core/test/**
       reason: Tests may compute digests to check the implementation against fixtures.

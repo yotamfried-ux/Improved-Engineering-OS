@@ -12,13 +12,19 @@
  *     the same as a rule deleted silently.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { championsOf } from '@ieos/resolver';
+import { SECRET_SHAPES } from '@ieos/core';
+import type { SolutionSetRecord } from '@ieos/core';
 import {
   describe as render,
   exists,
   findMatches,
   readSourceFiles,
   stripAllComments,
+  REPO_ROOT,
   type SourceFile,
 } from './scan.ts';
 
@@ -191,17 +197,50 @@ describe('F6 -- no target-project names or absolute paths in runtime paths', () 
 
 describe('F9 -- no key-shaped secret values anywhere', () => {
   // Values, not identifier words: "supabase" in a comment is fine, a key is not.
-  const SECRET_SHAPES = [
-    /sb_secret_[A-Za-z0-9]{20,}/u,
-    /sb_publishable_[A-Za-z0-9]{20,}/u,
-    /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\./u, // JWT
-    /-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----/u,
-    /gh[pousr]_[A-Za-z0-9]{30,}/u,
-    /AKIA[0-9A-Z]{16}/u,
+  //
+  // The list is imported rather than restated. The same shapes are what the
+  // telemetry sanitizer rejects at runtime and what the ingest function rejects
+  // at the boundary, and three copies of a regex list drift by default. A shape
+  // this scan knows and the sanitizer does not is the gap a key travels
+  // through.
+
+  /**
+   * The runtime rejecter's own negative controls.
+   *
+   * `fitness/checks` is already excluded from every scan, for the reason stated
+   * at BASE_EXCLUDE: a file that defines a scan necessarily contains the pattern
+   * it looks for. These two files are the same case one level out. They prove
+   * the telemetry sanitizer refuses a credential-shaped attribute value, and a
+   * control for a rejecter has to contain what it rejects or it proves nothing.
+   *
+   * Named file by file rather than as `packages/telemetry/test/**`, so the hole
+   * is exactly two files wide, and kept honest by the test below: each must
+   * exist and each must still be asserting rejection. The moment one stops
+   * being a control, its exclusion fails rather than quietly covering a key.
+   */
+  const F9_CONTROL_FILES = [
+    'packages/telemetry/test/attributes.test.ts',
+    'packages/telemetry/test/emitter.test.ts',
   ];
 
   const scanned = readSourceFiles(['packages', 'tools', 'contracts', 'fitness', 'supabase'], {
-    exclude: BASE_EXCLUDE,
+    exclude: [...BASE_EXCLUDE, ...F9_CONTROL_FILES],
+  });
+
+  it('excludes exactly those two files and nothing else in the package', () => {
+    // The hole is two files wide. If someone later widens it to a directory,
+    // this fails rather than the scan quietly stopping at the package boundary.
+    const paths = new Set(scanned.map((file) => file.path));
+    for (const control of F9_CONTROL_FILES) expect(paths.has(control)).toBe(false);
+    expect(paths.has('packages/telemetry/src/attributes.ts')).toBe(true);
+    expect(paths.has('packages/telemetry/test/flush.test.ts')).toBe(true);
+  });
+
+  it.each(F9_CONTROL_FILES)('control file %s exists and still asserts rejection', (path) => {
+    const text = readFileSync(join(REPO_ROOT, path), 'utf8');
+    // Not "mentions a secret" -- asserts that one was refused. The exclusion is
+    // justified by the assertion, so the assertion is what is checked.
+    expect(text).toMatch(/secret_shaped|EmitterError/u);
   });
 
   it.each(SECRET_SHAPES.map((pattern, index) => [index, pattern] as const))(
@@ -234,15 +273,40 @@ describe('F9 -- no key-shaped secret values anywhere', () => {
 });
 
 describe('F12 -- one canonical hashing site', () => {
-  const HASH_CALL = /createHash\s*\(/u;
+  // Two spellings, because there are two runtimes. Node hashes with
+  // `createHash`; a Deno Edge Function has no `node:crypto` and hashes with
+  // `crypto.subtle.digest`. A scan that knew only the first would have let the
+  // ingest function hash anything it liked -- which is not hypothetical, it is
+  // what the first version of this rule did the day that function appeared.
+  const HASH_CALL = /createHash\s*\(|subtle\.digest\s*\(/u;
   const CANONICAL_SITE = 'packages/core/src/hashing.ts';
 
-  it('createHash appears only in the canonical implementation', () => {
+  /**
+   * The C-02 exception, now active: credential verification in the ingest
+   * function (fitness/allowlist.yaml). It hashes an opaque random token, never
+   * a structured domain object, so it cannot mint an EOS identity -- which is
+   * the property C-02 turns on, not the choice of API.
+   */
+  const CREDENTIAL_HASHING_SITE = 'supabase/functions/ingest';
+
+  it('hashing appears only in the canonical implementation and the one C-02 site', () => {
     const files = readSourceFiles(['packages', 'tools', 'supabase', 'fitness'], {
       exclude: [...BASE_EXCLUDE, 'packages/core/test'],
     });
-    const violations = findMatches(files, HASH_CALL).filter((v) => v.path !== CANONICAL_SITE);
+    const violations = findMatches(files, HASH_CALL).filter(
+      (v) => v.path !== CANONICAL_SITE && !v.path.startsWith(`${CREDENTIAL_HASHING_SITE}/`),
+    );
     expect(violations, `F12 violations:\n${render(violations)}`).toEqual([]);
+  });
+
+  it('the C-02 site hashes a token and nothing structured', () => {
+    // The exception is for credential verification. If that site ever reached
+    // for canonical serialization, it would be minting identities under an
+    // allowance granted for opaque bytes.
+    const files = readSourceFiles([CREDENTIAL_HASHING_SITE]);
+    expect(files.length).toBeGreaterThan(0);
+    expect(findMatches(files, HASH_CALL).length).toBeGreaterThan(0);
+    expect(findMatches(stripAllComments(files), /canonicaliz|jcs\(|rfc\s?8785/iu)).toEqual([]);
   });
 
   it('the canonical site exists and does hash', () => {
@@ -251,9 +315,12 @@ describe('F12 -- one canonical hashing site', () => {
     expect(findMatches(readSourceFiles([CANONICAL_SITE]), HASH_CALL).length).toBeGreaterThan(0);
   });
 
-  it('control: the scan fires on a second hashing site', () => {
+  it('control: the scan fires on a second hashing site, in either spelling', () => {
     expect(
       findMatches(known("const d = createHash('sha256').update(x).digest();"), HASH_CALL),
+    ).toHaveLength(1);
+    expect(
+      findMatches(known("const d = await crypto.subtle.digest('SHA-256', bytes);"), HASH_CALL),
     ).toHaveLength(1);
   });
 
@@ -268,12 +335,20 @@ describe('F12 -- one canonical hashing site', () => {
     expect(violations, `F12 violations:\n${render(violations)}`).toEqual([]);
   });
 
-  it('the two permitted C-02 exceptions do not exist yet', () => {
+  it('the C-02 exception that has not reached its stage still does not exist', () => {
     // Pre-registered in fitness/allowlist.yaml as forbidden-until-their-stage,
-    // so a stray createHash( in either location fails today rather than after
-    // the directory that would excuse it appears.
+    // so a stray hash call there fails today rather than after the directory
+    // that would excuse it appears. The launcher is Stage 4.
     expect(exists('packages/launcher')).toBe(false);
-    expect(exists('supabase/functions/ingest')).toBe(false);
+  });
+
+  it('the ingest exception is active because its stage arrived, not because it appeared', () => {
+    // supabase/functions/ingest exists from Stage 2, which is the stage its
+    // allowlist entry names. The entry's status moved with it; a directory
+    // appearing early would have failed the test above instead.
+    expect(exists(CREDENTIAL_HASHING_SITE)).toBe(true);
+    const allowlist = readFileSync(join(REPO_ROOT, 'fitness/allowlist.yaml'), 'utf8');
+    expect(allowlist).toMatch(/supabase\/functions\/ingest\/\*\*\n\s+status: active/u);
   });
 });
 
@@ -406,3 +481,69 @@ describe('F2: adapters deliver the contract, they do not own knowledge', () => {
     ).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// F11 -- Champion selection reads the release index, never the score overlay
+// ---------------------------------------------------------------------------
+
+/** Any reach for a score, a snapshot or an overlay inside the selector. */
+const CONSULTS_A_SCORE = /\b(scores?|snapshot|overlay)\b/iu;
+
+describe('F11: a Champion cannot be chosen by score', () => {
+  // Armed at Stage 2, when `packages/resolver` first existed and the dormancy
+  // guard fired. The rule's whole risk is a scorer doing the natural thing:
+  // when `champion_id` is null, promote the best-scoring member. D34 and P-01
+  // forbid it, and the defence is structural rather than careful -- the
+  // selection function is not given the scores.
+
+  it('championsOf takes exactly one parameter, so a score cannot reach it', () => {
+    // Arity is the enforcement. Adding a scores parameter to consult them would
+    // change this number, and this test, and the reviewer would see both.
+    expect(championsOf.length).toBe(1);
+  });
+
+  it('the champion-selection function body references no score', () => {
+    const source = readFileSync(join(REPO_ROOT, 'packages/resolver/src/rank.ts'), 'utf8');
+    const start = source.indexOf('export function championsOf');
+    expect(start, 'championsOf not found; this check has lost its subject').toBeGreaterThan(-1);
+    // Comments stripped: the doc comment above the function explains at length
+    // why it must not consult a score, and matching on that would make the
+    // check pass for the wrong reason.
+    const body = stripAllComments([
+      { path: 'championsOf', content: source.slice(start, source.indexOf('\n}', start)) },
+    ])[0];
+    expect(body?.content, 'the function body could not be isolated').toBeDefined();
+    expect(CONSULTS_A_SCORE.test(body?.content ?? '')).toBe(false);
+  });
+
+  it('the scan can fire (control)', () => {
+    // A body that did consult scores would be caught by the same expression.
+    const planted = 'const best = scores.assets[0]; return best;';
+    expect(CONSULTS_A_SCORE.test(planted)).toBe(true);
+  });
+
+  it('behaviourally: the best-scoring member of an unresolved set is not a Champion', () => {
+    // The property test in packages/core covers the selector over generated
+    // input. This is the specific substitution F11 names, stated once here so
+    // the rule has a behavioural assertion of its own.
+    expect(championsOf([UNRESOLVED_SET_FIXTURE]).size).toBe(0);
+  });
+});
+
+/** An unresolved set whose members would score well if anything let them. */
+const UNRESOLVED_SET_FIXTURE = {
+  schema_version: '1',
+  stability: 'development',
+  introduced_in: '0.1.0',
+  deprecated_in: null,
+  replacement: null,
+  migration_path: null,
+  id: 'solset_f11',
+  problem_id: 'problem.f11',
+  compatibility_key: 'web',
+  members: ['asset_high', 'asset_low'],
+  champion_id: null,
+  canonical_state: 'unresolved',
+  champion_since_release: null,
+  why_unresolved: 'no evidence at corroborated or better',
+} as SolutionSetRecord;
