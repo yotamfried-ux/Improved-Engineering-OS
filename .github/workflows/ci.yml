@@ -123,7 +123,7 @@ jobs:
         run: |
           set -euo pipefail
           pnpm report:collect qualification/evidence/platforms/linux.json \
-            --stage 1 \
+            --stage 2 \
             --commit "${{ github.sha }}" \
             --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
@@ -217,6 +217,19 @@ jobs:
         # a decision unreproducible across machines.
         run: pnpm vitest run --project resolver
 
+      - name: Telemetry, derivation and the agent hooks on win32
+        # All three drive real files, real SQLite and real subprocesses, which
+        # is exactly where the two platforms differ. The hook adapter especially:
+        # its exit-code rule has to hold identically wherever the agent runs.
+        run: pnpm vitest run --project telemetry --project evidence-derivation --project claude-code
+
+      - name: The Evidence Plane suite on win32
+        # No PostgreSQL service here, so this SKIPS -- and recording the skip is
+        # the point. The win32 record then says "unproven on this platform"
+        # rather than omitting the tests, and the Stage 2 gate reads H5 from the
+        # platform that did run them.
+        run: pnpm vitest run --project evidence-plane
+
       - name: MCP 2026-07-28 conformance smoke on win32
         # The protocol layer has no filesystem in it, but the runtime that
         # serves it does run here, and Stage 0 already caught two defects on
@@ -252,8 +265,8 @@ jobs:
         run: |
           set -euo pipefail
           pnpm report:collect qualification/evidence/platforms/win32.json \
-            --stage 1 \
-            --projects core,snapshot-emit,sqlite-qualification,releases,store-sqlite,mcp,cli,resolver \
+            --stage 2 \
+            --projects core,snapshot-emit,sqlite-qualification,releases,store-sqlite,mcp,cli,resolver,telemetry,evidence-derivation,claude-code,evidence-plane \
             --commit "${{ github.sha }}" \
             --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           echo '--- win32 platform record (verbatim) ---'
@@ -343,6 +356,16 @@ jobs:
             --evidence-dir platforms \
             --out qualification/reports/stage-01-report.md
 
+      - name: Generate the Stage 2 qualification report
+        # Same reason as Stage 1's `always()`: a NOT PASSED report is the
+        # artifact either way, and the exit code still carries the verdict.
+        if: always()
+        run: |
+          set -euo pipefail
+          pnpm --silent report:stage2 \
+            --evidence-dir platforms \
+            --out qualification/reports/stage-02-report.md
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -350,4 +373,5 @@ jobs:
           path: |
             qualification/reports/stage-00-report.md
             qualification/reports/stage-01-report.md
+            qualification/reports/stage-02-report.md
           if-no-files-found: error

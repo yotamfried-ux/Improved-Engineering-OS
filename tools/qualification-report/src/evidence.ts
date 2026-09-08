@@ -128,6 +128,29 @@ export interface Stage1Evidence {
   readonly namedTests: readonly NamedTestResult[];
 }
 
+/**
+ * What the committed knowledge tree holds, counted rather than asserted.
+ *
+ * Stage 2's corpus requirement is a fact about the repository at this commit --
+ * a size range and a required mix of types. A test could assert it, but then
+ * the report would be quoting a test that quotes the tree, and the extra hop
+ * would buy nothing except a second place for the two to disagree.
+ */
+export interface KnowledgeEvidence {
+  readonly assetCount: number;
+  readonly byType: Readonly<Record<string, number>>;
+  readonly solutionSetCount: number;
+  readonly setsWithAlternatives: number;
+  readonly unresolvedSets: number;
+  readonly withProvenance: number;
+}
+
+/** The Stage 2 half of a platform record. */
+export interface Stage2Evidence {
+  readonly knowledge: KnowledgeEvidence;
+  readonly namedTests: readonly NamedTestResult[];
+}
+
 export interface PlatformEvidence {
   /** `process.platform` of the machine that produced this record. */
   readonly platform: string;
@@ -149,6 +172,14 @@ export interface PlatformEvidence {
   readonly suites: readonly SuiteResult[];
   /** Absent in a Stage 0 record, which is why it is nullable rather than assumed. */
   readonly stage1?: Stage1Evidence | null;
+  /**
+   * Absent in a Stage 0 or Stage 1 record, for the same reason.
+   *
+   * A record collected before this field existed is still legitimate evidence,
+   * and a report that could not read one would be discarding observations to
+   * suit its own schema.
+   */
+  readonly stage2?: Stage2Evidence | null;
 }
 
 export interface CollectOptions {
@@ -156,6 +187,7 @@ export interface CollectOptions {
   readonly runUrl?: string | null;
   readonly suites: readonly SuiteResult[];
   readonly stage1?: Stage1Evidence | null;
+  readonly stage2?: Stage2Evidence | null;
   readonly now?: () => Date;
 }
 
@@ -174,6 +206,7 @@ export function collectPlatformEvidence(options: CollectOptions): PlatformEviden
     },
     suites: options.suites,
     stage1: options.stage1 ?? null,
+    stage2: options.stage2 ?? null,
   };
 }
 

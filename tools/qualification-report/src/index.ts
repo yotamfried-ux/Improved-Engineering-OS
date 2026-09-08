@@ -7,7 +7,9 @@ export {
   totalSkipped,
   totalTests,
   type CollectOptions,
+  type KnowledgeEvidence,
   type PlatformEvidence,
+  type Stage2Evidence,
   type SuiteFailure,
   type SuiteResult,
 } from './evidence.ts';
@@ -22,6 +24,13 @@ export {
   type GateRow,
   type RowStatus,
 } from './gate.ts';
+export {
+  evaluateStage2,
+  REQUIRED_ASSET_TYPES,
+  SEED_CORPUS,
+  STAGE_2_TESTS,
+  type Stage2GateInput,
+} from './stage2.ts';
 export {
   evaluateStage1,
   REQUIRED_COMMANDS,
