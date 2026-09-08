@@ -11,7 +11,7 @@
  * broken outbox and an unanticipated throw -- rather than on the happy one.
  */
 
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -46,6 +46,22 @@ function outboxPath(): string {
   const dir = mkdtempSync(join(tmpdir(), 'ieos-hook-'));
   scratch.push(dir);
   return join(dir, '.ieos', 'outbox.sqlite');
+}
+
+/**
+ * A path the outbox genuinely cannot be created at, on any platform.
+ *
+ * A regular FILE with a path underneath it: `mkdir` fails there on POSIX and on
+ * Windows alike. The first version used `/dev/null/nope`, which is unopenable
+ * only on POSIX -- on Windows it resolves to `C:\dev\null\nope`, which mkdir
+ * happily creates, so the case quietly stopped being exercised there.
+ */
+function unopenableOutboxPath(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'ieos-hook-blocked-'));
+  scratch.push(dir);
+  const blocker = join(dir, 'not-a-directory');
+  writeFileSync(blocker, 'a file, not a directory', 'utf8');
+  return join(blocker, 'outbox.sqlite');
 }
 
 const clock: Clock = {
@@ -107,7 +123,9 @@ describe('the exit-code rule (D23)', () => {
     outcomes.push(await runHook('not json', shared));
     outcomes.push(await runHook(payload('PreToolUse'), shared));
     outcomes.push(await runHook(payload('SessionStart'), deps({ ingest: unreachableIngest() })));
-    outcomes.push(await runHook(payload('SessionStart'), deps({ outboxPath: '/dev/null/nope' })));
+    outcomes.push(
+      await runHook(payload('SessionStart'), deps({ outboxPath: unopenableOutboxPath() })),
+    );
     for (const outcome of outcomes) {
       expect(outcome.exitCode).not.toBe(BLOCKING_EXIT_CODE);
       expect(outcome.exitCode === 0 || outcome.exitCode === 1).toBe(true);
@@ -342,16 +360,26 @@ describe('the settings ieos init writes', () => {
 
 describe('a hostile or broken environment', () => {
   it('survives an outbox path it cannot create', async () => {
-    const outcome = await runHook(payload('SessionStart'), deps({ outboxPath: '/dev/null/nope' }));
+    const outcome = await runHook(
+      payload('SessionStart'),
+      deps({ outboxPath: unopenableOutboxPath() }),
+    );
     expect(outcome.exitCode).toBe(1);
     expect(outcome.stderr).toContain('outbox');
   });
 
   it('survives a corrupt outbox file', async () => {
+    // Written to the outbox path itself. The first version tried to derive a
+    // sibling path with a string replace on a POSIX separator, which silently
+    // did nothing on Windows and then wrote into a directory that did not exist.
     const path = outboxPath();
-    writeFileSync(path.replace('.ieos/outbox.sqlite', 'outbox.sqlite'), 'not a database', 'utf8');
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, 'not a database', 'utf8');
     const outcome = await runHook(payload('SessionStart'), deps({ outboxPath: path }));
-    expect(outcome.exitCode === 0 || outcome.exitCode === 1).toBe(true);
+    // Either it refuses to open the file or it reports the failure -- never the
+    // blocking code, and never a throw out of the process.
+    expect(outcome.exitCode).toBe(1);
+    expect(outcome.exitCode).not.toBe(BLOCKING_EXIT_CODE);
   });
 
   it('survives an ingest that throws rather than answering', async () => {
