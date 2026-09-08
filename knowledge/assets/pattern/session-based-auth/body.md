@@ -5,7 +5,6 @@
 **Solution:** On login, create a server-side session record in Redis and send the session ID in a signed, HttpOnly cookie. Each request looks up the session in Redis.
 
 **Architecture:**
-
 ```
 POST /login   →  validate credentials  →  create session in Redis (TTL 24h)  →  Set-Cookie: sid=<signed>
 GET  /page    →  server reads cookie  →  Redis lookup  →  attach user to request
@@ -13,13 +12,11 @@ DELETE /logout  →  delete Redis key  →  clear cookie
 ```
 
 **Implementation Notes:**
-
 - Use Redis as the session store for multi-instance deployments (not in-memory).
 - Cookie flags: `httpOnly: true`, `secure: true`, `sameSite: 'lax'`.
 - Regenerate the session ID after login to prevent session fixation attacks.
 
 **Example Code:**
-
 ```typescript
 import session from 'express-session';
 import RedisStore from 'connect-redis';
@@ -28,15 +25,13 @@ import { createClient } from 'redis';
 const redis = createClient({ url: process.env.REDIS_URL });
 await redis.connect();
 
-app.use(
-  session({
-    store: new RedisStore({ client: redis }),
-    secret: process.env.SESSION_SECRET!,
-    resave: false,
-    saveUninitialized: false,
-    cookie: { httpOnly: true, secure: true, sameSite: 'lax', maxAge: 86_400_000 },
-  }),
-);
+app.use(session({
+  store: new RedisStore({ client: redis }),
+  secret: process.env.SESSION_SECRET!,
+  resave: false,
+  saveUninitialized: false,
+  cookie: { httpOnly: true, secure: true, sameSite: 'lax', maxAge: 86_400_000 },
+}));
 
 // After credential validation:
 req.session.regenerate(() => {
@@ -46,13 +41,11 @@ req.session.regenerate(() => {
 ```
 
 **Common Mistakes:**
-
 - Not calling `regenerate()` after login — session fixation vulnerability.
 - Using in-memory store in production — sessions lost on restart and not shared across instances.
 - Setting `saveUninitialized: true` — creates a session for every anonymous visitor.
 
 **Security Considerations:**
-
 - `Secure` flag ensures the cookie is only sent over HTTPS.
 - Implement idle timeout: track `lastSeen` and expire sessions inactive for more than N hours.
 - Rate-limit login attempts per IP and per username.

@@ -149,6 +149,31 @@ describe('the rules can actually fire (control)', () => {
     expect(byPath).toContain('f4-domain-imports-no-store');
   });
 
+  it('fires when an adapter that is NOT the CLI derives evidence (C-11)', () => {
+    // The C-11 exception is one directory wide. Without this control, splitting
+    // F2 into two rules could have quietly widened the composition set for every
+    // adapter, and the suite would have reported the boundary as intact.
+    const probe = join(REPO_ROOT, 'packages/adapters/mcp/src/__fitness-probe.ts');
+    writeFileSync(
+      probe,
+      "export { deriveAttribution } from '@ieos/evidence-derivation';\n",
+      'utf8',
+    );
+    try {
+      const fired = cruise().summary.violations.map((violation) => violation.rule.name);
+      expect(fired).toContain('f2-adapters-do-not-derive-evidence-by-name');
+      writeFileSync(
+        probe,
+        "export { deriveAttribution } from '../../../evidence-derivation/src/index.ts';\n",
+        'utf8',
+      );
+      const byPath = cruise().summary.violations.map((violation) => violation.rule.name);
+      expect(byPath).toContain('f2-adapters-do-not-derive-evidence');
+    } finally {
+      rmSync(probe, { force: true });
+    }
+  });
+
   it('the probe leaves no trace, so the clean result above stays clean', () => {
     expect(cruise().summary.error).toBe(0);
   });

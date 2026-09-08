@@ -10,3 +10,4 @@ export {
   OUTBOX_BUSY_TIMEOUT_MS,
   SqliteOutbox,
 } from './outbox.ts';
+export { CREATE_RUN_STATE_SQL, SqliteRunStateStore, type LocalRunState } from './run-state.ts';

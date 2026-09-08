@@ -5,14 +5,12 @@
 **Solution:** Emit logs as JSON objects with a fixed set of mandatory fields on every line: `timestamp`, `severity`, `service`, `trace_id`, `user_id`, and `message`. Consumers (log aggregators, dashboards) can then filter and correlate without parsing.
 
 **Implementation Notes:**
-
 - Never interpolate variables directly into the message string; put them in dedicated fields so they are indexable.
 - Propagate `trace_id` from the incoming request context; generate one at the entry point if absent.
 - Use standard severity levels (`DEBUG`, `INFO`, `WARN`, `ERROR`) and never invent custom levels.
 - Redact secrets and PII before logging — scrub authorization headers, passwords, and SSNs at the logger level.
 
 **Example:**
-
 ```typescript
 import pino from 'pino';
 
@@ -35,13 +33,11 @@ export function createRequestLogger(traceId: string, userId?: string) {
 ```
 
 **Common Mistakes:**
-
 - Logging inside tight loops — use sampling or aggregate counters instead.
 - Emitting different field names for the same concept across services (`userId` vs `user_id` vs `uid`).
 - Logging sensitive values such as tokens, passwords, or full request bodies without scrubbing.
 
 **Security Considerations:**
-
 - Treat log output as a potential data leak vector; enforce a scrubber middleware that strips known sensitive field names.
 - Restrict log access to appropriate roles — logs often contain internal IDs, email addresses, and behavioral data.
 

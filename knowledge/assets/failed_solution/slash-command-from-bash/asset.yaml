@@ -1,4 +1,4 @@
-schema_version: '1'
+schema_version: "1"
 stability: development
 introduced_in: 0.1.0
 deprecated_in: null
@@ -8,7 +8,7 @@ id: asset_01K4V8Q2R7N3X5M9B2T6W1Y412
 type: failed_solution
 slug: slash-command-from-bash
 title: Invoking an agent slash command from bash
-summary: 'Recorded as failed: a slash command is interpreted by the client, not reachable from a shell.'
+summary: "Recorded as failed: a slash command is interpreted by the client, not reachable from a shell."
 status: active
 content_hash: sha256:9b2c73f18c26740135986ac2e3eced3ce29cb3465cf2f648d26743e6c315221b
 legacy_ids:

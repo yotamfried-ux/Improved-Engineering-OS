@@ -21,7 +21,15 @@ import {
   type RandomSource,
   type SessionKind,
 } from '@ieos/core';
-import { IndexUnavailableError, SqliteKnowledgeIndex } from '@ieos/store-sqlite';
+import {
+  IndexUnavailableError,
+  openOutbox,
+  SqliteKnowledgeIndex,
+  SqliteOutbox,
+  SqliteRunStateStore,
+} from '@ieos/store-sqlite';
+import { DEFAULT_ORIGIN_CLASS, runSchema, type RunRecord } from '@ieos/core';
+import { deriveAttribution, investigate, renderInvestigation } from '@ieos/evidence-derivation';
 import { buildRuntimeReport, formatRuntimeReport, type RuntimeObservations } from './doctor.ts';
 import { COMMANDS, describeCommand, isCommand, isImplemented } from './commands.ts';
 import {
@@ -291,6 +299,88 @@ async function runInit(): Promise<number> {
   return 0;
 }
 
+/**
+ * `ieos investigate <run_id>` (guide Stage 2, T-03).
+ *
+ * Reads the LOCAL outbox and derives attribution from it. Two limits come with
+ * that, and both are printed rather than left for the reader to discover:
+ *
+ *   Events already acknowledged by the Evidence Plane are gone from the outbox,
+ *   because the outbox deletes only on durable acknowledgement. So this shows
+ *   what is still local. Stage 7's server-side investigation reads the plane and
+ *   sees the whole run.
+ *
+ *   `origin_class` is not something this side knows. D36 puts classification in
+ *   a record a service principal writes, and the client is not one, so the run
+ *   is presented as the default (`operational`) with the reason stated. A local
+ *   guess at a stronger class is exactly the claim D36 exists to make
+ *   impossible.
+ */
+async function runInvestigate(): Promise<number> {
+  const runId = args[1];
+  if (runId === undefined || runId.startsWith('-')) {
+    process.stderr.write('usage: ieos investigate <run_id> [--outbox <path>]\n');
+    return 2;
+  }
+  const outboxPath = flag('--outbox') ?? join(repoRoot, '.ieos', 'outbox.sqlite');
+  if (!existsSync(outboxPath)) {
+    // Not an empty success: "no outbox" and "a run with no events" are
+    // different answers, and only one of them means the run happened.
+    process.stderr.write(
+      `no telemetry outbox at ${outboxPath}. Nothing has been recorded on this machine yet, ` +
+        'so there is no run to investigate.\n',
+    );
+    return 4;
+  }
+
+  const db = await openOutbox(outboxPath);
+  try {
+    const outbox = new SqliteOutbox(db);
+    const all = await outbox.pending(Number.MAX_SAFE_INTEGER);
+    const events = all.filter((event) => event.run_id === runId);
+    const localState = new SqliteRunStateStore(db).get(runId);
+
+    if (events.length === 0 && localState === undefined) {
+      process.stderr.write(
+        `run ${runId} is not in the local outbox. It may have been flushed to the ` +
+          'Evidence Plane already, or it may never have run here.\n',
+      );
+      return 4;
+    }
+
+    const run: RunRecord = runSchema.parse({
+      schema_version: '1',
+      stability: 'development',
+      introduced_in: '0.1.0',
+      deprecated_in: null,
+      replacement: null,
+      migration_path: null,
+      run_id: runId,
+      owner_id: 'local',
+      registered_by: null,
+      origin_class: DEFAULT_ORIGIN_CLASS,
+      holdout_state: null,
+      eval_set_version: null,
+      simulation_id: null,
+      registered_at: null,
+      first_event_at: localState?.startedAt ?? events[0]?.time.occurred_at ?? null,
+      telemetry_state: localState?.telemetryState ?? null,
+      qualification_eligible: localState?.qualificationEligible ?? null,
+    });
+
+    const rows = deriveAttribution({ events, run, derivedAt: systemClock.nowIso() });
+    process.stdout.write(renderInvestigation(investigate({ run, events, rows })));
+    process.stdout.write(
+      '\nread from the local outbox only. Events already acknowledged by the Evidence Plane ' +
+        'are no longer here, and origin_class is shown as the D36 default because a client ' +
+        'cannot classify its own run.\n',
+    );
+    return 0;
+  } finally {
+    db.close();
+  }
+}
+
 function notYetImplemented(name: string): number {
   // Deliberately an error, not an empty success. A command that exits 0 having
   // done nothing is indistinguishable from one that worked, and an agent
@@ -322,6 +412,8 @@ const exitCode = await (async (): Promise<number> => {
       return await runDoctor();
     case 'init':
       return await runInit();
+    case 'investigate':
+      return await runInvestigate();
     default:
       process.stderr.write(
         `\`ieos ${command}\` is listed as implemented but has no handler. ` +

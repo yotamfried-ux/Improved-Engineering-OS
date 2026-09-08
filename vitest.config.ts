@@ -121,6 +121,14 @@ export default defineConfig({
       },
       {
         test: {
+          name: 'evidence-derivation',
+          root: './packages/evidence-derivation',
+          include: ['test/**/*.test.ts'],
+          environment: 'node',
+        },
+      },
+      {
+        test: {
           name: 'telemetry',
           root: './packages/telemetry',
           include: ['test/**/*.test.ts'],

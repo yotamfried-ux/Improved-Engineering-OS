@@ -87,8 +87,32 @@ module.exports = {
       severity: 'error',
       from: { path: '^packages/adapters' },
       to: {
-        path: '^packages/(releases|curator|evidence-derivation)',
+        path: '^packages/(releases|curator)',
       },
+    },
+    {
+      name: 'f2-adapters-do-not-derive-evidence',
+      comment:
+        "F2, evidence-derivation half. The guide's section 3 composition set for adapters is " +
+        'core, resolver, telemetry, assurance and the store-* packages, and evidence-derivation ' +
+        'is listed for supabase/functions instead. Its own Stage 2 deliverables then require ' +
+        '`ieos investigate <run_id>` to derive attribution LOCALLY from the outbox, which no ' +
+        'other package can do. Deviation C-11 resolves that contradiction as narrowly as the ' +
+        'mechanism can express: the CLI may import it, every other adapter may not.',
+      severity: 'error',
+      from: { path: '^packages/adapters/(?!cli/)' },
+      to: { path: '^packages/evidence-derivation' },
+    },
+    {
+      name: 'f2-adapters-do-not-derive-evidence-by-name',
+      comment:
+        'The by-specifier half of the rule above, for the same reason F1a and F4 need one: an ' +
+        'undeclared workspace import is unresolvable under pnpm and never acquires a resolved ' +
+        'path, so only no-unresolvable would fire and the boundary violation would be reported ' +
+        'as a typo.',
+      severity: 'error',
+      from: { path: '^packages/adapters/(?!cli/)' },
+      to: { path: '^@ieos/evidence-derivation' },
     },
     {
       name: 'f4-domain-imports-no-store',

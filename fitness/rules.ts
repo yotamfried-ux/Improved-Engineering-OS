@@ -75,7 +75,9 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
       'cannot see -- an adapter that opens the knowledge tree as files imports nothing at all -- ' +
       'plus any adapter that defines ranking rather than passing through a score the score view ' +
       'produced. Controls prove both scans fire, and that they do not fire on an adapter merely ' +
-      'reporting a score.',
+      'reporting a score. The composition set is enforced in two rules rather than one: ' +
+      'evidence-derivation is barred from every adapter EXCEPT packages/adapters/cli, which the ' +
+      "guide's own Stage 2 deliverable requires to derive attribution locally (deviation C-11).",
     dormantWhileAbsent: [],
   },
   {
@@ -95,13 +97,13 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
     status: 'partial',
     mechanisms: ['dependency-graph'],
     note:
-      'Enforced for packages/resolver and packages/telemetry, which exist from Stage 2 and ' +
-      'talk to the KnowledgeIndex, Outbox and Ingest ports rather than to store-sqlite. ' +
-      "telemetry is not in F4's literal wording; the guide's dependency-direction table " +
-      'puts it in the same class (telemetry -> core), and covering it here is narrower than ' +
-      'writing a thirteenth rule for one package. assurance and evidence-derivation do not ' +
-      'exist yet, so the rule stays partial and their guards stay armed.',
-    dormantWhileAbsent: ['packages/assurance', 'packages/evidence-derivation'],
+      'Enforced for packages/resolver, packages/evidence-derivation and packages/telemetry, ' +
+      'which exist from Stage 2 and talk to the KnowledgeIndex, Outbox and Ingest ports rather ' +
+      "than to store-sqlite. telemetry is not in F4's literal wording; the guide's " +
+      'dependency-direction table puts it in the same class (telemetry -> core), and covering ' +
+      'it here is narrower than writing a thirteenth rule for one package. assurance does not ' +
+      'exist yet, so the rule stays partial and its guard stays armed.',
+    dormantWhileAbsent: ['packages/assurance'],
   },
   {
     id: 'F5',

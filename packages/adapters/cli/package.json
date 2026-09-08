@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@ieos/core": "workspace:*",
+    "@ieos/evidence-derivation": "workspace:*",
     "@ieos/store-sqlite": "workspace:*",
     "yaml": "2.9.0"
   },

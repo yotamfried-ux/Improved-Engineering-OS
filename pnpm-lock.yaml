@@ -247,6 +247,9 @@ importers:
       '@ieos/core':
         specifier: workspace:*
         version: link:../../core
+      '@ieos/evidence-derivation':
+        specifier: workspace:*
+        version: link:../../evidence-derivation
       '@ieos/store-sqlite':
         specifier: workspace:*
         version: link:../../store-sqlite
@@ -285,6 +288,16 @@ importers:
       zod:
         specifier: 4.5.4
         version: 4.5.4
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
+  packages/evidence-derivation:
+    dependencies:
+      '@ieos/core':
+        specifier: workspace:*
+        version: link:../core
     devDependencies:
       '@types/node':
         specifier: 24.13.3

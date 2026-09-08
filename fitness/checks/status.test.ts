@@ -96,22 +96,22 @@ describe('declared status matches what is actually on disk', () => {
     expect(rule('F2').dormantWhileAbsent).toEqual([]);
   });
 
-  it('F4 is partial because TWO of its three subjects still do not exist', () => {
+  it('F4 is partial because ONE of its three subjects still does not exist', () => {
     // F4 constrains `resolver`, `assurance` and `evidence-derivation`. Stage 2
-    // created the first, so the rule is enforced for it; the other two are
-    // still absent, which is why it stays partial rather than becoming
-    // enforced. The store side is what gives the rule a target -- it was never
-    // what made the rule enforceable, and an earlier wording that tied it there
-    // fired for the wrong reason.
-    expect(exists('packages/resolver'), 'resolver exists, so F4 is live for it').toBe(true);
-    for (const subject of ['packages/assurance', 'packages/evidence-derivation']) {
-      expect(exists(subject), `${subject} exists, so F4 must be armed further`).toBe(false);
+    // created the first and then the third, so the rule is enforced for both;
+    // `assurance` is still absent, which is why it stays partial rather than
+    // becoming enforced. The store side is what gives the rule a target -- it
+    // was never what made the rule enforceable, and an earlier wording that
+    // tied it there fired for the wrong reason.
+    for (const armed of ['packages/resolver', 'packages/evidence-derivation']) {
+      expect(exists(armed), `${armed} exists, so F4 is live for it`).toBe(true);
     }
+    expect(
+      exists('packages/assurance'),
+      'packages/assurance exists, so F4 must be armed further',
+    ).toBe(false);
     expect(rule('F4').status).toBe('partial');
-    expect(rule('F4').dormantWhileAbsent).toEqual([
-      'packages/assurance',
-      'packages/evidence-derivation',
-    ]);
+    expect(rule('F4').dormantWhileAbsent).toEqual(['packages/assurance']);
   });
 
   it('F1a, F1b, F3, F6, F9 and F12 are enforced, and their subject exists', () => {

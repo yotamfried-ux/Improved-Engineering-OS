@@ -3,7 +3,6 @@
 > חלק מ-Engineering OS. נטען מתוך [`CLAUDE.md`](../CLAUDE.md).
 >
 > **מתי לגשת לקובץ הזה:**
->
 > - בשלב 7 ב-workflow — לפני קומיט, לניקוי קוד (`<cleanup>`).
 > - בשלב 8 ב-workflow — לבדיקת הקוד לפני קומיט (`<pre_commit_review>`).
 > - בסיום כל משימה — לעבור על רשימת תנאי הסיום (`<definition_of_done>`).
@@ -100,7 +99,6 @@
 ### בדיקות תלויות-משימה
 
 בנוסף, הרץ את הבדיקות הרלוונטיות לסוג המשימה:
-
 - **לוגיקה / backend** — הרצת טסטים (unit / integration); אימות נתונים מול Supabase.
   במשימה שנוגעת ל-schema/טבלאות ב-Supabase — אמת גם ש-RLS דולק ושקיימת policy מפורשת
   (ראה [`connector-policy.md`](./connector-policy.md) › Supabase › אבטחה).

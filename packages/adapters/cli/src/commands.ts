@@ -1,10 +1,11 @@
 /**
- * The `ieos` command surface (guide Stage 1 deliverables).
+ * The `ieos` command surface (guide Stage 1 and Stage 2 deliverables).
  *
- * The guide lists exactly seven commands. They are enumerated here rather than
- * discovered from a dispatch table so that "what does `ieos` do" has one
- * answer, and so a command cannot be half-added: appearing in help but not
- * running, or running but undocumented.
+ * The Stage 1 list is exactly seven commands; Stage 2 adds `investigate`, which
+ * the guide names in its own deliverables ("`ieos investigate <run_id>` v0").
+ * They are enumerated here rather than discovered from a dispatch table so that
+ * "what does `ieos` do" has one answer, and so a command cannot be half-added:
+ * appearing in help but not running, or running but undocumented.
  *
  * Four of them -- resolve, inspect, expand, observe -- are the Agent Contract,
  * which is identical over MCP and over the CLI (guide §5.6). That identity is
@@ -20,6 +21,7 @@ export const COMMANDS = [
   'expand',
   'observe',
   'auth',
+  'investigate',
 ] as const;
 
 export type Command = (typeof COMMANDS)[number];
@@ -36,7 +38,7 @@ export type Command = (typeof COMMANDS)[number];
  * corrects itself when the commands land, instead of waiting for someone to
  * notice.
  */
-export const IMPLEMENTED_COMMANDS: readonly Command[] = ['doctor', 'init'];
+export const IMPLEMENTED_COMMANDS: readonly Command[] = ['doctor', 'init', 'investigate'];
 
 export function isImplemented(command: Command): boolean {
   return IMPLEMENTED_COMMANDS.includes(command);
@@ -77,5 +79,7 @@ export function describeCommand(command: Command): string {
       return 'Record an observation. Staging only; never canonical knowledge.';
     case 'auth':
       return 'Manage the installation credential. Arrives at Stage 2 (D22); not implemented yet.';
+    case 'investigate':
+      return "Print a run's raw event timeline and the attribution derived from it.";
   }
 }

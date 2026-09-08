@@ -20,7 +20,6 @@ claude plugin install superpowers@claude-plugins-official
 ## מה לבדוק במקום
 
 ראה `lessons-learned/bugs/claude-plugin-programmatic-install.md` — הפתרון הנכון:
-
 ```bash
 claude plugin marketplace add obra/superpowers-marketplace
 claude plugin install superpowers@superpowers-marketplace
