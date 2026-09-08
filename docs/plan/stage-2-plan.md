@@ -1,9 +1,15 @@
 # Stage 2 — Seed knowledge, resolver, telemetry, Evidence Plane
 
-**Status: built; gate not yet closed.** The gate is closed only by a
-harness-generated report in `qualification/reports/`, produced by CI from
-two platform records. Nothing in this document can close it, and this
-document is one of the things the report is meant to be able to contradict.
+**Status: gate PASSED.** `qualification/reports/stage-02-2026-09-08.md` —
+harness-generated, 11 pass, 0 fail, 0 unproven, from two platform records at
+commit `75694d9`. Nothing in this document closed it, and this document is one
+of the things that report is meant to be able to contradict.
+
+The gate reached that verdict on its second attempt. The first said **NOT
+PASSED — 9 pass, 0 fail, 2 unproven**, because H1 and H9 each rested on a named
+test that `seed-import` and `harness` had never run on Windows. There were no
+failures either time; there was an absence, and the gate declined to read it as
+a pass. Both projects now run in the Windows smoke.
 
 ## What the guide asks for
 
