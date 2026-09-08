@@ -25,6 +25,7 @@
  */
 
 import { sha256Text } from '@ieos/core';
+import { hookSettings } from '@ieos/adapter-claude-code';
 
 export const BEGIN_MARKER = '<!-- ieos:begin -->';
 export const END_MARKER = '<!-- ieos:end -->';
@@ -43,6 +44,16 @@ import { AGENT_CONTRACT_COMMANDS, isImplemented } from './commands.ts';
 
 export const MCP_SERVER_ENTRY = 'packages/adapters/mcp/src/server-cli.ts';
 
+/**
+ * The hook executable the primary agent's settings point at (Q-09).
+ *
+ * A constant for the same reason `MCP_SERVER_ENTRY` is one: `ieos init` writes
+ * this path into someone else's repository, and a path that no longer exists is
+ * a broken hook in a project nobody will connect back to this file. `ieos
+ * doctor` checks both.
+ */
+export const HOOK_ENTRY = 'packages/adapters/claude-code/src/hook.ts';
+
 export interface FootprintInput {
   /** Absolute path to the EOS source checkout (Stages 0-3; a release later). */
   readonly sourceCheckout: string;
@@ -54,6 +65,19 @@ export interface FootprintInput {
   /** How the MCP server is launched from the target project. */
   readonly mcpCommand: string;
   readonly mcpArgs: readonly string[];
+  /** How the telemetry hook is launched from the target project (Q-09). */
+  readonly hookArgs: readonly string[];
+  /**
+   * Whether to register the telemetry hook in `.claude/settings.json`.
+   *
+   * Off by default, and that is a decision rather than caution. D18.4 fixes the
+   * footprint at six paths and closes with "Nothing else lands in the project";
+   * a hook is a seventh, and it is also a command that would run on every tool
+   * call in someone else's repository. Installing that silently is not a thin
+   * footprint. `ieos init --with-hooks` is the owner saying yes, which keeps
+   * D18.4 satisfied exactly when they have not.
+   */
+  readonly withHooks: boolean;
 }
 
 export interface GeneratedFile {
@@ -64,7 +88,7 @@ export interface GeneratedFile {
    * How to apply it. `replace` owns the whole file; `merge-markers` rewrites
    * only the region between the markers; `merge-json` adds one key.
    */
-  readonly mode: 'replace' | 'merge-markers' | 'merge-json' | 'merge-toml';
+  readonly mode: 'replace' | 'merge-markers' | 'merge-json' | 'merge-toml' | 'merge-hooks';
 }
 
 /** The generated agent-bootstrap paragraph (D18.4, TD-07). */
@@ -164,8 +188,25 @@ export function planFootprint(input: FootprintInput): readonly GeneratedFile[] {
     { path: '.ieos/profile.yaml', content: profile, mode: 'replace' },
     { path: '.mcp.json', content: `${JSON.stringify(mcpEntry, null, 2)}\n`, mode: 'merge-json' },
     { path: '.codex/config.toml', content: codexBlock, mode: 'merge-toml' },
+
     { path: 'AGENTS.md', content: paragraph, mode: 'merge-markers' },
     { path: 'CLAUDE.md', content: paragraph, mode: 'merge-markers' },
+    // Q-09: hooks for the PRIMARY agent only, and only when asked. The second
+    // agent's adapter is Stage 8's, and building one now would answer a
+    // question Stage 3 has not asked yet.
+    ...(input.withHooks
+      ? ([
+          {
+            path: '.claude/settings.json',
+            content: `${JSON.stringify(
+              hookSettings({ command: input.mcpCommand, args: [...input.hookArgs] }),
+              null,
+              2,
+            )}\n`,
+            mode: 'merge-hooks',
+          },
+        ] as const)
+      : []),
   ];
 }
 
@@ -223,4 +264,62 @@ export function mergeCodexToml(existing: string, block: string): string {
   const pattern = /\[mcp_servers\.ieos\][\s\S]*?(?=\n\[|$)/u;
   if (pattern.test(existing)) return existing.replace(pattern, block.replace(/\n+$/u, ''));
   return `${existing.replace(/\n*$/u, '')}\n\n${block}`;
+}
+
+/**
+ * Add the EOS telemetry hook to an existing `.claude/settings.json` (Q-09).
+ *
+ * Three properties, each of which a simpler merge would break:
+ *
+ *   Other settings survive. The file is the project's; EOS adds a hook to it
+ *   and owns nothing else in it.
+ *
+ *   Other people's hooks on the same event survive. A project that already runs
+ *   a formatter on `PostToolUse` must keep running it.
+ *
+ *   Re-running `ieos init` does not stack duplicates. An entry whose command is
+ *   ours is replaced in place; anything else is left alone. Without this, every
+ *   re-init would add another copy and the agent would emit each event twice.
+ */
+export function mergeClaudeSettings(existing: string, generated: string): string {
+  const incoming = JSON.parse(generated) as { hooks: Record<string, unknown[]> };
+  let current: Record<string, unknown> = {};
+  if (existing.trim().length > 0) {
+    try {
+      current = JSON.parse(existing) as Record<string, unknown>;
+    } catch {
+      throw new Error(
+        '.claude/settings.json exists but is not valid JSON. Fix or remove it before running ' +
+          '`ieos init`; overwriting it would discard settings this project already relies on.',
+      );
+    }
+  }
+
+  const currentHooks = (current['hooks'] ?? {}) as Record<string, unknown[]>;
+  const mergedHooks: Record<string, unknown[]> = { ...currentHooks };
+  for (const [event, entries] of Object.entries(incoming.hooks)) {
+    const ours = entries[0] as { hooks: { command: string }[] };
+    const ourCommand = ours.hooks[0]?.command ?? '';
+    const kept = (currentHooks[event] ?? []).filter((entry) => !isOurs(entry, ourCommand));
+    mergedHooks[event] = [...kept, ours];
+  }
+  return `${JSON.stringify({ ...current, hooks: mergedHooks }, null, 2)}\n`;
+}
+
+/**
+ * Whether an existing entry is the one this tool wrote.
+ *
+ * Matched on the command text, which is the only thing that identifies it. A
+ * marker comment would be tidier and JSON has none, so the command it runs is
+ * the identity -- and that is also what makes replacement correct: an entry
+ * running our hook IS our entry, whoever added it.
+ */
+function isOurs(entry: unknown, ourCommand: string): boolean {
+  if (entry === null || typeof entry !== 'object') return false;
+  const hooks = (entry as { hooks?: unknown }).hooks;
+  if (!Array.isArray(hooks)) return false;
+  return hooks.some((hook) => {
+    const command = (hook as { command?: unknown }).command;
+    return typeof command === 'string' && (command === ourCommand || command.includes(HOOK_ENTRY));
+  });
 }

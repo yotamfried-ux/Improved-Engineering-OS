@@ -1,19 +1,17 @@
 {
-  "name": "@ieos/cli",
+  "name": "@ieos/adapter-claude-code",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "The `ieos` command: the Agent Contract over a CLI (guide section 5.6).",
+  "description": "Hook adapter for the primary agent: SessionStart, PostToolUse, Stop, SessionEnd (Q-09, D23).",
   "license": "UNLICENSED",
   "exports": {
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@ieos/adapter-claude-code": "workspace:*",
     "@ieos/core": "workspace:*",
-    "@ieos/evidence-derivation": "workspace:*",
     "@ieos/store-sqlite": "workspace:*",
-    "yaml": "2.9.0"
+    "@ieos/telemetry": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "24.13.3"

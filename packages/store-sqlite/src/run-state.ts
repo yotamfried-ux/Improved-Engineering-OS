@@ -34,6 +34,11 @@ interface WritableDatabase {
 
 export const CREATE_RUN_STATE_SQL = `create table if not exists run_state (
    run_id text primary key,
+   -- The agent's own session identifier, so every hook of one coding session
+   -- lands on one run. Unique: two runs claiming one session would split that
+   -- session's events across runs that each look half-empty, and an
+   -- investigation would read one session as several.
+   session_key text unique,
    telemetry_state text not null,
    qualification_eligible integer not null,
    ingest_reachable_at_start integer not null,
@@ -43,6 +48,7 @@ export const CREATE_RUN_STATE_SQL = `create table if not exists run_state (
 
 export interface LocalRunState {
   readonly runId: string;
+  readonly sessionKey: string | null;
   readonly telemetryState: 'COMPLETE' | 'INCOMPLETE';
   readonly qualificationEligible: boolean;
   readonly ingestReachableAtStart: boolean;
@@ -67,15 +73,32 @@ export class SqliteRunStateStore {
    * not finish, which is true, instead of no row at all, which reads as a run
    * that never existed.
    */
-  begin(runId: string, ingestReachableAtStart: boolean, startedAt: string): void {
+  begin(
+    runId: string,
+    ingestReachableAtStart: boolean,
+    startedAt: string,
+    sessionKey: string | null = null,
+  ): void {
     this.#db
       .prepare(
         `insert or ignore into run_state
-           (run_id, telemetry_state, qualification_eligible,
+           (run_id, session_key, telemetry_state, qualification_eligible,
             ingest_reachable_at_start, started_at, ended_at)
-         values (?, 'INCOMPLETE', 0, ?, ?, null)`,
+         values (?, ?, 'INCOMPLETE', 0, ?, ?, null)`,
       )
-      .run(runId, ingestReachableAtStart ? 1 : 0, startedAt);
+      .run(runId, sessionKey, ingestReachableAtStart ? 1 : 0, startedAt);
+  }
+
+  /**
+   * The run this agent session belongs to, if one has begun.
+   *
+   * Hooks after SessionStart have only the agent's session id, and minting a
+   * second run for the same session would be worse than dropping the event:
+   * two half-runs, neither of them what happened.
+   */
+  forSession(sessionKey: string): LocalRunState | undefined {
+    const row = this.#db.prepare('select * from run_state where session_key = ?').get(sessionKey);
+    return row === undefined ? undefined : toState(row);
   }
 
   /** Write the terminal state the runtime computed (guide §5.3). */
@@ -108,6 +131,7 @@ function toState(row: Record<string, unknown>): LocalRunState {
   const telemetryState = String(row['telemetry_state']);
   return {
     runId: String(row['run_id']),
+    sessionKey: row['session_key'] === null ? null : String(row['session_key']),
     // Anything that is not literally COMPLETE reads as INCOMPLETE. A corrupt or
     // hand-edited value must not be able to promote a run to "measured".
     telemetryState: telemetryState === 'COMPLETE' ? 'COMPLETE' : 'INCOMPLETE',

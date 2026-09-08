@@ -19,6 +19,7 @@ import {
   bootstrapParagraph,
   mergeCodexToml,
   mergeMcpJson,
+  mergeClaudeSettings,
   planFootprint,
   MCP_SERVER_ENTRY,
   spliceMarkedBlock,
@@ -34,6 +35,8 @@ const input: FootprintInput = {
   projectId: 'proj_01J9Z6Q0K3N6X4R8V2T7M5B1WQ',
   mcpCommand: 'node',
   mcpArgs: ['/srv/eos/packages/adapters/mcp/src/server-cli.ts'],
+  hookArgs: ['/srv/eos/packages/adapters/claude-code/src/hook.ts'],
+  withHooks: false,
 };
 
 describe('the footprint is exactly the closed list D18.4 names', () => {
@@ -49,6 +52,31 @@ describe('the footprint is exactly the closed list D18.4 names', () => {
       '.mcp.json',
       'AGENTS.md',
       'CLAUDE.md',
+    ]);
+  });
+
+  it('adds exactly one path when the owner asks for hooks, and only that one', () => {
+    // Q-09's hooks are a seventh file and a command that runs on every tool
+    // call, so they are opt-in: D18.4's closed list stays exactly closed unless
+    // someone says otherwise. Asserting the DIFFERENCE rather than the new list
+    // means a future addition smuggled in beside it fails here.
+    const withoutHooks = planFootprint(input).map((f) => f.path);
+    const withHooks = planFootprint({ ...input, withHooks: true }).map((f) => f.path);
+    expect(withHooks.filter((path) => !withoutHooks.includes(path))).toEqual([
+      '.claude/settings.json',
+    ]);
+  });
+
+  it('registers the four events Q-09 names, and no others', () => {
+    const settings = JSON.parse(
+      planFootprint({ ...input, withHooks: true }).find((f) => f.path === '.claude/settings.json')
+        ?.content ?? '{}',
+    ) as { hooks: Record<string, unknown> };
+    expect(Object.keys(settings.hooks).sort()).toEqual([
+      'PostToolUse',
+      'SessionEnd',
+      'SessionStart',
+      'Stop',
     ]);
   });
 
@@ -221,4 +249,70 @@ describe('the declared implementation status is the real one', () => {
       expect(run(command).code).not.toBe(3);
     });
   }
+});
+
+describe('merging into a project’s own .claude/settings.json', () => {
+  const ours = JSON.stringify({
+    hooks: {
+      PostToolUse: [{ hooks: [{ type: 'command', command: 'node /srv/eos/hook.ts' }] }],
+    },
+  });
+
+  it('keeps settings that have nothing to do with EOS', () => {
+    const merged = JSON.parse(
+      mergeClaudeSettings('{"model":"opus","permissions":{"allow":["Bash"]}}', ours),
+    ) as Record<string, unknown>;
+    expect(merged['model']).toBe('opus');
+    expect(merged['permissions']).toEqual({ allow: ['Bash'] });
+  });
+
+  it('keeps another tool’s hook on the same event', () => {
+    // A project that already runs a formatter on PostToolUse must keep running
+    // it. Replacing the array would silently disable someone else's tooling.
+    const existing = JSON.stringify({
+      hooks: { PostToolUse: [{ hooks: [{ type: 'command', command: 'prettier --write' }] }] },
+    });
+    const merged = JSON.parse(mergeClaudeSettings(existing, ours)) as {
+      hooks: { PostToolUse: { hooks: { command: string }[] }[] };
+    };
+    expect(merged.hooks.PostToolUse).toHaveLength(2);
+    expect(merged.hooks.PostToolUse[0]?.hooks[0]?.command).toBe('prettier --write');
+  });
+
+  it('does not stack a duplicate when init runs twice', () => {
+    // Without this, every re-init adds another copy and the agent emits each
+    // event once per copy -- a run that looks busier than it was.
+    const once = mergeClaudeSettings('', ours);
+    const twice = mergeClaudeSettings(once, ours);
+    const merged = JSON.parse(twice) as { hooks: { PostToolUse: unknown[] } };
+    expect(merged.hooks.PostToolUse).toHaveLength(1);
+  });
+
+  it('replaces an entry left by an older EOS path', () => {
+    // Matched on the hook entry path, so an install from a moved checkout is
+    // replaced rather than duplicated.
+    const stale = JSON.stringify({
+      hooks: {
+        PostToolUse: [
+          {
+            hooks: [
+              {
+                type: 'command',
+                command: 'node /old/packages/adapters/claude-code/src/hook.ts',
+              },
+            ],
+          },
+        ],
+      },
+    });
+    const merged = JSON.parse(mergeClaudeSettings(stale, ours)) as {
+      hooks: { PostToolUse: { hooks: { command: string }[] }[] };
+    };
+    expect(merged.hooks.PostToolUse).toHaveLength(1);
+    expect(merged.hooks.PostToolUse[0]?.hooks[0]?.command).toBe('node /srv/eos/hook.ts');
+  });
+
+  it('refuses a malformed settings file rather than discarding it', () => {
+    expect(() => mergeClaudeSettings('{ not json', ours)).toThrow(/not valid JSON/u);
+  });
 });

@@ -19,3 +19,9 @@ export * from './graders.ts';
 export * from './budget.ts';
 export * from './collect.ts';
 export * from './trial.ts';
+export {
+  httpRegisterRun,
+  registerWithPlane,
+  type RegisterRunTransport,
+  type RegistrationResult,
+} from './plane-registrar.ts';

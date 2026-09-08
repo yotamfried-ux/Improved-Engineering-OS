@@ -30,7 +30,13 @@ import {
 } from '@ieos/store-sqlite';
 import { DEFAULT_ORIGIN_CLASS, runSchema, type RunRecord } from '@ieos/core';
 import { deriveAttribution, investigate, renderInvestigation } from '@ieos/evidence-derivation';
-import { buildRuntimeReport, formatRuntimeReport, type RuntimeObservations } from './doctor.ts';
+import {
+  buildRuntimeReport,
+  formatRuntimeReport,
+  observeHooks,
+  type RuntimeObservations,
+} from './doctor.ts';
+import { REGISTERED_EVENTS } from '@ieos/adapter-claude-code';
 import { COMMANDS, describeCommand, isCommand, isImplemented } from './commands.ts';
 import {
   AuthError,
@@ -46,8 +52,10 @@ import {
 import {
   BEGIN_MARKER,
   END_MARKER,
+  HOOK_ENTRY,
   MCP_SERVER_ENTRY,
   mergeCodexToml,
+  mergeClaudeSettings,
   mergeMcpJson,
   planFootprint,
   spliceMarkedBlock,
@@ -187,7 +195,40 @@ async function observeRuntime(): Promise<RuntimeObservations> {
     ingest,
     sqliteAvailable,
     bootstrap: observeBootstrap(projectRoot),
+    hooks: observeHooks(readIfPresent(join(projectRoot, '.claude', 'settings.json')), HOOK_ENTRY, [
+      ...REGISTERED_EVENTS,
+    ]),
+    lastRuns: await observeLastRuns(join(projectRoot, '.ieos', 'outbox.sqlite')),
   };
+}
+
+function readIfPresent(path: string): string | null {
+  return existsSync(path) ? readFileSync(path, 'utf8') : null;
+}
+
+/**
+ * The runs this machine recorded, for `doctor`'s last-run row (D23).
+ *
+ * An unreadable store yields no runs rather than an error: doctor exists to
+ * report the state of things, and failing to open one file must not stop it
+ * reporting the other nine.
+ */
+async function observeLastRuns(outboxPath: string): Promise<RuntimeObservations['lastRuns']> {
+  if (!existsSync(outboxPath)) return [];
+  try {
+    const db = await openOutbox(outboxPath);
+    try {
+      return new SqliteRunStateStore(db).recent(5).map((run) => ({
+        runId: run.runId,
+        telemetryState: run.telemetryState,
+        startedAt: run.startedAt,
+      }));
+    } finally {
+      db.close();
+    }
+  } catch {
+    return [];
+  }
 }
 
 async function runDoctor(): Promise<number> {
@@ -272,6 +313,8 @@ async function runInit(): Promise<number> {
     // context snapshot to the project's HEAD commit, and it must not infer that
     // from whatever directory the agent happened to launch it in.
     mcpArgs: [join(repoRoot, MCP_SERVER_ENTRY), '--eos-root', repoRoot, '--project', projectRoot],
+    hookArgs: [join(repoRoot, HOOK_ENTRY), '--eos-root', repoRoot, '--project', projectRoot],
+    withHooks: args.includes('--with-hooks'),
   });
 
   for (const file of files) {
@@ -297,6 +340,9 @@ async function runInit(): Promise<number> {
       case 'merge-json':
         content = mergeMcpJson(existing, file.content);
         break;
+      case 'merge-hooks':
+        content = mergeClaudeSettings(existing, file.content);
+        break;
       case 'merge-toml':
         content = mergeCodexToml(existing, file.content);
         break;
@@ -307,6 +353,16 @@ async function runInit(): Promise<number> {
     process.stdout.write(`  ${file.mode === 'replace' ? 'wrote  ' : 'merged '} ${file.path}\n`);
   }
   process.stdout.write(`\nfootprint written to ${projectRoot}\n`);
+  if (!args.includes('--with-hooks')) {
+    // Named rather than merely absent. Telemetry that nobody knew was optional
+    // produces empty runs and a puzzled owner.
+    process.stdout.write(
+      '\nTelemetry hooks were NOT installed. `ieos init --with-hooks` registers the four\n' +
+        'hooks the primary agent calls (SessionStart, PostToolUse, Stop, SessionEnd) in\n' +
+        '.claude/settings.json. Without them nothing observes a run, and `ieos investigate`\n' +
+        'will have no timeline to show.\n',
+    );
+  }
   return 0;
 }
 

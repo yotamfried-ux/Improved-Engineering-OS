@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildRuntimeReport,
   formatRuntimeReport,
+  observeHooks,
   type RuntimeObservations,
 } from '../src/doctor.ts';
 
@@ -27,6 +28,8 @@ const healthy = (over: Partial<RuntimeObservations> = {}): RuntimeObservations =
   sessionKind: 'local_persistent',
   ingest: { state: 'unconfigured' },
   sqliteAvailable: true,
+  hooks: { state: 'registered', events: ['SessionStart', 'PostToolUse', 'Stop', 'SessionEnd'] },
+  lastRuns: [{ runId: 'run_a', telemetryState: 'COMPLETE', startedAt: '2026-09-08T00:00:00.000Z' }],
   bootstrap: {
     state: 'healthy',
     detail: `AGENTS.md and CLAUDE.md match sha256:${'b'.repeat(64)}`,
@@ -146,5 +149,92 @@ describe('the rendered report', () => {
     const text = formatRuntimeReport(buildRuntimeReport(healthy()));
     expect(text).toContain('runtime ok');
     expect(text).not.toContain('FAIL');
+  });
+});
+
+describe('telemetry hooks (Q-09)', () => {
+  const finding = (observations: RuntimeObservations, name: string) =>
+    buildRuntimeReport(observations).findings.find((f) => f.name === name);
+
+  it('says nothing is observing a run when no hook is registered', () => {
+    // Not a fault -- `ieos init` leaves hooks off by default -- but not silent
+    // either. A run nobody observed looks exactly like a run in which nothing
+    // happened.
+    const report = finding(healthy({ hooks: { state: 'unregistered' } }), 'hooks');
+    expect(report?.level).toBe('unknown');
+    expect(report?.blocking).toBe(false);
+    expect(report?.detail).toContain('ieos init --with-hooks');
+  });
+
+  it('BLOCKS on a partial registration, unlike none at all', () => {
+    // Some of four means a run's timeline has holes at known points: the
+    // terminal flush may never fire, and a partial timeline read as whole is
+    // the failure D23 names. "None" is a choice; "some" is a broken install.
+    const report = finding(
+      healthy({ hooks: { state: 'partial', events: ['SessionStart'] } }),
+      'hooks',
+    );
+    expect(report?.level).toBe('failed');
+    expect(report?.blocking).toBe(true);
+  });
+
+  it('reads registration out of a project’s settings by the hook entry path', () => {
+    const settings = JSON.stringify({
+      hooks: {
+        SessionStart: [{ hooks: [{ command: 'node /eos/src/hook.ts' }] }],
+        Stop: [{ hooks: [{ command: 'node /eos/src/hook.ts' }] }],
+      },
+    });
+    expect(observeHooks(settings, 'src/hook.ts', ['SessionStart', 'Stop'])).toEqual({
+      state: 'registered',
+      events: ['SessionStart', 'Stop'],
+    });
+    expect(observeHooks(settings, 'src/hook.ts', ['SessionStart', 'Stop', 'SessionEnd'])).toEqual({
+      state: 'partial',
+      events: ['SessionStart', 'Stop'],
+    });
+  });
+
+  it('does not count someone else’s hook as ours', () => {
+    const settings = JSON.stringify({
+      hooks: { Stop: [{ hooks: [{ command: 'prettier --write' }] }] },
+    });
+    expect(observeHooks(settings, 'src/hook.ts', ['Stop'])).toEqual({ state: 'unregistered' });
+  });
+
+  it('reads unreadable settings as unregistered, never as registered', () => {
+    // Claiming `registered` from a file it could not parse is the most
+    // expensive wrong answer available here.
+    expect(observeHooks('{ not json', 'src/hook.ts', ['Stop'])).toEqual({ state: 'unregistered' });
+    expect(observeHooks(null, 'src/hook.ts', ['Stop'])).toEqual({ state: 'unregistered' });
+  });
+});
+
+describe('the last runs doctor reports (D23, Stage 2 exit gate)', () => {
+  const finding = (observations: RuntimeObservations) =>
+    buildRuntimeReport(observations).findings.find((f) => f.name === 'last-run');
+
+  it('makes an INCOMPLETE run visible', () => {
+    // The Stage 2 exit gate names this: INCOMPLETE runs must be visible in
+    // `ieos doctor --last-run`. A lossy run may never have reached the Evidence
+    // Plane, so the plane is the one place that cannot be asked.
+    const report = finding(
+      healthy({
+        lastRuns: [
+          { runId: 'run_bad', telemetryState: 'INCOMPLETE', startedAt: '2026-09-08T00:00:00.000Z' },
+          { runId: 'run_ok', telemetryState: 'COMPLETE', startedAt: '2026-09-07T00:00:00.000Z' },
+        ],
+      }),
+    );
+    expect(report?.level).toBe('failed');
+    expect(report?.detail).toContain('run_bad');
+    expect(report?.detail).toContain('not qualification evidence');
+    // Not blocking: an INCOMPLETE run is a true record, not a broken install.
+    expect(report?.blocking).toBe(false);
+  });
+
+  it('distinguishes "no runs yet" from "all complete"', () => {
+    expect(finding(healthy({ lastRuns: [] }))?.level).toBe('unknown');
+    expect(finding(healthy())?.level).toBe('ok');
   });
 });

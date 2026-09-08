@@ -242,8 +242,27 @@ importers:
         specifier: 24.13.3
         version: 24.13.3
 
+  packages/adapters/claude-code:
+    dependencies:
+      '@ieos/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@ieos/store-sqlite':
+        specifier: workspace:*
+        version: link:../../store-sqlite
+      '@ieos/telemetry':
+        specifier: workspace:*
+        version: link:../../telemetry
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
   packages/adapters/cli:
     dependencies:
+      '@ieos/adapter-claude-code':
+        specifier: workspace:*
+        version: link:../claude-code
       '@ieos/core':
         specifier: workspace:*
         version: link:../../core

@@ -95,6 +95,15 @@ export default defineConfig({
       },
       {
         test: {
+          name: 'claude-code',
+          root: './packages/adapters/claude-code',
+          include: ['test/**/*.test.ts'],
+          environment: 'node',
+          ...REAL_IO,
+        },
+      },
+      {
+        test: {
           name: 'mcp',
           root: './packages/adapters/mcp',
           include: ['test/**/*.test.ts'],
