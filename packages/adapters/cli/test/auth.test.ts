@@ -20,6 +20,7 @@ import {
   expiryFrom,
   INSTALLATION_SCOPES,
   mintToken,
+  protectionOf,
   TOKEN_BYTES,
   tokenHashLiteral,
 } from '../src/auth.ts';
@@ -88,10 +89,25 @@ describe('ieos auth enroll', () => {
     expect(result.stdout).toContain('insert into principals');
   });
 
-  it('makes the credential readable by its owner alone', () => {
+  it('makes the credential readable by its owner alone, or says it cannot', () => {
+    // Platform-aware rather than skipped on Windows. D22.1's fallback is a
+    // `0600` file, and on Windows that fallback does not exist: chmod there
+    // toggles the read-only attribute and nothing else. Skipping would drop the
+    // guarantee silently; asserting 0600 everywhere would assert a falsehood.
+    // So each platform is held to what it can actually do, and the one that
+    // cannot has to SAY so.
     const path = credentialsPath();
-    run('auth', 'enroll', '--owner', OWNER, '--credentials', path);
-    expect(statSync(path).mode & 0o777).toBe(CREDENTIALS_MODE);
+    const result = run('auth', 'enroll', '--owner', OWNER, '--credentials', path);
+    const protection = protectionOf(statSync(path).mode, process.platform);
+    if (process.platform === 'win32') {
+      expect(protection.enforced).toBe(false);
+      expect(result.stderr).toContain('WARNING');
+      expect(result.stdout).toContain('permissions NOT enforced');
+    } else {
+      expect(protection.enforced).toBe(true);
+      expect(statSync(path).mode & 0o777).toBe(CREDENTIALS_MODE);
+      expect(result.stdout).toContain('mode 0600');
+    }
   });
 
   it('grants exactly the three scopes an installation may hold (D22.1)', () => {
@@ -149,11 +165,16 @@ describe('ieos auth rotate', () => {
   it('tightens the mode of a credential that was left world-readable', () => {
     // `writeFileSync`'s mode applies only when it creates the file, so a
     // rotation over a loose file would silently keep the old permissions.
+    // Where modes mean nothing, the command has to keep saying so instead.
     const path = credentialsPath();
     run('auth', 'enroll', '--owner', OWNER, '--credentials', path);
     chmodSync(path, 0o644);
-    run('auth', 'rotate', '--credentials', path);
-    expect(statSync(path).mode & 0o777).toBe(CREDENTIALS_MODE);
+    const result = run('auth', 'rotate', '--credentials', path);
+    if (process.platform === 'win32') {
+      expect(result.stderr).toContain('WARNING');
+    } else {
+      expect(statSync(path).mode & 0o777).toBe(CREDENTIALS_MODE);
+    }
   });
 
   it('clears any revocation, because a rotated token is meant to work', () => {
@@ -208,5 +229,34 @@ describe('a corrupt credential file', () => {
     const result = run('auth', 'rotate', '--credentials', path, '--installation', 'inst_known');
     expect(result.code).toBe(0);
     expect(result.stdout).toContain('inst_known');
+  });
+});
+
+describe('what a file mode can and cannot guarantee', () => {
+  it('calls 0600 enforced on a platform that has file modes', () => {
+    expect(protectionOf(0o600, 'linux')).toEqual({ enforced: true, mode: 0o600, reason: null });
+  });
+
+  it('calls anything looser unenforced, and names the mode', () => {
+    const loose = protectionOf(0o644, 'linux');
+    expect(loose.enforced).toBe(false);
+    expect(loose.reason).toContain('0644');
+  });
+
+  it('explains WHY Windows cannot enforce it, rather than reporting a bare failure', () => {
+    // An owner reading "not enforced" needs to know whether they misconfigured
+    // something or whether the platform simply cannot do it, because only one
+    // of those has an action attached.
+    const windows = protectionOf(0o666, 'win32');
+    expect(windows.enforced).toBe(false);
+    expect(windows.reason).toContain('POSIX file modes');
+    expect(windows.reason).toContain('environment secret');
+  });
+
+  it('still calls a genuinely 0600 file enforced on Windows, if one ever appears', () => {
+    // The check is on the observed bits, not on the platform name. If a future
+    // Windows or a POSIX-mode filesystem produced 0600, that is enforcement and
+    // the report should say so.
+    expect(protectionOf(0o600, 'win32').enforced).toBe(true);
   });
 });

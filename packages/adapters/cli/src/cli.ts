@@ -8,7 +8,15 @@
  * without arranging the world into that state.
  */
 
-import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import {
@@ -44,6 +52,7 @@ import {
   credentialsFor,
   enrolmentStatement,
   mintToken,
+  protectionOf,
   revocationStatement,
   rotationStatement,
   tokenHashLiteral,
@@ -519,8 +528,17 @@ async function runAuth(): Promise<number> {
                 expiresAt: credentials.expires_at,
               });
 
+        // Checked, not assumed. On Windows chmod only toggles read-only, so a
+        // file written 0600 reports 0666 and the mode protects nothing; saying
+        // "mode 0600" there would tell the owner they have a guarantee they do
+        // not.
+        const protection = protectionOf(statSync(credentialsPath).mode, process.platform);
         process.stdout.write(`installation: ${installationId}\n`);
-        process.stdout.write(`credential:   ${credentialsPath} (mode 0600)\n`);
+        process.stdout.write(
+          `credential:   ${credentialsPath}` +
+            (protection.enforced ? ' (mode 0600)' : ' (permissions NOT enforced)') +
+            '\n',
+        );
         process.stdout.write(`expires:      ${credentials.expires_at}\n\n`);
         process.stdout.write('Apply this against your Evidence Plane, as the owner:\n\n');
         process.stdout.write(`${statement}\n\n`);
@@ -531,6 +549,9 @@ async function runAuth(): Promise<number> {
           'The statement carries the token HASH. The token is in the credential file above ' +
             'and is not printed; copy it from there for a remote environment secret.\n',
         );
+        if (!protection.enforced) {
+          process.stderr.write(`\nWARNING: ${protection.reason ?? ''}\n`);
+        }
         return 0;
       }
 

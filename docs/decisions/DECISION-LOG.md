@@ -470,6 +470,40 @@ because its stage arrived, and a second test asserts that site hashes a token
 and reaches for no canonical serialization — an allowance granted for opaque
 bytes must not become a licence to mint identities.
 
+### S-4 A file mode is not a guarantee on every platform
+
+D22.1 names the OS keychain first and a `~/.ieos/credentials.json` at mode
+`0600` as the fallback. On Windows that fallback does not exist: `fs.chmod`
+there toggles the read-only attribute and nothing else, so a file written
+`0600` reports `0666` and the mode carries no access control at all.
+
+Found by the Windows smoke job failing on `expected 438 to be 384` — that is,
+`0o666` where `0o600` was asserted. The useful direction to find it in: the
+assertion was written on Linux, where it holds, and the platform that cannot
+honour it said so rather than the code quietly shipping a protection nobody had.
+
+Three consequences, none of them a skip:
+
+`ieos auth` now CHECKS the resulting mode instead of assuming chmod worked, and
+prints `permissions NOT enforced` with a reason when it did not. Accepting
+`0666` because chmod returned without error would leave an owner believing in a
+guarantee they do not have, which is worse than the missing guarantee.
+
+The test is platform-aware rather than skipped. Each platform is held to what it
+can actually do, and the one that cannot has to say so in its output. A skip
+would have dropped the guarantee silently on exactly the platform where it is
+absent.
+
+The reason names the remedy — prefer an environment secret on Windows — because
+"not enforced" without one leaves the owner unable to tell a misconfiguration
+from a platform limit, and only one of those has an action attached.
+
+**Technical debt:** D22.1's primary path, the OS keychain, is not implemented on
+any platform; every installation currently uses the file fallback. On Linux and
+macOS that fallback is `0600`. On Windows it is the directory's ACLs and nothing
+more. This is recorded rather than fixed at Stage 2, and it is the reason the
+warning names an environment secret as the better option there.
+
 ### Explicitly not done at Stage 2
 
 `candidates`, `promotion_proposals`, and the `read_proposals` / `ack_proposal`

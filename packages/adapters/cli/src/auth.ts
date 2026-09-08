@@ -28,8 +28,52 @@ export const TOKEN_BYTES = 32;
 /** 90 days, renewable (D22.1). */
 export const TOKEN_LIFETIME_DAYS = 90;
 
-/** The credential file is readable by its owner and nobody else. */
+/** The credential file is readable by its owner and nobody else -- where that is expressible. */
 export const CREDENTIALS_MODE = 0o600;
+
+export interface CredentialProtection {
+  /** True when the file really is owner-only. */
+  readonly enforced: boolean;
+  /** The permission bits actually observed. */
+  readonly mode: number;
+  /** Why the credential is not protected, when it is not. */
+  readonly reason: string | null;
+}
+
+/**
+ * Whether the credential file's permissions actually protect it.
+ *
+ * D22.1 names the OS keychain first and a `0600` file as the fallback. On
+ * Windows that fallback does not exist: `fs.chmod` only toggles the read-only
+ * attribute, so a file written `0600` reports `0666` and the mode carries no
+ * access control at all. Discovered when the Windows smoke job failed on a mode
+ * assertion, which is the useful direction for it to have been discovered in.
+ *
+ * The mode is therefore checked rather than assumed, and a platform where it
+ * means nothing says so. Silently accepting `0666` because "chmod returned
+ * without error" would leave an owner believing in a protection they do not
+ * have, which is worse than the missing protection itself.
+ */
+export function protectionOf(mode: number, platform: string): CredentialProtection {
+  const bits = mode & 0o777;
+  if (bits === CREDENTIALS_MODE) return { enforced: true, mode: bits, reason: null };
+  if (platform === 'win32') {
+    return {
+      enforced: false,
+      mode: bits,
+      reason:
+        'Windows does not implement POSIX file modes -- chmod there toggles the read-only ' +
+        'attribute and nothing else -- so this file is protected only by the ACLs of the ' +
+        'directory holding it. Prefer an environment secret over this file on Windows until ' +
+        'the OS keychain path D22.1 names is implemented.',
+    };
+  }
+  return {
+    enforced: false,
+    mode: bits,
+    reason: `the credential file is mode 0${bits.toString(8)} rather than 0600`,
+  };
+}
 
 export class AuthError extends Error {
   constructor(message: string) {
