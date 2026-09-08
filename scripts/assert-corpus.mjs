@@ -54,6 +54,8 @@ export const WINDOWS_SMOKE_PROJECTS = [
   // The floor below counts passing tests, and this project contributes the
   // ones that need no database.
   'evidence-plane',
+  'seed-import',
+  'harness',
 ];
 
 /** Floors. Raise them when a whole area of the suite lands, never lower them to go green. */

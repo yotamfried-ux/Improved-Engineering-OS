@@ -223,6 +223,15 @@ jobs:
         # its exit-code rule has to hold identically wherever the agent runs.
         run: pnpm vitest run --project telemetry --project evidence-derivation --project claude-code
 
+      - name: The seed importer and the trial harness on win32
+        # Both were linux-only, and the Stage 2 gate said so: H1 and H9 came
+        # back `unproven` because two of their named tests had never been
+        # observed here. Declaring those tests platform-independent would have
+        # been the cheap way out; running them is the honest one. The harness
+        # especially -- its containment probes resolve real paths and follow
+        # real symlinks, which is exactly the kind of thing that differs.
+        run: pnpm vitest run --project seed-import --project harness
+
       - name: The Evidence Plane suite on win32
         # No PostgreSQL service here, so this SKIPS -- and recording the skip is
         # the point. The win32 record then says "unproven on this platform"
@@ -266,7 +275,7 @@ jobs:
           set -euo pipefail
           pnpm report:collect qualification/evidence/platforms/win32.json \
             --stage 2 \
-            --projects core,snapshot-emit,sqlite-qualification,releases,store-sqlite,mcp,cli,resolver,telemetry,evidence-derivation,claude-code,evidence-plane \
+            --projects core,snapshot-emit,sqlite-qualification,releases,store-sqlite,mcp,cli,resolver,telemetry,evidence-derivation,claude-code,evidence-plane,seed-import,harness \
             --commit "${{ github.sha }}" \
             --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           echo '--- win32 platform record (verbatim) ---'
