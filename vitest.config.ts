@@ -121,6 +121,15 @@ export default defineConfig({
       },
       {
         test: {
+          name: 'evidence-plane',
+          root: './supabase',
+          include: ['tests/**/*.test.ts'],
+          environment: 'node',
+          ...REAL_IO,
+        },
+      },
+      {
+        test: {
           name: 'evidence-derivation',
           root: './packages/evidence-derivation',
           include: ['test/**/*.test.ts'],

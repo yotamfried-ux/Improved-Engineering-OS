@@ -424,6 +424,68 @@ timeouts. A timeout is a liveness backstop, not an assertion: raising it weakens
 no claim these suites make, and leaving it where scheduling pressure decides the
 verdict was reporting a schedule as a determinism defect.
 
+## 4f. Stage 2 findings
+
+### S-1 Prettier invalidated every seeded `content_hash`
+
+`knowledge/` was not in `.prettierignore`, so `pnpm format` rewrote quote style
+and blank lines in the thirteen imported asset bodies _after_ `tools/seed-import`
+had computed each `content_hash` over the bytes it wrote. `pnpm build:index`
+exited 1 on both platforms and the Stage 1 gate's G1 row failed.
+
+The failing check was the smaller half. `content_hash` is what ties a body to
+the section it was imported from at a pinned revision, and a formatter had
+quietly made that claim false for every seeded asset. The H-2 build-time
+verification caught it, doing exactly the job it was added for.
+
+Fixed by regenerating from the pinned revision, adding `knowledge/` to
+`.prettierignore` for the same reason `contracts/capabilities.yaml` and
+`qualification/evidence/` are already there, and closing the gap that let it
+reach CI: `pnpm test` read only fixture trees, never the committed one, so
+`packages/releases/test/committed-tree.test.ts` now holds the real corpus to the
+rule the build applies. Verified as a control by editing a body.
+
+### S-2 The ingest function relayed upstream error text into its response
+
+`detail` was the database's own error message, so whatever the plane put in an
+error — a parameter value, a row, in principle a token — came back to the
+caller. Found by a test written to assert the opposite.
+
+The rule that replaced it is narrow enough to hold: nothing arriving from
+outside the function is written into a response body. Refusals carry a fixed
+sentence chosen locally; the raw message goes to the function's own log, where
+an operator can read it and a client cannot.
+
+### S-3 F12 knew one spelling of "hash"
+
+The rule says canonical and identity hashing lives in one place, and its scan
+looked for `createHash(`. A Deno Edge Function has no `node:crypto` and hashes
+with `crypto.subtle.digest` — so the day `supabase/functions/ingest` appeared,
+F12 would have been blind to every hash it computed while continuing to report
+green.
+
+The scan now knows both spellings, with a control for each. The C-02 credential
+exception moved from `not-yet-created` to `active` in `fitness/allowlist.yaml`
+because its stage arrived, and a second test asserts that site hashes a token
+and reaches for no canonical serialization — an allowance granted for opaque
+bytes must not become a licence to mint identities.
+
+### Explicitly not done at Stage 2
+
+`candidates`, `promotion_proposals`, and the `read_proposals` / `ack_proposal`
+RPCs that guide §5.9's table lists for `proposal.*` principals. They belong to
+Stage 10's promotion policy. An empty table with a stub RPC would answer "no
+proposals" to a caller who could not tell that from "proposals are not
+implemented here". The `proposal.read` and `proposal.ack` scopes are already in
+the `principals` constraint, so adding them later needs no migration of that
+table.
+
+The Evidence Plane is also **not deployed**. The migration and the function are
+executed against a real PostgreSQL in CI, which proves their behaviour; it does
+not prove they work on Supabase, whose platform supplies `auth.uid()`, the
+`service_role` identity and the Edge Function runtime. That remains UNPROVEN
+until the owner's Pro project exists (D30) and the deploy runs.
+
 ## 4b. Owner decisions
 
 | Item                                   | Decision                                                                                                                                                                                                                                                            | Date       | Consequence                                                                                                                                                                                                                                                                                                                                                                                |

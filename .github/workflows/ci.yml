@@ -29,6 +29,33 @@ jobs:
     name: linux (primary)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
+    # The Evidence Plane's guarantees -- D36's classification authority, D22's
+    # credential boundary, RLS denying by default -- are enforced by the
+    # database, so they are tested by executing the migration against a real
+    # PostgreSQL rather than by reading the SQL. Without this service the suite
+    # reports itself SKIPPED, which the qualification gate counts as unproven;
+    # it never reports a pass it did not earn.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ieos_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Local to the runner and thrown away with it. Not a credential in any
+      # sense F9 is about, but it is still the only connection string in the
+      # repository, so it is a throwaway password on a container that accepts
+      # connections from this job alone.
+      IEOS_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ieos_test
+
     steps:
       - uses: actions/checkout@v5
 
@@ -69,6 +96,28 @@ jobs:
         # A runner that discovers nothing exits 0. This asserts a non-vacuous
         # corpus, so "all tests passed" cannot mean "no tests ran".
         run: node scripts/assert-corpus.mjs
+
+      - name: The Evidence Plane suite really ran here
+        # It skips itself when no database is reachable, which is the honest
+        # answer on a developer's laptop and the wrong one in CI: this job
+        # provides a database, so a skip here means the service or the client
+        # is missing and the D22/D36 guarantees went unchecked while the job
+        # stayed green. Fails closed on exactly that.
+        run: |
+          set -euo pipefail
+          psql "$IEOS_TEST_DATABASE_URL" -tAc 'select 1' > /dev/null
+          node node_modules/vitest/vitest.mjs run --project evidence-plane \
+            --reporter=json --outputFile=/tmp/evidence-plane.json > /dev/null
+          node -e '
+            const r = require("/tmp/evidence-plane.json");
+            const passed = r.numPassedTests ?? 0;
+            const pending = (r.numTotalTests ?? 0) - passed - (r.numFailedTests ?? 0);
+            if (pending > 0 || passed < 20) {
+              console.error(`Evidence Plane suite did not run: ${passed} passed, ${pending} skipped`);
+              process.exit(1);
+            }
+            console.log(`Evidence Plane: ${passed} tests executed against PostgreSQL`);
+          '
 
       - name: Collect this platform's qualification evidence
         run: |

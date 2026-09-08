@@ -8,7 +8,7 @@
  * without arranging the world into that state.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import {
@@ -32,6 +32,17 @@ import { DEFAULT_ORIGIN_CLASS, runSchema, type RunRecord } from '@ieos/core';
 import { deriveAttribution, investigate, renderInvestigation } from '@ieos/evidence-derivation';
 import { buildRuntimeReport, formatRuntimeReport, type RuntimeObservations } from './doctor.ts';
 import { COMMANDS, describeCommand, isCommand, isImplemented } from './commands.ts';
+import {
+  AuthError,
+  CREDENTIALS_MODE,
+  credentialsFor,
+  enrolmentStatement,
+  mintToken,
+  revocationStatement,
+  rotationStatement,
+  tokenHashLiteral,
+  type Credentials,
+} from './auth.ts';
 import {
   BEGIN_MARKER,
   END_MARKER,
@@ -381,6 +392,133 @@ async function runInvestigate(): Promise<number> {
   }
 }
 
+/**
+ * `ieos auth enroll|rotate|revoke` (D22.1).
+ *
+ * The token is minted here, written to a 0600 file, and shown once. What is
+ * NOT here is any call to the Evidence Plane: writing a `principals` row is an
+ * owner-authenticated action, and giving this command a credential able to
+ * perform it would put a privileged key on every machine that runs `ieos` --
+ * the exact thing D22 is built to avoid. So it prints the statement for the
+ * owner to apply, carrying the token HASH and never the token.
+ */
+async function runAuth(): Promise<number> {
+  const subcommand = args[1] ?? '';
+  const credentialsPath = flag('--credentials') ?? join(repoRoot, '.ieos', 'credentials.json');
+  const installationId =
+    flag('--installation') ??
+    readInstallationId(credentialsPath) ??
+    mintId('inst', systemClock, systemRandom);
+
+  try {
+    switch (subcommand) {
+      case 'enroll':
+      case 'rotate': {
+        const ownerId = flag('--owner');
+        if (subcommand === 'enroll' && ownerId === undefined) {
+          // The owner id is a fact about the project, not something a tool may
+          // pick. Refusing is better than emitting a statement with a
+          // placeholder someone would paste unedited.
+          process.stderr.write(
+            'usage: ieos auth enroll --owner <supabase auth user uuid> [--label <name>]\n',
+          );
+          return 2;
+        }
+        if (existsSync(credentialsPath) && subcommand === 'enroll') {
+          process.stderr.write(
+            `${credentialsPath} already exists. Use \`ieos auth rotate\` to replace the token ` +
+              'without minting a second installation identity.\n',
+          );
+          return 4;
+        }
+
+        const token = mintToken(systemRandom);
+        const credentials = credentialsFor({
+          installationId,
+          token,
+          nowIso: systemClock.nowIso(),
+        });
+        mkdirSync(dirname(credentialsPath), { recursive: true });
+        writeFileSync(credentialsPath, `${JSON.stringify(credentials, null, 2)}\n`, {
+          encoding: 'utf8',
+          mode: CREDENTIALS_MODE,
+        });
+        // Written with the mode AND chmodded: `writeFileSync`'s mode applies
+        // only when it creates the file, so a rotation over an existing
+        // world-readable file would keep the old permissions.
+        chmodSync(credentialsPath, CREDENTIALS_MODE);
+
+        const statement =
+          subcommand === 'enroll'
+            ? enrolmentStatement({
+                installationId,
+                ownerId: ownerId as string,
+                tokenHash: tokenHashLiteral(token),
+                expiresAt: credentials.expires_at,
+                label: flag('--label') ?? null,
+              })
+            : rotationStatement({
+                installationId,
+                tokenHash: tokenHashLiteral(token),
+                expiresAt: credentials.expires_at,
+              });
+
+        process.stdout.write(`installation: ${installationId}\n`);
+        process.stdout.write(`credential:   ${credentialsPath} (mode 0600)\n`);
+        process.stdout.write(`expires:      ${credentials.expires_at}\n\n`);
+        process.stdout.write('Apply this against your Evidence Plane, as the owner:\n\n');
+        process.stdout.write(`${statement}\n\n`);
+        // The token itself is deliberately absent from this output. It is in
+        // the credential file, shown once, and printing it here would put it in
+        // a terminal scrollback and a CI log.
+        process.stdout.write(
+          'The statement carries the token HASH. The token is in the credential file above ' +
+            'and is not printed; copy it from there for a remote environment secret.\n',
+        );
+        return 0;
+      }
+
+      case 'revoke': {
+        process.stdout.write('Apply this against your Evidence Plane, as the owner:\n\n');
+        process.stdout.write(`${revocationStatement(installationId)}\n\n`);
+        if (existsSync(credentialsPath)) {
+          rmSync(credentialsPath, { force: true });
+          process.stdout.write(`removed ${credentialsPath}\n`);
+        }
+        // Revocation is not complete until the statement runs. Saying so is the
+        // difference between a command that revoked and one that prepared a
+        // revocation, and an owner who confuses them believes a token is dead.
+        process.stdout.write(
+          'The local credential is gone. The installation is NOT revoked until the statement ' +
+            'above has run against the Evidence Plane.\n',
+        );
+        return 0;
+      }
+
+      default:
+        process.stderr.write('usage: ieos auth <enroll|rotate|revoke> [options]\n');
+        return 2;
+    }
+  } catch (error) {
+    if (error instanceof AuthError) {
+      process.stderr.write(`${error.message}\n`);
+      return 4;
+    }
+    throw error;
+  }
+}
+
+/** The installation this machine already has, if any. */
+function readInstallationId(credentialsPath: string): string | undefined {
+  if (!existsSync(credentialsPath)) return undefined;
+  try {
+    const parsed = JSON.parse(readFileSync(credentialsPath, 'utf8')) as Partial<Credentials>;
+    return typeof parsed.installation_id === 'string' ? parsed.installation_id : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function notYetImplemented(name: string): number {
   // Deliberately an error, not an empty success. A command that exits 0 having
   // done nothing is indistinguishable from one that worked, and an agent
@@ -414,6 +552,8 @@ const exitCode = await (async (): Promise<number> => {
       return await runInit();
     case 'investigate':
       return await runInvestigate();
+    case 'auth':
+      return await runAuth();
     default:
       process.stderr.write(
         `\`ieos ${command}\` is listed as implemented but has no handler. ` +

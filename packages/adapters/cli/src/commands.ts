@@ -38,7 +38,7 @@ export type Command = (typeof COMMANDS)[number];
  * corrects itself when the commands land, instead of waiting for someone to
  * notice.
  */
-export const IMPLEMENTED_COMMANDS: readonly Command[] = ['doctor', 'init', 'investigate'];
+export const IMPLEMENTED_COMMANDS: readonly Command[] = ['doctor', 'init', 'investigate', 'auth'];
 
 export function isImplemented(command: Command): boolean {
   return IMPLEMENTED_COMMANDS.includes(command);
@@ -78,7 +78,7 @@ export function describeCommand(command: Command): string {
     case 'observe':
       return 'Record an observation. Staging only; never canonical knowledge.';
     case 'auth':
-      return 'Manage the installation credential. Arrives at Stage 2 (D22); not implemented yet.';
+      return 'Mint, rotate or revoke the installation credential (D22). Prints the statement the owner applies.';
     case 'investigate':
       return "Print a run's raw event timeline and the attribution derived from it.";
   }

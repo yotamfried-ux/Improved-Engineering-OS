@@ -273,15 +273,40 @@ describe('F9 -- no key-shaped secret values anywhere', () => {
 });
 
 describe('F12 -- one canonical hashing site', () => {
-  const HASH_CALL = /createHash\s*\(/u;
+  // Two spellings, because there are two runtimes. Node hashes with
+  // `createHash`; a Deno Edge Function has no `node:crypto` and hashes with
+  // `crypto.subtle.digest`. A scan that knew only the first would have let the
+  // ingest function hash anything it liked -- which is not hypothetical, it is
+  // what the first version of this rule did the day that function appeared.
+  const HASH_CALL = /createHash\s*\(|subtle\.digest\s*\(/u;
   const CANONICAL_SITE = 'packages/core/src/hashing.ts';
 
-  it('createHash appears only in the canonical implementation', () => {
+  /**
+   * The C-02 exception, now active: credential verification in the ingest
+   * function (fitness/allowlist.yaml). It hashes an opaque random token, never
+   * a structured domain object, so it cannot mint an EOS identity -- which is
+   * the property C-02 turns on, not the choice of API.
+   */
+  const CREDENTIAL_HASHING_SITE = 'supabase/functions/ingest';
+
+  it('hashing appears only in the canonical implementation and the one C-02 site', () => {
     const files = readSourceFiles(['packages', 'tools', 'supabase', 'fitness'], {
       exclude: [...BASE_EXCLUDE, 'packages/core/test'],
     });
-    const violations = findMatches(files, HASH_CALL).filter((v) => v.path !== CANONICAL_SITE);
+    const violations = findMatches(files, HASH_CALL).filter(
+      (v) => v.path !== CANONICAL_SITE && !v.path.startsWith(`${CREDENTIAL_HASHING_SITE}/`),
+    );
     expect(violations, `F12 violations:\n${render(violations)}`).toEqual([]);
+  });
+
+  it('the C-02 site hashes a token and nothing structured', () => {
+    // The exception is for credential verification. If that site ever reached
+    // for canonical serialization, it would be minting identities under an
+    // allowance granted for opaque bytes.
+    const files = readSourceFiles([CREDENTIAL_HASHING_SITE]);
+    expect(files.length).toBeGreaterThan(0);
+    expect(findMatches(files, HASH_CALL).length).toBeGreaterThan(0);
+    expect(findMatches(stripAllComments(files), /canonicaliz|jcs\(|rfc\s?8785/iu)).toEqual([]);
   });
 
   it('the canonical site exists and does hash', () => {
@@ -290,9 +315,12 @@ describe('F12 -- one canonical hashing site', () => {
     expect(findMatches(readSourceFiles([CANONICAL_SITE]), HASH_CALL).length).toBeGreaterThan(0);
   });
 
-  it('control: the scan fires on a second hashing site', () => {
+  it('control: the scan fires on a second hashing site, in either spelling', () => {
     expect(
       findMatches(known("const d = createHash('sha256').update(x).digest();"), HASH_CALL),
+    ).toHaveLength(1);
+    expect(
+      findMatches(known("const d = await crypto.subtle.digest('SHA-256', bytes);"), HASH_CALL),
     ).toHaveLength(1);
   });
 
@@ -307,12 +335,20 @@ describe('F12 -- one canonical hashing site', () => {
     expect(violations, `F12 violations:\n${render(violations)}`).toEqual([]);
   });
 
-  it('the two permitted C-02 exceptions do not exist yet', () => {
+  it('the C-02 exception that has not reached its stage still does not exist', () => {
     // Pre-registered in fitness/allowlist.yaml as forbidden-until-their-stage,
-    // so a stray createHash( in either location fails today rather than after
-    // the directory that would excuse it appears.
+    // so a stray hash call there fails today rather than after the directory
+    // that would excuse it appears. The launcher is Stage 4.
     expect(exists('packages/launcher')).toBe(false);
-    expect(exists('supabase/functions/ingest')).toBe(false);
+  });
+
+  it('the ingest exception is active because its stage arrived, not because it appeared', () => {
+    // supabase/functions/ingest exists from Stage 2, which is the stage its
+    // allowlist entry names. The entry's status moved with it; a directory
+    // appearing early would have failed the test above instead.
+    expect(exists(CREDENTIAL_HASHING_SITE)).toBe(true);
+    const allowlist = readFileSync(join(REPO_ROOT, 'fitness/allowlist.yaml'), 'utf8');
+    expect(allowlist).toMatch(/supabase\/functions\/ingest\/\*\*\n\s+status: active/u);
   });
 });
 
