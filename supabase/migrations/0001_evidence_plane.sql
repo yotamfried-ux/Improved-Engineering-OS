@@ -589,13 +589,24 @@ $$;
 --
 -- `ieos_principal` is not granted at all: it is the resolver the others call,
 -- and exposing it would turn the RPC surface into a token oracle.
+--
+-- Named explicitly to anon, authenticated and service_role, not just public
+-- (S-5, found against a real deploy). A Supabase project's own default
+-- privileges grant EXECUTE on every new function in this schema DIRECTLY to
+-- those three roles, before this migration ever runs -- not to PUBLIC. A
+-- `revoke ... from public` does not touch a grant made straight to a named
+-- role, so it left every RPC here, `ieos_principal` included, callable by
+-- `anon` on the platform this was written for. Bare PostgreSQL has no such
+-- default, which is exactly why this passed the local suite the first time.
 
-revoke all on function ieos_principal(bytea, text) from public;
-revoke all on function register_run(bytea, text, text, text, text, text) from public;
-revoke all on function ingest_events(bytea, jsonb) from public;
-revoke all on function ingest_observations(bytea, jsonb) from public;
-revoke all on function ingest_context_snapshots(bytea, jsonb) from public;
-revoke all on function read_minimal(bytea, text, text) from public;
+revoke all on function ieos_principal(bytea, text) from public, anon, authenticated, service_role;
+revoke all on function register_run(bytea, text, text, text, text, text)
+  from public, anon, authenticated, service_role;
+revoke all on function ingest_events(bytea, jsonb) from public, anon, authenticated, service_role;
+revoke all on function ingest_observations(bytea, jsonb) from public, anon, authenticated, service_role;
+revoke all on function ingest_context_snapshots(bytea, jsonb)
+  from public, anon, authenticated, service_role;
+revoke all on function read_minimal(bytea, text, text) from public, anon, authenticated, service_role;
 
 grant execute on function register_run(bytea, text, text, text, text, text) to service_role;
 grant execute on function ingest_events(bytea, jsonb) to service_role;

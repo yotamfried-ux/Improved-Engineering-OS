@@ -504,6 +504,43 @@ macOS that fallback is `0600`. On Windows it is the directory's ACLs and nothing
 more. This is recorded rather than fixed at Stage 2, and it is the reason the
 warning names an environment secret as the better option there.
 
+### S-5 A Supabase project's own default privileges reopened every RPC
+
+Found on the first real deploy, not in CI: the migration applied cleanly to a
+fresh Supabase project, but `select has_function_privilege('anon', ...)`
+against the live database came back `true` for all six functions, `ieos_
+principal` included — the one the migration's own comment says "is not
+granted at all... exposing it would turn the RPC surface into a token
+oracle."
+
+The cause was invisible to the local suite by construction. A Supabase
+project runs `alter default privileges in schema public grant execute on
+functions to anon, authenticated, service_role` once, before any migration
+of its own ever executes, so every function `create`d afterward inherits
+that grant _directly on the named roles_ — not through `PUBLIC`. `0001`'s
+closing block only ever said `revoke all on function ... from public`, which
+undoes a grant made to `PUBLIC` and does nothing to one made straight to
+`anon`. Bare PostgreSQL has no such standing default, so the local harness's
+`create role anon nologin` produced a role with no grant to revoke, the
+existing test asserting the closure (`grants the RPCs to service_role and to
+nobody else`) had nothing to catch, and it passed — truthfully, for an
+environment that had never reproduced the platform behaviour it was supposed
+to be checking.
+
+Fixed at the root, in that order: `supabase/tests/harness.ts` now runs that
+same `alter default privileges` statement before applying a migration, so a
+local run reproduces the platform's starting state rather than a friendlier
+one. Re-running the suite unchanged then turned the two grant assertions red
+— confirming the harness fix, not just the migration fix, before either was
+trusted. `0001_evidence_plane.sql`'s closing block now names `anon`,
+`authenticated` and `service_role` explicitly in every `revoke`, alongside
+`public`. Applied to the live project as a second statement (Supabase's own
+migration ledger, not a new file in this repository — the git history stays
+one correct migration, not one migration and a patch), and reverified by
+querying `has_function_privilege` directly against the live database: all
+six functions closed exactly as designed, and `get_advisors(type: security)`
+went from six `SECURITY DEFINER`-reachable-by-`anon` warnings to zero.
+
 ### Explicitly not done at Stage 2
 
 `candidates`, `promotion_proposals`, and the `read_proposals` / `ack_proposal`
@@ -514,11 +551,28 @@ implemented here". The `proposal.read` and `proposal.ack` scopes are already in
 the `principals` constraint, so adding them later needs no migration of that
 table.
 
-The Evidence Plane is also **not deployed**. The migration and the function are
-executed against a real PostgreSQL in CI, which proves their behaviour; it does
-not prove they work on Supabase, whose platform supplies `auth.uid()`, the
-`service_role` identity and the Edge Function runtime. That remains UNPROVEN
-until the owner's Pro project exists (D30) and the deploy runs.
+**The Evidence Plane is now deployed** to a real Supabase project (`improved-
+engineering-os`, ref `hvfpblugxqxwmmqqksjs`, `eu-central-1`), created on the
+organization's **Free** plan — the owner had not yet upgraded to Pro at the
+time of deploy, so D30's "no inactivity pause; daily backups" guarantee does
+not hold yet. This is a placeholder for proving the deploy path works, not a
+substitute for the Pro project D30 requires; the org's Free plan pauses the
+project after 7 idle days, which the deployed function does nothing to
+prevent. Proven directly against the live project (schema created, RLS
+enabled on every table, the six functions grant exactly `service_role` for
+five and nobody for `ieos_principal`, zero security advisor findings): the
+migration's behaviour on Supabase itself, not only on a bare PostgreSQL
+standing in for it. **Not proven**: an actual round trip through the
+deployed `ingest` Edge Function. This session's own egress policy blocks
+outbound HTTPS to `*.supabase.co`, so no request reached the function from
+here, and there is no tool in this session to inspect or set Edge Function
+secrets — so whether `SUPABASE_SECRET_KEYS` is populated in the function's
+running environment, which its own code depends on to authenticate to the
+database, is UNPROVEN rather than assumed. The function's request-handling
+logic is proven independently (`supabase/tests/ingest-function.test.ts`, 36
+cases, no network); the deploy entrypoint that wires it to `Deno.serve` and a
+real RPC call (`supabase/functions/ingest/serve.ts`) is new and has not run
+outside this deploy.
 
 ## 4b. Owner decisions
 
