@@ -574,6 +574,19 @@ cases, no network); the deploy entrypoint that wires it to `Deno.serve` and a
 real RPC call (`supabase/functions/ingest/serve.ts`) is new and has not run
 outside this deploy.
 
+**Update, same day: the organization is now on Pro.** The owner upgraded
+`yotamfried-ux's Org` through the Supabase Dashboard billing page after the
+paragraph above was written. Reverified directly: `get_organization` returns
+`plan: "pro"`. D30's hosting requirement — no inactivity pause, daily
+backups — now holds for the deployed project as it stands, closing the one
+placeholder condition the paragraph above named. The two findings that
+remain UNPROVEN are unrelated to the plan tier and unchanged by this
+upgrade: an actual HTTP round trip through the deployed `ingest` function
+(this session's egress policy still blocks `*.supabase.co`, and there is
+still no tool here to inspect Edge Function secrets), and the weekly
+`pg_dump` export plus restore-drill D30 also names, which is scheduling and
+tooling work not yet built.
+
 ## 4b. Owner decisions
 
 | Item                                   | Decision                                                                                                                                                                                                                                                            | Date       | Consequence                                                                                                                                                                                                                                                                                                                                                                                |
