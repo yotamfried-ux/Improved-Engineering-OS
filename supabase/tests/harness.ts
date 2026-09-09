@@ -105,6 +105,17 @@ export function applyMigration(migrationPath: string): void {
       if not exists (select 1 from pg_roles where rolname = 'authenticated') then create role authenticated nologin; end if;
       if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role nologin bypassrls; end if;
     end $do$;
+    -- The platform default privilege a bare \`create role\` does not reproduce
+    -- (S-5). Every real Supabase project grants EXECUTE on every new function
+    -- in \`public\` directly to anon, authenticated AND service_role -- not to
+    -- PUBLIC -- as a standing default privilege set before any migration ever
+    -- runs. A migration's own \`revoke ... from public\` does not touch a grant
+    -- made directly to a named role, so without this line here a migration
+    -- that revoked only from \`public\` would pass locally and still leave every
+    -- RPC callable by \`anon\` on the real platform -- invisibly, since nothing
+    -- in a bare PostgreSQL would ever have granted it in the first place.
+    alter default privileges in schema public
+      grant execute on functions to anon, authenticated, service_role;
   `);
   const result = spawnSync(
     'psql',
