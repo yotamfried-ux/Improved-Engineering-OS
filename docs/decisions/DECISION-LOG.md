@@ -587,6 +587,92 @@ still no tool here to inspect Edge Function secrets), and the weekly
 `pg_dump` export plus restore-drill D30 also names, which is scheduling and
 tooling work not yet built.
 
+## 4g. Pre-Stage-3 readiness (owner-directed audit, 2026-09-09)
+
+Stage 2 and its Supabase follow-up (#7) are merged; Stage 3 is next. Before
+touching the vertical slice itself, the owner asked for every real Stage 3
+entry prerequisite to be closed, and only those — not a wish list. This
+section is that audit, done by re-reading the frozen guide's own Stage 3
+section rather than by inferring blockers that would merely be nice to have.
+
+**Independently reverified, not assumed from the earlier session's claims:**
+`main` at `bdb45d9`; Stage 0/1/2 qualification reports each read `Verdict:
+PASS` (6/0/0, 9/0/0, 11/0/0 respectively) directly from the committed report
+files; the live Supabase project (`hvfpblugxqxwmmqqksjs`) is
+`ACTIVE_HEALTHY` on organization plan `pro`; `ingest` is `ACTIVE`; both
+migrations (`0001_evidence_plane`, `0001b_close_platform_default_grants`)
+are present in Supabase's own ledger; `has_function_privilege` against the
+live database confirms the S-5 fix still holds (all six functions closed to
+anon/authenticated, five granted to service_role, `ieos_principal` granted
+to nobody); `get_advisors(type: security)` returns zero findings.
+
+**Credential hygiene.** The disposable test principal minted in the prior
+turn (`inst_roundtrip_test`) was exposed in conversation output before the
+owner had a chance to use it. Checked first, not assumed: `raw_events` and
+`observations` show zero rows under that installation id and
+`last_seen_at` is null, so it was never actually presented to the plane.
+Revoked anyway (`revoked_at` now set), since exposure in chat is the
+compromise, not use. A second, distinct disposable principal
+(`inst_stage3_readiness_probe`, same three minimal scopes, 2-hour expiry)
+was minted for the one round-trip test described below; neither token's
+plaintext appears in this file, a PR body, or any commit.
+
+**The live HTTP round trip remains the one open item.** `query_logs` on
+`function_edge_logs` shows the deployed function has already received two
+real inbound requests (`POST | 401 | .../ingest/read_minimal`) from before
+either test principal existed — proof the function is reachable from the
+public internet and that its refusal path runs, but not proof of a
+successful, persisted round trip. This session's own egress policy still
+returns `403` on a direct re-probe of `https://hvfpblugxqxwmmqqksjs
+.supabase.co`, confirmed again rather than assumed unchanged from the S-5
+entry above. Per this project's standing rule, that is not routed around.
+**Status: UNPROVEN, pending one command the owner runs externally**, after
+which the resulting row is checked directly in `raw_events` before this
+entry is updated. Once closed, this is recorded as post-Stage-2 /
+pre-Stage-3 **operational evidence** — it is not a stage gate and does not
+touch either the Stage 2 report or its verdict.
+
+**C-5 reconciled: the real primary-agent driver is Stage 3's own first
+task, not a prerequisite to starting it.** The frozen guide's Stage 3
+section describes exactly one deliverable — "at least three independent
+tasks with the primary agent only... driven by the harness" (T-07) — and
+never separates "build the driver" from "run the trials" into different
+stages, unlike Stage 8, which names building the _second_ driver as its own
+explicit deliverable. `tools/harness/src/driver.ts`'s own docstring already
+said as much when it was written: "Implemented at Stage 2/3 for the primary
+agent." The `AgentDriver` port and `FakeAgentDriver` test double exist,
+untouched by this audit, and are exactly what a real implementation is
+meant to satisfy — this is confirmed ready, not built now. One thing Task 1
+must also settle that this audit does not: **O-3, which agent is primary,
+is still formally open** (`docs/plan/stage-0-plan.md`: "Not chosen... Owner/
+stage decision; no evidence exists yet"). `packages/adapters/claude-code`
+already exists from Stage 2's hook work, which is suggestive but is
+infrastructure for whichever agent ends up primary, not a decision — Task 1
+still has to make that decision explicit before the driver it writes can be
+anything but speculative.
+
+**D30 reconciled: the weekly `pg_dump` / restore-drill is not a Stage 3
+gate.** Three independent places in the frozen guide tie it to release
+candidates, not to Stage 3: D30's own row ("restore drill **each RC**"),
+D30's prose ("a restore drill into a scratch project **at every RC**"), and
+Stage 17's deliverables ("Evidence Plane restore drill into a scratch
+Supabase project (D30)"); the open-parameters register lists the drill's
+timing as "Stage 17" outright. Nothing in the guide's Stage 3 section
+mentions either. Recorded as **non-blocking debt**, trigger: before the
+first `1.0.0-rc.N` is cut (Stage 17) — named explicitly rather than left
+ambiguous, per the owner's instruction not to silently leave it that way.
+
+**Classification of every item this audit considered:**
+
+| Item                                            | Classification                      | Why                                                                                                                                                                                                          |
+| ----------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Live HTTP round trip through `ingest`           | **BLOCKER BEFORE STAGE 3**          | Stage 3's trials (T-07) require telemetry to actually reach the plane; that path is currently proven only in unit tests and by two unrelated 401s, not by a successful, persisted event from this deployment |
+| Real primary-agent `AgentDriver` implementation | **REQUIRED DURING STAGE 3**         | The guide names it as part of T-07 itself, not a separate prior stage; the port is ready and waiting, per C-5                                                                                                |
+| O-3 (which agent is primary)                    | **REQUIRED DURING STAGE 3**         | Bound to the driver decision above; not evidenced by anything built so far                                                                                                                                   |
+| D30 weekly `pg_dump` + restore drill            | **NON-BLOCKING DEBT**               | Guide ties it to Stage 17 (RC) in three places; not mentioned in Stage 3's own text                                                                                                                          |
+| Stage 0/1/2 report regression                   | **checked, not a blocker**          | All three independently reverified PASS on `main` at `bdb45d9`; nothing about this audit's work touches their evidence                                                                                       |
+| CodeRabbit / independent review of #6, #7       | **NON-BLOCKING DEBT, pre-existing** | Recorded already in both PR bodies; Free-tier CodeRabbit skips real review; unrelated to Stage 3 entry                                                                                                       |
+
 ## 4b. Owner decisions
 
 | Item                                   | Decision                                                                                                                                                                                                                                                            | Date       | Consequence                                                                                                                                                                                                                                                                                                                                                                                |
