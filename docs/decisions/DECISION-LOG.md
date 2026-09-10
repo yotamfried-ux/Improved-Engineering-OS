@@ -617,20 +617,65 @@ compromise, not use. A second, distinct disposable principal
 was minted for the one round-trip test described below; neither token's
 plaintext appears in this file, a PR body, or any commit.
 
-**The live HTTP round trip remains the one open item.** `query_logs` on
-`function_edge_logs` shows the deployed function has already received two
-real inbound requests (`POST | 401 | .../ingest/read_minimal`) from before
-either test principal existed — proof the function is reachable from the
-public internet and that its refusal path runs, but not proof of a
-successful, persisted round trip. This session's own egress policy still
-returns `403` on a direct re-probe of `https://hvfpblugxqxwmmqqksjs
-.supabase.co`, confirmed again rather than assumed unchanged from the S-5
-entry above. Per this project's standing rule, that is not routed around.
-**Status: UNPROVEN, pending one command the owner runs externally**, after
-which the resulting row is checked directly in `raw_events` before this
-entry is updated. Once closed, this is recorded as post-Stage-2 /
-pre-Stage-3 **operational evidence** — it is not a stage gate and does not
-touch either the Stage 2 report or its verdict.
+**The live HTTP round trip is PROVEN** (2026-09-10, live project
+`hvfpblugxqxwmmqqksjs`). This is post-Stage-2 / pre-Stage-3 **operational
+evidence** — not a stage gate. It does not touch the Stage 2 report or its
+verdict, which were closed on the evidence they were designed to measure.
+
+The chain, each link observed rather than inferred: an external HTTP POST
+to `.../functions/v1/ingest/ingest_events` carrying only an installation
+token → the deployed Edge Function → token authentication (the principal's
+`last_seen_at` moved to `22:36:25.929777+00`, which only the successful
+resolver path writes) → the `ingest_events` RPC → a persisted `raw_events`
+row. Verified in SQL, not from the HTTP body: `event_id`
+`evt_stage3_readiness_1`, `installation_id inst_stage3_readiness_probe`,
+`emitter_id emt_readiness`, `sequence 0`, `event_type tool.call`,
+`occurred_at`/`observed_at` as sent, `ingested_at 22:36:25.929777+00`
+server-stamped an hour and a half after the client's own `occurred_at` of
+`21:00:00+00`, and `origin_class operational` — correct for an unregistered
+run (D36). The stored envelope retains neither `origin_class` nor
+`ingested_at`.
+
+**Negative controls, all against the live deployment:** a second event
+(`evt_stage3_readiness_2`) that _did_ carry `"origin_class":"qualification"`
+in its payload was stored as `operational` — a client cannot promote its own
+evidence. A malformed token was refused `401 malformed_installation_token`.
+After revoking the probe credential, the same request was refused `403
+revoked_installation_token`. Neither refused call wrote a row.
+
+**Idempotent retry: `count: 1`, no duplicate.** Re-sending the identical
+event returns `{"count":1,"accepted":["evt_stage3_readiness_1"]}` and the
+table still holds exactly one row for that id, with `ingested_at` unchanged
+from the original insert.
+
+**A false alarm worth recording, because it nearly became a "finding".** An
+earlier attempt at the retry returned `count: 0` twice, which contradicts
+that contract, while replaying the identical RPC directly in SQL returned
+`count: 1` every time. That looked like a transport-layer defect, and was
+held open as a blocker rather than written off. It was neither. A temporary
+diagnostic function — the same accepted-SELECT, reporting its own
+internals — was called over the _same_ Edge Function → PostgREST path and
+returned `accepted_count: 1`, proving the transport correct
+(`session_user authenticator`, `role_setting service_role`, `current_user
+postgres`, parameters intact). The difference was `ingest_events`' empty-batch
+early return, which the diagnostic lacks. The retries had been typed into a
+fresh PowerShell window each time, where `$body` from the previous window no
+longer existed, so an empty body was sent; the function correctly answered
+`count: 0` for a zero-length batch. The contract was never actually
+exercised until it was driven server-side. **The lesson is about method, not
+code: a red result reproduced twice through one client is evidence about the
+client too, and "reproducible" is not the same as "understood".**
+
+The proof was ultimately driven from inside the project itself: this
+session's egress policy still returns `403` to `*.supabase.co` (re-probed,
+not assumed), and that block was not routed around. Instead `pg_net` — the
+extension Supabase ships for exactly this — was installed temporarily so the
+database issued the HTTP requests to its own Edge Function. Every temporary
+artifact has been removed: the diagnostic function, its log table and
+`pg_net` are dropped, the `diag` endpoint is neutralised in place (this
+toolchain has no delete-function call), and both probe credentials are
+revoked. Two test rows remain in `raw_events`, retained deliberately as the
+evidence above; the security advisor still reports zero findings.
 
 **C-5 reconciled: the real primary-agent driver is Stage 3's own first
 task, not a prerequisite to starting it.** The frozen guide's Stage 3
@@ -664,14 +709,14 @@ ambiguous, per the owner's instruction not to silently leave it that way.
 
 **Classification of every item this audit considered:**
 
-| Item                                            | Classification                      | Why                                                                                                                                                                                                          |
-| ----------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Live HTTP round trip through `ingest`           | **BLOCKER BEFORE STAGE 3**          | Stage 3's trials (T-07) require telemetry to actually reach the plane; that path is currently proven only in unit tests and by two unrelated 401s, not by a successful, persisted event from this deployment |
-| Real primary-agent `AgentDriver` implementation | **REQUIRED DURING STAGE 3**         | The guide names it as part of T-07 itself, not a separate prior stage; the port is ready and waiting, per C-5                                                                                                |
-| O-3 (which agent is primary)                    | **REQUIRED DURING STAGE 3**         | Bound to the driver decision above; not evidenced by anything built so far                                                                                                                                   |
-| D30 weekly `pg_dump` + restore drill            | **NON-BLOCKING DEBT**               | Guide ties it to Stage 17 (RC) in three places; not mentioned in Stage 3's own text                                                                                                                          |
-| Stage 0/1/2 report regression                   | **checked, not a blocker**          | All three independently reverified PASS on `main` at `bdb45d9`; nothing about this audit's work touches their evidence                                                                                       |
-| CodeRabbit / independent review of #6, #7       | **NON-BLOCKING DEBT, pre-existing** | Recorded already in both PR bodies; Free-tier CodeRabbit skips real review; unrelated to Stage 3 entry                                                                                                       |
+| Item                                            | Classification                          | Why                                                                                                                                                                                                         |
+| ----------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Live HTTP round trip through `ingest`           | **CLOSED** (was BLOCKER BEFORE STAGE 3) | Stage 3's trials (T-07) require telemetry to actually reach the plane. Proven end to end against the live deployment on 2026-09-10, with negative controls and an idempotent retry; see the paragraph above |
+| Real primary-agent `AgentDriver` implementation | **REQUIRED DURING STAGE 3**             | The guide names it as part of T-07 itself, not a separate prior stage; the port is ready and waiting, per C-5                                                                                               |
+| O-3 (which agent is primary)                    | **REQUIRED DURING STAGE 3**             | Bound to the driver decision above; not evidenced by anything built so far                                                                                                                                  |
+| D30 weekly `pg_dump` + restore drill            | **NON-BLOCKING DEBT**                   | Guide ties it to Stage 17 (RC) in three places; not mentioned in Stage 3's own text                                                                                                                         |
+| Stage 0/1/2 report regression                   | **checked, not a blocker**              | All three independently reverified PASS on `main` at `bdb45d9`; nothing about this audit's work touches their evidence                                                                                      |
+| CodeRabbit / independent review of #6, #7       | **NON-BLOCKING DEBT, pre-existing**     | Recorded already in both PR bodies; Free-tier CodeRabbit skips real review; unrelated to Stage 3 entry                                                                                                      |
 
 ## 4b. Owner decisions
 
