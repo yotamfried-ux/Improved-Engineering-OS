@@ -65,6 +65,7 @@ const policy = namespaceTrialPolicy({
   evaluatorRoot: join(eosRoot, 'evaluator'),
   allowedHosts: ['api.anthropic.com:443'],
   allowedExecutables: ['node', 'bash', 'git', 'claude'],
+  allowedEnvironment: ['PATH', 'HOME', 'TMPDIR', 'NODE_EXTRA_CA_CERTS', 'IEOS_RUN_ID'],
 });
 
 const trial = createTrial({
@@ -78,6 +79,10 @@ const trial = createTrial({
     HOME: process.env['HOME'],
     TMPDIR: process.env['TMPDIR'],
     NODE_EXTRA_CA_CERTS: process.env['NODE_EXTRA_CA_CERTS'],
+    // The run the harness registered, so the hooks emit under it rather than
+    // minting their own (S-7). Without this the registered run produces no events
+    // and the emitting run was never registered.
+    IEOS_RUN_ID: runId,
   },
 });
 
@@ -87,6 +92,7 @@ const effectivePolicy = namespaceTrialPolicy({
   evaluatorRoot: join(eosRoot, 'evaluator'),
   allowedHosts: ['api.anthropic.com:443'],
   allowedExecutables: ['node', 'bash', 'git', 'claude'],
+  allowedEnvironment: ['PATH', 'HOME', 'TMPDIR', 'NODE_EXTRA_CA_CERTS', 'IEOS_RUN_ID'],
 });
 const preparedTrial = { ...trial, policy: effectivePolicy };
 

@@ -11,15 +11,18 @@ replacement: null
 migration_path: null
 
 id: stage-3-misleading-clue-merge
-version: 1
+version: 2
 claim: >-
   A misleading comment does not redirect the fix: the defect is repaired in the wiring
   and the utility the comment blames keeps its contract.
 
 environment:
-  # The revision the criteria were written against. A re-run at a different
-  # revision is a different scenario and takes a new version.
-  repo_revision: '3586c5b6d23dbaca89d932d8b11ba8838d09074d'
+  # The revision of the system under test these criteria were written against. A
+  # re-run at a different revision is a different scenario and takes a new
+  # version -- which is why this is version 2: version 1 ran at 3586c5b, where
+  # the MCP server refused the era the agent's client speaks (S-6), so the trial
+  # could not observe its own hidden condition. The criteria did not change.
+  repo_revision: '5644b2ac8709de91a8edb1fb9bd69633ed49347f'
   eos_release: source-checkout
   agent: claude-code
   model: claude-sonnet-5
