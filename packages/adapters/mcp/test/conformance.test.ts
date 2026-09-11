@@ -154,6 +154,37 @@ describe('MCP 2026-07-28 conformance smoke', () => {
       });
     });
 
+    it('rejects a malformed envelope with invalid params', async () => {
+      await withSession(async (client) => {
+        const reply = await client.request(
+          'tools/list',
+          {},
+          {
+            'io.modelcontextprotocol/protocolVersion': MODERN_VERSION,
+          },
+        );
+        expect(reply.error?.code).toBe(-32602);
+        expect(reply.error?.message).toContain('io.modelcontextprotocol/clientCapabilities');
+      });
+    });
+
+    it('still refuses a modern-era request that names an unsupported revision', async () => {
+      // The control that must survive: serving the older era is not the same as
+      // accepting any era on a connection that claimed the modern one.
+      await withSession(async (client) => {
+        const reply = await client.request('tools/list', {}, metaEnvelope('2024-01-01'));
+        expect(reply.error?.code).toBe(-32022);
+        expect(reply.error?.data?.['supported']).toEqual([MODERN_VERSION]);
+      });
+    });
+  });
+
+  describe('the era a real client opens with is served (S-6)', () => {
+    // Split from the block above, which asserts refusals: these two assert
+    // service, and a describe title claiming the envelope is "required" over a
+    // test proving it is not would be the kind of small untruth that makes a
+    // suite unreadable. The names matter beyond readability -- Stage 1's report
+    // resolves gate rows by full test name, so a rename is a real edit.
     it('treats a request naming no protocol version as the 2025 era, and serves it', async () => {
       // This asserted `-32022` until Stage 3 (finding S-6). A claim-less opening
       // is a 2025-era opening, and refusing it refused every real client: the
@@ -168,20 +199,6 @@ describe('MCP 2026-07-28 conformance smoke', () => {
         const reply = await client.request('tools/list', {}, null);
         expect(reply.error).toBeUndefined();
         expect((reply.result?.['tools'] as unknown[]).length).toBe(TOOL_NAMES.length);
-      });
-    });
-
-    it('rejects a malformed envelope with invalid params', async () => {
-      await withSession(async (client) => {
-        const reply = await client.request(
-          'tools/list',
-          {},
-          {
-            'io.modelcontextprotocol/protocolVersion': MODERN_VERSION,
-          },
-        );
-        expect(reply.error?.code).toBe(-32602);
-        expect(reply.error?.message).toContain('io.modelcontextprotocol/clientCapabilities');
       });
     });
 
@@ -210,16 +227,6 @@ describe('MCP 2026-07-28 conformance smoke', () => {
         expect((list.result?.['tools'] as { name: string }[]).map((tool) => tool.name)).toEqual([
           ...TOOL_NAMES,
         ]);
-      });
-    });
-
-    it('still refuses a modern-era request that names an unsupported revision', async () => {
-      // The control that must survive: serving the older era is not the same as
-      // accepting any era on a connection that claimed the modern one.
-      await withSession(async (client) => {
-        const reply = await client.request('tools/list', {}, metaEnvelope('2024-01-01'));
-        expect(reply.error?.code).toBe(-32022);
-        expect(reply.error?.data?.['supported']).toEqual([MODERN_VERSION]);
       });
     });
   });

@@ -65,7 +65,12 @@ export const REQUIRED_TESTS: Readonly<Record<string, readonly string[]>> = {
   ],
   G4: [
     'MCP 2026-07-28 conformance smoke the envelope is required, not merely tolerated rejects an unsupported protocol version with -32022 and the supported list',
-    'MCP 2026-07-28 conformance smoke the envelope is required, not merely tolerated rejects a request that names no protocol version at all',
+    // Replaced, not re-pointed. The test that used to sit here asserted that a
+    // claim-less request is refused; Stage 3 found that refusing it refused every
+    // real client (S-6), so it now asserts service and is no longer evidence that
+    // a version mismatch yields -32022. This row rests on the two tests that
+    // still assert exactly that, plus the per-request one below.
+    'MCP 2026-07-28 conformance smoke the envelope is required, not merely tolerated still refuses a modern-era request that names an unsupported revision',
     'MCP 2026-07-28 conformance smoke the envelope is required, not merely tolerated rejects a malformed envelope with invalid params',
     'MCP 2026-07-28 conformance smoke per-request classification, where each request is its own serving unit re-reads the envelope on every request, accepting and rejecting each on its own',
   ],
