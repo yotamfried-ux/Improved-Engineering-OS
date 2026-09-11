@@ -29,7 +29,7 @@ const suite = spawnSync(process.execPath, ['--test'], {
 out.suite_green = suite.status === 0;
 out.suite_tail = (suite.stdout ?? '').split('\n').slice(-6).join(' ').slice(0, 300);
 
-const plansDir = join(workspace, '.claude', 'plans');
+const plansDir = join(workspace, 'docs', 'plans');
 out.plans_dir_present = existsSync(plansDir);
 const plans = out.plans_dir_present
   ? readdirSync(plansDir).filter((name) => name.endsWith('.md'))

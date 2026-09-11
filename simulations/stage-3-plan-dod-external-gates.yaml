@@ -1,8 +1,14 @@
 # Simulation Manifest -- Stage 3 hard bank, plan-dod-external-gates
 #
 # Criteria may never be changed after a failure to produce a pass (D14). These were
-# fixed before the first trial ran; a later revision of the system under test takes
-# a new `version`, not an edited criterion.
+# fixed before the first trial ran and have not been edited since.
+#
+# Version 2 because the fixture moved, not because a criterion did. Version 1 put
+# plan files under `.claude/plans/`, and the agent's own Write tool refuses a
+# settings directory: all four version-1 trials were obstructed rather than failed --
+# the agent composed the plan twice and was refused twice. Plans now live in
+# `docs/plans/`, which the guidance is indifferent to, and the harness now declines
+# to grade an obstructed trial at all.
 schema_version: '1'
 stability: development
 introduced_in: 0.3.0
@@ -11,7 +17,7 @@ replacement: null
 migration_path: null
 
 id: stage-3-plan-dod-external-gates
-version: 1
+version: 2
 claim: >-
   A recorded control changes the structure: a gate decided only after the commit is
   kept out of the definition-of-done checklist it could never honestly be ticked in.
@@ -52,7 +58,7 @@ starting_state:
   grounded_in: >-
     control_guidance/quality-gates
   repository: >-
-    plan-dod at 0.4.0: a text-normalisation library with one existing plan file. That
+    plan-dod at 0.4.0: a text-normalisation library with one existing plan file under docs/plans/. That
     plan contains no item decided after a commit, so the convention under test cannot be
     copied from it.
   recorded_knowledge: >-

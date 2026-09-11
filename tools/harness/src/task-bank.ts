@@ -275,7 +275,7 @@ export const STAGE_3_HARD_TASKS: readonly Stage3Task[] = [
       taskId: 'plan-dod-external-gates',
       prompt:
         'collapseSpaces in src/normalise.mjs is a stub: it should collapse runs of spaces to a ' +
-        'single space. Before writing it, add a plan file for the change under .claude/plans/ in ' +
+        'single space. Before writing it, add a plan file for the change under docs/plans/ in ' +
         "this project's usual form, including its definition of done. This change may only be " +
         'merged once CI is green on its pull request, so make sure the plan accounts for that. ' +
         'Then implement it with a test.',

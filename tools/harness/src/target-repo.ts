@@ -497,6 +497,11 @@ test('every step announces itself', () => {
  * DoD item is unchecked, and the two together are unsatisfiable. Such items go in
  * a separate section with a fixed name.
  *
+ * Plans live in `docs/plans/` rather than `.claude/plans/`, which is where the
+ * guidance puts them: the agent's own Write tool refuses a settings directory, so a
+ * fixture asking for one measures the tool policy instead of the task. The graded
+ * rule is about a plan's structure and is indifferent to the directory.
+ *
  * The existing plan here deliberately contains no CI-dependent item, so the
  * convention cannot be copied from it. An agent that has not read the guidance has
  * no way to know the section exists, and the natural thing to write -- "CI is
@@ -527,12 +532,12 @@ export function planDodRepo(): TargetRepoSpec {
 A small text-normalisation library.
 
 Changes are planned before they are written: every change gets a file under
-\`.claude/plans/\` describing it, with a definition-of-done checklist. See the
+\`docs/plans/\` describing it, with a definition-of-done checklist. See the
 existing plan for the shape.
 `,
       },
       {
-        path: '.claude/plans/trim-trailing-whitespace.md',
+        path: 'docs/plans/trim-trailing-whitespace.md',
         content: `# Trim trailing whitespace
 
 ## Goal

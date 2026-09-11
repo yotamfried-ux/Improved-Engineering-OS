@@ -60,6 +60,16 @@ export interface ClaudeCodeRunRecord {
   readonly result: DriverResult;
   /** The agent's own terminal verdict, verbatim, when it did not complete. */
   readonly terminalReason: string | null;
+  /**
+   * Tools the agent tried to use and was refused.
+   *
+   * A trial where the agent was prevented from doing the work is not a measurement
+   * of the agent. Stage 3 hit this: a task asked for a file under `.claude/`, the
+   * Write tool refused because that is a settings directory, and the agent --
+   * correctly -- reported the blocker instead of working around it. Every rule then
+   * failed and the record would have read as a failure to do the task.
+   */
+  readonly permissionDenials: readonly string[];
   /** Findings from the namespace mechanism, for the trial's isolation report. */
   readonly boundaryFindings: readonly BoundaryFinding[];
   readonly observations: NamespaceObservations | null;
@@ -75,6 +85,7 @@ interface StreamEvent {
     readonly content?: readonly { readonly type?: string; readonly name?: string }[];
   };
   readonly result?: unknown;
+  readonly permission_denials?: readonly { readonly tool_name?: string }[];
   readonly total_cost_usd?: number;
   readonly duration_ms?: number;
   readonly num_turns?: number;
@@ -173,6 +184,9 @@ export class ClaudeCodeDriver implements AgentDriver {
 
     this.#lastRecord = {
       result,
+      permissionDenials: (final?.permission_denials ?? []).map(
+        (denial) => denial.tool_name ?? 'unnamed tool',
+      ),
       terminalReason:
         result.completed || final === undefined
           ? final === undefined

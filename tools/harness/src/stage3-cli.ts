@@ -265,7 +265,23 @@ const subject = {
  * agent's own terminal message. The manifest's recovery procedure applies: discard
  * the workspace and re-run.
  */
-const ranToCompletion = finalOutcome.result.completed;
+const denials = driver.lastRecord?.permissionDenials ?? [];
+/**
+ * An obstructed trial is not graded either.
+ *
+ * `ranToCompletion` catches a run that died; this catches one that finished by
+ * reporting that it was not allowed to proceed. Both leave a workspace the graders
+ * would read as a failed attempt, and neither is a fact about the agent. Stage 3
+ * found this the hard way: a task asked for a file under `.claude/`, the Write tool
+ * refused because that is a settings directory, and four trials were scored as the
+ * agent failing to write a plan it had in fact composed twice.
+ *
+ * Conservative on purpose. A denial the agent legitimately worked around would also
+ * land here, and a re-run that reports no denial costs one trial; a graded trial
+ * that silently measured an obstruction costs the conclusion.
+ */
+const obstructed = denials.length > 0;
+const ranToCompletion = finalOutcome.result.completed && !obstructed;
 const verdicts = ranToCompletion
   ? [
       ...task.deterministicRules.map((rule) => gradeDeterministic(rule, subject)),
@@ -312,6 +328,8 @@ const trialRecord = {
   registration: { confirmed: registration.confirmed, reason: registration.reason },
   status: report.status,
   ran_to_completion: ranToCompletion,
+  obstructed,
+  permission_denials: denials,
   terminal_reason: record?.terminalReason ?? null,
   qualification_eligible: report.qualificationEligible,
   origin_class_the_plane_would_stamp: registry.originClassFor(runId),
@@ -336,7 +354,12 @@ const recordPath = join(outDir, `${trialId}.json`);
 writeFileSync(recordPath, `${JSON.stringify(trialRecord, null, 2)}\n`, 'utf8');
 
 process.stdout.write(`\n${formatTrialReport(report)}`);
-if (!ranToCompletion) {
+if (obstructed) {
+  process.stdout.write(
+    `  NOT GRADED -- the agent was refused ${String(denials.length)} tool call(s) ` +
+      `(${[...new Set(denials)].join(', ')}), so the workspace does not reflect what it did\n`,
+  );
+} else if (!ranToCompletion) {
   process.stdout.write(
     `  NOT GRADED -- the run did not complete: ${record?.terminalReason ?? 'no reason recorded'}\n`,
   );

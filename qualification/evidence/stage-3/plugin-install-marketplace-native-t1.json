@@ -1,0 +1,308 @@
+{
+  "trial_id": "plugin-install-marketplace-native-t1",
+  "run_id": "run_s3_plugin_install_marketplace_native_t1",
+  "simulation_id": "stage-3-plugin-install-marketplace",
+  "task_id": "plugin-install-marketplace",
+  "arm": "native",
+  "recorded_at": "2026-09-11T23:29:25.154Z",
+  "eos_revision": "ab570e53f466199198a3f31468bc6dd861cbbd4c",
+  "setting_sources": "project",
+  "ranking_mode": "recorded",
+  "registration": {
+    "confirmed": false,
+    "reason": "no Evidence Plane is enrolled for this harness"
+  },
+  "status": "unproven",
+  "ran_to_completion": true,
+  "terminal_reason": null,
+  "qualification_eligible": false,
+  "origin_class_the_plane_would_stamp": "operational",
+  "budget": {
+    "state": "within",
+    "reasons": []
+  },
+  "usage": {
+    "wallClockSeconds": 123.26,
+    "costUsd": 0.30528700000000003,
+    "inputTokens": 38,
+    "outputTokens": 7054,
+    "cacheReadInputTokens": 697705,
+    "cacheCreationInputTokens": 23526,
+    "turns": 25
+  },
+  "tool_calls": [
+    {
+      "name": "Bash",
+      "at": "2026-09-11T23:27:30.200Z"
+    },
+    {
+      "name": "Glob",
+      "at": "2026-09-11T23:27:30.426Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-11T23:27:34.734Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T23:27:34.893Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T23:27:39.351Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T23:27:39.450Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T23:27:44.266Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T23:27:51.422Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T23:27:52.023Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T23:27:57.014Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T23:28:00.952Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T23:28:08.092Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T23:28:14.311Z"
+    },
+    {
+      "name": "ToolSearch",
+      "at": "2026-09-11T23:28:22.817Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T23:28:23.281Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T23:28:27.769Z"
+    },
+    {
+      "name": "WebSearch",
+      "at": "2026-09-11T23:28:28.069Z"
+    },
+    {
+      "name": "WebSearch",
+      "at": "2026-09-11T23:28:31.481Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T23:28:43.023Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T23:28:47.804Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T23:29:00.891Z"
+    },
+    {
+      "name": "Edit",
+      "at": "2026-09-11T23:29:06.578Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T23:29:09.651Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T23:29:14.003Z"
+    }
+  ],
+  "resolve_called_unprompted": false,
+  "eos_tools_used": [],
+  "isolation": {
+    "findings": [
+      {
+        "boundary": "filesystem",
+        "verdict": "proven",
+        "evidence": "before and after the trial ran: workspace /tmp/ieos-trial-plugin-install-marketplace-native-t1-bbSiLX contains no path resolving outside its allowed roots, and no denied root is reachable from it"
+      },
+      {
+        "boundary": "environment",
+        "verdict": "proven",
+        "evidence": "before and after the trial ran: trial environment contains only the 4 explicitly granted name(s); nothing was inherited"
+      },
+      {
+        "boundary": "process",
+        "verdict": "unproven",
+        "evidence": "before and after the trial ran: a temporary directory cannot constrain process creation. Proving this boundary needs a container, namespace or equivalent mechanism, which is a Stage 3 precondition (ADR-0005)."
+      },
+      {
+        "boundary": "network",
+        "verdict": "unproven",
+        "evidence": "before and after the trial ran: a temporary directory cannot constrain network egress, and SDK settings isolation says nothing about what a spawned process can reach (research finding R5). Proving this boundary needs a container, namespace or equivalent mechanism (ADR-0005)."
+      },
+      {
+        "boundary": "filesystem",
+        "verdict": "proven",
+        "evidence": "inside the namespace, /home/user/Improved-Engineering-OS/evaluator /home/user/Improved-Engineering-OS/simulations showed 0 entries: an empty directory is mounted over every denied root, so the evaluator tree is absent rather than merely unreferenced"
+      },
+      {
+        "boundary": "environment",
+        "verdict": "proven",
+        "evidence": "the trial process was started with a replaced environment rather than a filtered one, so only the names the policy granted exist inside it"
+      },
+      {
+        "boundary": "process",
+        "verdict": "proven",
+        "evidence": "the trial is pid 1 in its own PID namespace and sees 4 process(es): its own tree and nothing of the host"
+      },
+      {
+        "boundary": "network",
+        "verdict": "proven",
+        "evidence": "egress is lo,tap0 with OUTPUT dropped by default and api.anthropic.com(160.79.104.10):443 allowed; the control destination 93.184.216.34:443 was refused:timeout"
+      }
+    ],
+    "qualificationEligible": true,
+    "reasons": []
+  },
+  "namespace_observations": {
+    "denied_roots": " /home/user/Improved-Engineering-OS/evaluator /home/user/Improved-Engineering-OS/simulations",
+    "denied_entries_visible": 0,
+    "allowlist": " api.anthropic.com(160.79.104.10):443",
+    "control_host": "93.184.216.34:443",
+    "control_result": "refused:timeout",
+    "interfaces": "lo,tap0",
+    "pid_namespace_self": 1,
+    "pid_namespace_visible_processes": 4
+  },
+  "mechanism_unavailable": null,
+  "check": {
+    "failure": null,
+    "outcomes": {
+      "suite_green": true,
+      "shell_files_read": "scripts/setup.sh",
+      "correct_marketplace_added": true,
+      "installs_from_that_marketplace": true,
+      "marketplace_added_before_install": true,
+      "reached_for_recorded_failure_official_marketplace": false,
+      "reached_for_recorded_failure_slash_command": false,
+      "marketplace_named": "obra/superpowers-marketplace",
+      "mentions_superpowers": true
+    }
+  },
+  "verdicts": [
+    {
+      "graderId": "S3-H1-suite",
+      "kind": "deterministic",
+      "status": "proven",
+      "evidence": "suite_green = true, expected true"
+    },
+    {
+      "graderId": "S3-H1-correct-marketplace",
+      "kind": "deterministic",
+      "status": "proven",
+      "evidence": "correct_marketplace_added = true, expected true"
+    },
+    {
+      "graderId": "S3-H1-installs-from-it",
+      "kind": "deterministic",
+      "status": "proven",
+      "evidence": "installs_from_that_marketplace = true, expected true"
+    },
+    {
+      "graderId": "S3-H1-order",
+      "kind": "deterministic",
+      "status": "proven",
+      "evidence": "marketplace_added_before_install = true, expected true"
+    },
+    {
+      "graderId": "S3-H1-not-recorded-failure",
+      "kind": "deterministic",
+      "status": "proven",
+      "evidence": "reached_for_recorded_failure_official_marketplace = false, expected false"
+    },
+    {
+      "graderId": "S3-H1-not-slash-command",
+      "kind": "deterministic",
+      "status": "proven",
+      "evidence": "reached_for_recorded_failure_slash_command = false, expected false"
+    },
+    {
+      "graderId": "S3-H1-resolve-unprompted",
+      "kind": "trace_rule",
+      "status": "failed",
+      "evidence": "resolve was never called; trace was [Bash, Glob, Read, Bash, Bash, Bash, Bash, Bash, Bash, Bash, Bash, Bash, Bash, ToolSearch, Bash, Bash, WebSearch, WebSearch, Bash, Bash, Bash, Edit, Bash, Bash]"
+    }
+  ],
+  "grading": {
+    "status": "proven",
+    "decidedBy": [
+      {
+        "graderId": "S3-H1-suite",
+        "kind": "deterministic",
+        "status": "proven",
+        "evidence": "suite_green = true, expected true"
+      },
+      {
+        "graderId": "S3-H1-correct-marketplace",
+        "kind": "deterministic",
+        "status": "proven",
+        "evidence": "correct_marketplace_added = true, expected true"
+      },
+      {
+        "graderId": "S3-H1-installs-from-it",
+        "kind": "deterministic",
+        "status": "proven",
+        "evidence": "installs_from_that_marketplace = true, expected true"
+      },
+      {
+        "graderId": "S3-H1-order",
+        "kind": "deterministic",
+        "status": "proven",
+        "evidence": "marketplace_added_before_install = true, expected true"
+      },
+      {
+        "graderId": "S3-H1-not-recorded-failure",
+        "kind": "deterministic",
+        "status": "proven",
+        "evidence": "reached_for_recorded_failure_official_marketplace = false, expected false"
+      },
+      {
+        "graderId": "S3-H1-not-slash-command",
+        "kind": "deterministic",
+        "status": "proven",
+        "evidence": "reached_for_recorded_failure_slash_command = false, expected false"
+      }
+    ],
+    "overruled": [],
+    "reasons": [
+      "S3-H1-suite (deterministic): suite_green = true, expected true",
+      "S3-H1-correct-marketplace (deterministic): correct_marketplace_added = true, expected true",
+      "S3-H1-installs-from-it (deterministic): installs_from_that_marketplace = true, expected true",
+      "S3-H1-order (deterministic): marketplace_added_before_install = true, expected true",
+      "S3-H1-not-recorded-failure (deterministic): reached_for_recorded_failure_official_marketplace = false, expected false",
+      "S3-H1-not-slash-command (deterministic): reached_for_recorded_failure_slash_command = false, expected false"
+    ]
+  },
+  "reasons": [
+    "S3-H1-suite (deterministic): suite_green = true, expected true",
+    "S3-H1-correct-marketplace (deterministic): correct_marketplace_added = true, expected true",
+    "S3-H1-installs-from-it (deterministic): installs_from_that_marketplace = true, expected true",
+    "S3-H1-order (deterministic): marketplace_added_before_install = true, expected true",
+    "S3-H1-not-recorded-failure (deterministic): reached_for_recorded_failure_official_marketplace = false, expected false",
+    "S3-H1-not-slash-command (deterministic): reached_for_recorded_failure_slash_command = false, expected false",
+    "run run_s3_plugin_install_marketplace_native_t1 was registered locally but not with the Evidence Plane, so the plane will stamp its events \"operational\" and this trial is not qualification evidence (D36)"
+  ],
+  "transcript_ref": "/home/user/Improved-Engineering-OS/qualification/evidence/stage-3/transcripts/plugin-install-marketplace-native-t1-plugin-install-marketplace.ndjson"
+}
