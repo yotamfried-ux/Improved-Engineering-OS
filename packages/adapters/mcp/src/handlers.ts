@@ -84,15 +84,12 @@ export interface AgentContractDeps {
   readonly projectFacts?: Readonly<Record<string, string>>;
   readonly capabilities?: readonly string[];
   /**
-   * A ranking mode the caller may not override (D24, Q-06).
+   * Forwarded to the resolver, which decides what it means (F2).
    *
-   * Absent normally: the resolver's own default applies and a client may ask for
-   * what it likes. Set for a qualification trial, where the harness pins
-   * `recorded` with a fixed score view so a score change between two trials
-   * cannot reorder their results. It overrides the request rather than defaulting
-   * it, for the same reason D36 takes `origin_class` away from the agent: a
-   * subject that can choose the conditions it is measured under is not being
-   * measured.
+   * The adapter carries no ranking policy of its own: it does not default this,
+   * override with it, or inspect it. A harness running a qualification trial sets
+   * it so the trial's ranking cannot be chosen by the subject (D24, Q-06), and the
+   * rule that enforces it lives in `packages/resolver`.
    */
   readonly pinnedRankingMode?: 'live_overlay' | 'recorded';
 }
@@ -104,6 +101,7 @@ function resolverDeps(deps: AgentContractDeps): ResolveDeps {
     facts: deps.facts,
     ...(deps.projectFacts === undefined ? {} : { projectFacts: deps.projectFacts }),
     ...(deps.capabilities === undefined ? {} : { capabilities: deps.capabilities }),
+    ...(deps.pinnedRankingMode === undefined ? {} : { pinnedRankingMode: deps.pinnedRankingMode }),
   };
 }
 
@@ -123,16 +121,7 @@ export async function resolve(
   store: SnapshotStore,
   request: ResolveRequest,
 ): Promise<unknown> {
-  return resolverResolve(resolverDeps(deps), store, pinRanking(deps, request));
-}
-
-/** Apply a pinned ranking mode over whatever the caller asked for. */
-function pinRanking<TRequest extends { ranking_mode?: 'live_overlay' | 'recorded' | undefined }>(
-  deps: AgentContractDeps,
-  request: TRequest,
-): TRequest {
-  if (deps.pinnedRankingMode === undefined) return request;
-  return { ...request, ranking_mode: deps.pinnedRankingMode };
+  return resolverResolve(resolverDeps(deps), store, request);
 }
 
 export async function expand(

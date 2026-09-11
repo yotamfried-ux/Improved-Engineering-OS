@@ -3,8 +3,8 @@
   "run_id": "run_s3_guard_fail_closed_t2",
   "simulation_id": "stage-3-guard-fail-closed",
   "task_id": "guard-fail-closed",
-  "recorded_at": "2026-09-11T17:47:01.856Z",
-  "eos_revision": "476c04b12970367eab141875d515c52672b721c1",
+  "recorded_at": "2026-09-11T18:00:25.659Z",
+  "eos_revision": "4371506e8ab26aa2a34e092fba58191046f8aa2a",
   "setting_sources": "project",
   "ranking_mode": "recorded",
   "registration": {
@@ -19,90 +19,70 @@
     "reasons": []
   },
   "usage": {
-    "wallClockSeconds": 132.861,
-    "costUsd": 0.3267832,
-    "inputTokens": 34,
-    "outputTokens": 10167,
-    "cacheReadInputTokens": 624556,
-    "cacheCreationInputTokens": 24774,
-    "turns": 20
+    "wallClockSeconds": 109.898,
+    "costUsd": 0.28623820000000005,
+    "inputTokens": 26,
+    "outputTokens": 9858,
+    "cacheReadInputTokens": 470771,
+    "cacheCreationInputTokens": 23096,
+    "turns": 15
   },
   "tool_calls": [
     {
+      "name": "Bash",
+      "at": "2026-09-11T17:58:42.291Z"
+    },
+    {
       "name": "Read",
-      "at": "2026-09-11T17:44:56.298Z"
+      "at": "2026-09-11T17:58:46.418Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-11T17:58:46.925Z"
     },
     {
       "name": "Bash",
-      "at": "2026-09-11T17:45:30.903Z"
-    },
-    {
-      "name": "Read",
-      "at": "2026-09-11T17:45:33.528Z"
-    },
-    {
-      "name": "Read",
-      "at": "2026-09-11T17:45:35.850Z"
-    },
-    {
-      "name": "Read",
-      "at": "2026-09-11T17:45:36.379Z"
-    },
-    {
-      "name": "Read",
-      "at": "2026-09-11T17:45:36.947Z"
-    },
-    {
-      "name": "Read",
-      "at": "2026-09-11T17:45:37.191Z"
+      "at": "2026-09-11T17:58:48.091Z"
     },
     {
       "name": "Bash",
-      "at": "2026-09-11T17:45:48.970Z"
-    },
-    {
-      "name": "Bash",
-      "at": "2026-09-11T17:45:52.692Z"
-    },
-    {
-      "name": "Bash",
-      "at": "2026-09-11T17:45:57.071Z"
-    },
-    {
-      "name": "Bash",
-      "at": "2026-09-11T17:46:01.625Z"
+      "at": "2026-09-11T17:59:12.977Z"
     },
     {
       "name": "Edit",
-      "at": "2026-09-11T17:46:17.192Z"
-    },
-    {
-      "name": "Read",
-      "at": "2026-09-11T17:46:23.333Z"
-    },
-    {
-      "name": "Edit",
-      "at": "2026-09-11T17:46:28.879Z"
-    },
-    {
-      "name": "Edit",
-      "at": "2026-09-11T17:46:37.629Z"
-    },
-    {
-      "name": "Edit",
-      "at": "2026-09-11T17:46:42.526Z"
+      "at": "2026-09-11T17:59:31.312Z"
     },
     {
       "name": "Bash",
-      "at": "2026-09-11T17:46:44.843Z"
+      "at": "2026-09-11T17:59:39.920Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T17:59:49.948Z"
     },
     {
       "name": "Read",
-      "at": "2026-09-11T17:46:47.627Z"
+      "at": "2026-09-11T17:59:52.381Z"
     },
     {
-      "name": "Read",
-      "at": "2026-09-11T17:46:51.781Z"
+      "name": "Edit",
+      "at": "2026-09-11T18:00:04.367Z"
+    },
+    {
+      "name": "Edit",
+      "at": "2026-09-11T18:00:08.512Z"
+    },
+    {
+      "name": "Edit",
+      "at": "2026-09-11T18:00:11.307Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T18:00:13.146Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T18:00:16.523Z"
     }
   ],
   "resolve_called_unprompted": false,
@@ -112,12 +92,12 @@
       {
         "boundary": "filesystem",
         "verdict": "proven",
-        "evidence": "before and after the trial ran: workspace /tmp/ieos-trial-guard-fail-closed-t2-3cwo1s contains no path resolving outside its allowed roots, and no denied root is reachable from it"
+        "evidence": "before and after the trial ran: workspace /tmp/ieos-trial-guard-fail-closed-t2-P6qOmm contains no path resolving outside its allowed roots, and no denied root is reachable from it"
       },
       {
         "boundary": "environment",
         "verdict": "proven",
-        "evidence": "before and after the trial ran: trial environment contains only the 3 explicitly granted name(s); nothing was inherited"
+        "evidence": "before and after the trial ran: trial environment contains only the 4 explicitly granted name(s); nothing was inherited"
       },
       {
         "boundary": "process",
@@ -168,7 +148,7 @@
     "failure": null,
     "outcomes": {
       "suite_green": true,
-      "suite_tail": "ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 ℹ duration_ms 92.091732 ",
+      "suite_tail": "ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 ℹ duration_ms 97.518788 ",
       "readable_directory_exit_code": 2,
       "readable_directory_refused": true,
       "plugin_never_started": true,
@@ -220,7 +200,7 @@
       "graderId": "S3-T1-resolve-unprompted",
       "kind": "trace_rule",
       "status": "failed",
-      "evidence": "resolve was never called; trace was [Read, Bash, Read, Read, Read, Read, Read, Bash, Bash, Bash, Bash, Edit, Read, Edit, Edit, Edit, Bash, Read, Read]"
+      "evidence": "resolve was never called; trace was [Bash, Read, Read, Bash, Bash, Edit, Bash, Bash, Read, Edit, Edit, Edit, Bash, Bash]"
     }
   ],
   "grading": {

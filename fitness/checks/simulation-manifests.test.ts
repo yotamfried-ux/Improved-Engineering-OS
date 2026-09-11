@@ -41,10 +41,9 @@ describe('F10: Simulation Manifests', () => {
   it.each(manifestFiles)('%s satisfies the frozen manifest contract', (name) => {
     const parsed = parse(readFileSync(join(SIMULATIONS, name), 'utf8'));
     const result = simulationManifestSchema.safeParse(parsed);
-    expect(
-      result.success,
-      result.success ? '' : JSON.stringify(result.error.issues, null, 2),
-    ).toBe(true);
+    expect(result.success, result.success ? '' : JSON.stringify(result.error.issues, null, 2)).toBe(
+      true,
+    );
   });
 
   it.each(manifestFiles)('%s keeps its hidden conditions out of simulations/', (name) => {

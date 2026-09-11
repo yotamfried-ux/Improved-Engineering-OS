@@ -123,7 +123,11 @@ if (process.argv[1]?.endsWith('launcher.mjs')) {
 }
 `,
       },
-      { path: 'plugins/hello.sh', content: '#!/bin/bash\necho "hello from plugin"\n', executable: true },
+      {
+        path: 'plugins/hello.sh',
+        content: '#!/bin/bash\necho "hello from plugin"\n',
+        executable: true,
+      },
       {
         path: 'plugins/fails.sh',
         content: '#!/bin/bash\necho "plugin failed" >&2\nexit 7\n',
@@ -377,6 +381,9 @@ export function writeTargetRepo(root: string, spec: TargetRepoSpec): void {
       continue;
     }
     mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(target, file.content, { encoding: 'utf8', mode: file.executable === true ? 0o755 : 0o644 });
+    writeFileSync(target, file.content, {
+      encoding: 'utf8',
+      mode: file.executable === true ? 0o755 : 0o644,
+    });
   }
 }

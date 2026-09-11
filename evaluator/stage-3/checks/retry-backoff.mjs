@@ -62,7 +62,9 @@ try {
   out.observed_gaps_ms = gaps ?? [];
   out.delay_is_not_zero = Array.isArray(gaps) && gaps.length > 0 && Math.max(...gaps) >= 5;
   out.delay_increases =
-    Array.isArray(gaps) && gaps.length >= 2 && gaps.every((gap, i) => i === 0 || gap >= gaps[i - 1]);
+    Array.isArray(gaps) &&
+    gaps.length >= 2 &&
+    gaps.every((gap, i) => i === 0 || gap >= gaps[i - 1]);
   out.total_delay_ms = Array.isArray(gaps) ? gaps.reduce((sum, gap) => sum + gap, 0) : 0;
 } catch {
   out.probe_failed = ((probed.stderr ?? '') || 'no output').slice(0, 300);

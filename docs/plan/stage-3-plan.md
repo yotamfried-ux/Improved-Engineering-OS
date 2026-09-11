@@ -1,15 +1,30 @@
 # Stage 3 — Real agent vertical slice
 
-**Status: in progress.** No gate is claimed here. The only artifact permitted to
-say whether Stage 3 passed is a harness-generated report under
-`qualification/reports/`, and this document is one of the things that report is
-meant to be able to contradict.
+**Status: gate NOT PASSED.** `qualification/reports/stage-03-2026-09-11.md` —
+harness-generated, 7 pass, 2 fail, 0 unproven, from six trial records at revision
+`4371506`. Nothing in this document decided that, and this document is one of the
+things that report is meant to be able to contradict.
+
+Both failing rows have one cause and neither is about the agent or the tasks: this
+environment's egress policy does not reach the Evidence Plane, so no run could be
+confirmed as `qualification` (T4) and every trial ended `telemetry_state:
+INCOMPLETE` (T7), which this repository's own rule excludes from measurement. The
+remedy is an environment whose network policy permits that host; the trials re-run
+unmodified.
+
+The separate finding is the one worth reading twice: `resolve` was called in **0 of
+6** trials, with the tools connected and verified in each session's own init event.
+Every task was solved correctly without EOS, including the one built on a Stage 2
+lesson whose trap the agent was never told about. The gate's letter allows that —
+"or correctly did not need it" — and the stage's question was whether EOS is
+natural, so the answer is no, not on work a capable agent can already do. Stage 4
+is not started, per the guide's own clause.
 
 ## What the guide asks for
 
 > A real agent, in a fresh session, on a realistic disposable repo, performs an
 > ordinary bounded task and uses EOS naturally: `agent → resolve → inspect →
-> work → tests → telemetry → (minimal) evidence → investigation`.
+work → tests → telemetry → (minimal) evidence → investigation`.
 
 **Hidden condition.** The target repo carries the generated bootstrap block
 (D18.4), stating that EOS tools exist and what they are for. No task-specific
@@ -59,10 +74,10 @@ carrying a bootstrap block with a unique marker, every file-reading tool was
 disallowed so that only injected context could answer, and the same question was
 put twice:
 
-| `setting_sources` | Answer | Meaning |
-| --- | --- | --- |
-| `[]` | `NONE` | the target repo's own `CLAUDE.md` never reaches the agent |
-| `['project']` | `ZANZIBAR-7719` | the repo's own bootstrap block reaches the agent |
+| `setting_sources` | Answer          | Meaning                                                   |
+| ----------------- | --------------- | --------------------------------------------------------- |
+| `[]`              | `NONE`          | the target repo's own `CLAUDE.md` never reaches the agent |
+| `['project']`     | `ZANZIBAR-7719` | the repo's own bootstrap block reaches the agent          |
 
 Under `[]` the agent is never told EOS exists. "Was `resolve` called unprompted?"
 would then measure nothing, the lesson-dependent task could not be passed by any
@@ -90,12 +105,12 @@ stage cannot honestly pass. So the mechanism is built here.
 namespace set: user + mount + PID + network. What each boundary gets is different
 in kind from a directory check:
 
-| Boundary | Mechanism | Observed |
-| --- | --- | --- |
-| `filesystem` | the evaluator tree is bind-mounted empty inside the namespace | `0` entries visible where the repository is on the host — "`evaluator/` never mounted" literally, not by convention |
-| `environment` | `env -i` plus the policy's named variables | built, never filtered |
-| `process` | PID namespace with `--mount-proc` | the trial is pid 1 and sees only its own tree |
-| `network` | `slirp4netns` for egress, `iptables -P OUTPUT DROP` plus one allowlisted destination | a control host is refused; the agent still completes, because the one allowed destination is the inference endpoint |
+| Boundary      | Mechanism                                                                            | Observed                                                                                                            |
+| ------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `filesystem`  | the evaluator tree is bind-mounted empty inside the namespace                        | `0` entries visible where the repository is on the host — "`evaluator/` never mounted" literally, not by convention |
+| `environment` | `env -i` plus the policy's named variables                                           | built, never filtered                                                                                               |
+| `process`     | PID namespace with `--mount-proc`                                                    | the trial is pid 1 and sees only its own tree                                                                       |
+| `network`     | `slirp4netns` for egress, `iptables -P OUTPUT DROP` plus one allowlisted destination | a control host is refused; the agent still completes, because the one allowed destination is the inference endpoint |
 
 The network policy for a real-agent trial is therefore `allowlist`, not `deny`,
 and that is a statement about what the trial is rather than a relaxation: the

@@ -11,7 +11,7 @@ replacement: null
 migration_path: null
 
 id: stage-3-misleading-clue-merge
-version: 2
+version: 3
 claim: >-
   A misleading comment does not redirect the fix: the defect is repaired in the wiring
   and the utility the comment blames keeps its contract.
@@ -19,10 +19,13 @@ claim: >-
 environment:
   # The revision of the system under test these criteria were written against. A
   # re-run at a different revision is a different scenario and takes a new
-  # version -- which is why this is version 2: version 1 ran at 3586c5b, where
+  # version. Version 1 ran at 3586c5b, where
   # the MCP server refused the era the agent's client speaks (S-6), so the trial
-  # could not observe its own hidden condition. The criteria did not change.
-  repo_revision: '5644b2ac8709de91a8edb1fb9bd69633ed49347f'
+  # could not observe its own hidden condition. Version 2 ran before S-7, where the
+  # hooks emitted under a run id the harness had not registered. Version 3 is the
+  # first revision where both halves of the evidence chain join. The criteria have
+  # not changed once.
+  repo_revision: '4371506e8ab26aa2a34e092fba58191046f8aa2a'
   eos_release: source-checkout
   agent: claude-code
   model: claude-sonnet-5

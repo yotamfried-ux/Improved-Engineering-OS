@@ -3,8 +3,8 @@
   "run_id": "run_s3_guard_fail_closed_t1",
   "simulation_id": "stage-3-guard-fail-closed",
   "task_id": "guard-fail-closed",
-  "recorded_at": "2026-09-11T17:55:31.807Z",
-  "eos_revision": "476c04b12970367eab141875d515c52672b721c1",
+  "recorded_at": "2026-09-11T17:58:34.904Z",
+  "eos_revision": "4371506e8ab26aa2a34e092fba58191046f8aa2a",
   "setting_sources": "project",
   "ranking_mode": "recorded",
   "registration": {
@@ -19,62 +19,90 @@
     "reasons": []
   },
   "usage": {
-    "wallClockSeconds": 145.884,
-    "costUsd": 0.3205268,
-    "inputTokens": 26,
-    "outputTokens": 12779,
-    "cacheReadInputTokens": 466424,
-    "cacheCreationInputTokens": 24588,
-    "turns": 13
+    "wallClockSeconds": 137.383,
+    "costUsd": 0.341195,
+    "inputTokens": 32,
+    "outputTokens": 11306,
+    "cacheReadInputTokens": 614435,
+    "cacheCreationInputTokens": 26034,
+    "turns": 20
   },
   "tool_calls": [
     {
       "name": "Read",
-      "at": "2026-09-11T17:53:12.077Z"
+      "at": "2026-09-11T17:56:25.042Z"
     },
     {
       "name": "Bash",
-      "at": "2026-09-11T17:53:39.205Z"
+      "at": "2026-09-11T17:56:48.926Z"
     },
     {
       "name": "Read",
-      "at": "2026-09-11T17:53:41.057Z"
+      "at": "2026-09-11T17:56:53.540Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-11T17:56:54.047Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-11T17:56:54.504Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-11T17:56:54.953Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-11T17:56:55.321Z"
     },
     {
       "name": "Bash",
-      "at": "2026-09-11T17:53:44.295Z"
-    },
-    {
-      "name": "Bash",
-      "at": "2026-09-11T17:53:48.682Z"
-    },
-    {
-      "name": "Bash",
-      "at": "2026-09-11T17:54:22.534Z"
-    },
-    {
-      "name": "Bash",
-      "at": "2026-09-11T17:54:40.636Z"
+      "at": "2026-09-11T17:57:24.010Z"
     },
     {
       "name": "Edit",
-      "at": "2026-09-11T17:54:49.242Z"
-    },
-    {
-      "name": "Bash",
-      "at": "2026-09-11T17:55:03.652Z"
+      "at": "2026-09-11T17:57:33.478Z"
     },
     {
       "name": "Edit",
-      "at": "2026-09-11T17:55:12.972Z"
+      "at": "2026-09-11T17:57:44.145Z"
     },
     {
       "name": "Bash",
-      "at": "2026-09-11T17:55:16.451Z"
+      "at": "2026-09-11T17:57:49.637Z"
+    },
+    {
+      "name": "Edit",
+      "at": "2026-09-11T17:58:09.129Z"
+    },
+    {
+      "name": "Edit",
+      "at": "2026-09-11T17:58:11.800Z"
     },
     {
       "name": "Bash",
-      "at": "2026-09-11T17:55:21.718Z"
+      "at": "2026-09-11T17:58:13.740Z"
+    },
+    {
+      "name": "Edit",
+      "at": "2026-09-11T17:58:16.988Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T17:58:18.452Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-11T17:58:20.564Z"
+    },
+    {
+      "name": "Edit",
+      "at": "2026-09-11T17:58:23.755Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T17:58:25.163Z"
     }
   ],
   "resolve_called_unprompted": false,
@@ -84,7 +112,7 @@
       {
         "boundary": "filesystem",
         "verdict": "proven",
-        "evidence": "before and after the trial ran: workspace /tmp/ieos-trial-guard-fail-closed-t1-RtDNqU contains no path resolving outside its allowed roots, and no denied root is reachable from it"
+        "evidence": "before and after the trial ran: workspace /tmp/ieos-trial-guard-fail-closed-t1-6uL5bt contains no path resolving outside its allowed roots, and no denied root is reachable from it"
       },
       {
         "boundary": "environment",
@@ -140,7 +168,7 @@
     "failure": null,
     "outcomes": {
       "suite_green": true,
-      "suite_tail": "ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 ℹ duration_ms 92.85735 ",
+      "suite_tail": "ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 ℹ duration_ms 100.912558 ",
       "readable_directory_exit_code": 2,
       "readable_directory_refused": true,
       "plugin_never_started": true,
@@ -192,7 +220,7 @@
       "graderId": "S3-T1-resolve-unprompted",
       "kind": "trace_rule",
       "status": "failed",
-      "evidence": "resolve was never called; trace was [Read, Bash, Read, Bash, Bash, Bash, Bash, Edit, Bash, Edit, Bash, Bash]"
+      "evidence": "resolve was never called; trace was [Read, Bash, Read, Read, Read, Read, Read, Bash, Edit, Edit, Bash, Edit, Edit, Bash, Edit, Bash, Read, Edit, Bash]"
     }
   ],
   "grading": {

@@ -25,7 +25,13 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { AgentDriver, AgentRunUsage, DriverResult, ToolCallRecord, TrialTask } from '../driver.ts';
+import type {
+  AgentDriver,
+  AgentRunUsage,
+  DriverResult,
+  ToolCallRecord,
+  TrialTask,
+} from '../driver.ts';
 import type { Trial } from '../sandbox.ts';
 import { ABORT_MULTIPLIER } from '../budget.ts';
 import { namespaceFindings, runInNamespace, type NamespaceObservations } from '../ns-sandbox.ts';
@@ -52,6 +58,8 @@ export interface ClaudeCodeDriverOptions {
 
 export interface ClaudeCodeRunRecord {
   readonly result: DriverResult;
+  /** The agent's own terminal verdict, verbatim, when it did not complete. */
+  readonly terminalReason: string | null;
   /** Findings from the namespace mechanism, for the trial's isolation report. */
   readonly boundaryFindings: readonly BoundaryFinding[];
   readonly observations: NamespaceObservations | null;
@@ -63,7 +71,10 @@ interface StreamEvent {
   readonly type?: string;
   readonly subtype?: string;
   readonly timestamp?: string;
-  readonly message?: { readonly content?: readonly { readonly type?: string; readonly name?: string }[] };
+  readonly message?: {
+    readonly content?: readonly { readonly type?: string; readonly name?: string }[];
+  };
+  readonly result?: unknown;
   readonly total_cost_usd?: number;
   readonly duration_ms?: number;
   readonly num_turns?: number;
@@ -162,6 +173,12 @@ export class ClaudeCodeDriver implements AgentDriver {
 
     this.#lastRecord = {
       result,
+      terminalReason:
+        result.completed || final === undefined
+          ? final === undefined
+            ? 'the run produced no result event at all, so it ended without finishing a turn'
+            : null
+          : String(final.result ?? '').slice(0, 400) || 'the run reported an error with no message',
       boundaryFindings: namespaceFindings(run.observations, {
         unavailableReason: run.unavailableReason,
       }),

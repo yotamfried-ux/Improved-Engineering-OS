@@ -4,8 +4,7 @@
  * concatenating arrays breaks the contract this module's own tests pin.
  */
 export function deepMerge(base, patch) {
-  const isPlain = (value) =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);
+  const isPlain = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
   if (Array.isArray(base) && Array.isArray(patch)) return [...base, ...patch];
   if (!isPlain(base) || !isPlain(patch)) return patch;
   const merged = { ...base };

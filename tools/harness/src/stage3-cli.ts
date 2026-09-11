@@ -115,7 +115,16 @@ run('git', ['init', '-q', '.'], trial.workspaceRoot);
 run('git', ['add', '-A'], trial.workspaceRoot);
 run(
   'git',
-  ['-c', 'user.email=harness@ieos.invalid', '-c', 'user.name=ieos harness', 'commit', '-q', '-m', 'fixture'],
+  [
+    '-c',
+    'user.email=harness@ieos.invalid',
+    '-c',
+    'user.name=ieos harness',
+    'commit',
+    '-q',
+    '-m',
+    'fixture',
+  ],
   trial.workspaceRoot,
 );
 
@@ -141,7 +150,9 @@ const mcpConfig = JSON.parse(readFileSync(mcpConfigPath, 'utf8')) as {
 };
 const ieosServer = mcpConfig.mcpServers['ieos'];
 if (ieosServer === undefined) {
-  throw new Error('`ieos init` did not register an ieos MCP server, so no trial could call resolve');
+  throw new Error(
+    '`ieos init` did not register an ieos MCP server, so no trial could call resolve',
+  );
 }
 ieosServer.args = [...(ieosServer.args ?? []), '--ranking-mode', 'recorded'];
 writeFileSync(mcpConfigPath, `${JSON.stringify(mcpConfig, null, 2)}\n`, 'utf8');
@@ -221,17 +232,36 @@ const subject = {
   transcript: finalOutcome.result.transcriptRef,
 };
 
-const verdicts = [
-  ...task.deterministicRules.map((rule) => gradeDeterministic(rule, subject)),
-  ...task.traceRules.map((rule) => gradeTrace(rule, subject)),
-];
+/**
+ * A trial the agent never attempted is not graded.
+ *
+ * The first version of this graded whatever workspace was left behind, and a run
+ * that died on its opening turn -- an account session limit, in the case that
+ * exposed this -- left the fixture untouched, so every rule failed and the record
+ * read "the agent could not add backoff". That is a false failure of exactly the
+ * kind this repository exists to refuse: the graders were measuring an unmodified
+ * fixture and reporting it as a verdict about an agent that was never asked.
+ *
+ * So an incomplete run yields no verdicts and the trial is `unproven` with the
+ * agent's own terminal message. The manifest's recovery procedure applies: discard
+ * the workspace and re-run.
+ */
+const ranToCompletion = finalOutcome.result.completed;
+const verdicts = ranToCompletion
+  ? [
+      ...task.deterministicRules.map((rule) => gradeDeterministic(rule, subject)),
+      ...task.traceRules.map((rule) => gradeTrace(rule, subject)),
+    ]
+  : [];
 
 const usage = finalOutcome.result.usage;
 const report = buildTrialReport({
   outcome: finalOutcome,
   // Trace verdicts are reported, not gating: the exit gate allows a task solved
   // correctly without EOS, so a trace rule must not be able to fail a trial.
-  verdicts: task.deterministicRules.map((rule) => gradeDeterministic(rule, subject)),
+  verdicts: ranToCompletion
+    ? task.deterministicRules.map((rule) => gradeDeterministic(rule, subject))
+    : [],
   budget: { ...task.task.budget, maxCostUsd: MAX_COST_USD_PER_TRIAL },
   usage: {
     wallClockSeconds: usage?.wallClockSeconds ?? 0,
@@ -253,11 +283,16 @@ const trialRecord = {
   simulation_id: `stage-3-${taskId}`,
   task_id: taskId,
   recorded_at: new Date().toISOString(),
-  eos_revision: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: eosRoot, encoding: 'utf8' }).trim(),
+  eos_revision: execFileSync('git', ['rev-parse', 'HEAD'], {
+    cwd: eosRoot,
+    encoding: 'utf8',
+  }).trim(),
   setting_sources: settingSources ?? 'project',
   ranking_mode: RANKING_MODE,
   registration: { confirmed: registration.confirmed, reason: registration.reason },
   status: report.status,
+  ran_to_completion: ranToCompletion,
+  terminal_reason: record?.terminalReason ?? null,
   qualification_eligible: report.qualificationEligible,
   origin_class_the_plane_would_stamp: registry.originClassFor(runId),
   budget: report.budget,
@@ -281,7 +316,14 @@ const recordPath = join(outDir, `${trialId}.json`);
 writeFileSync(recordPath, `${JSON.stringify(trialRecord, null, 2)}\n`, 'utf8');
 
 process.stdout.write(`\n${formatTrialReport(report)}`);
+if (!ranToCompletion) {
+  process.stdout.write(
+    `  NOT GRADED -- the run did not complete: ${record?.terminalReason ?? 'no reason recorded'}\n`,
+  );
+}
 process.stdout.write(`  resolve called unprompted: ${String(resolveCalled)}\n`);
-process.stdout.write(`  cost: $${String(usage?.costUsd ?? 0)}  tool calls: ${String(toolCalls.length)}\n`);
+process.stdout.write(
+  `  cost: $${String(usage?.costUsd ?? 0)}  tool calls: ${String(toolCalls.length)}\n`,
+);
 process.stdout.write(`  record: ${recordPath}\n`);
 process.stdout.write(`  workspace kept for inspection: ${trial.workspaceRoot}\n`);

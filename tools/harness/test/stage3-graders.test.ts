@@ -123,7 +123,9 @@ describe('guard-fail-closed: the graders detect known-bad', () => {
     'deleting the repository tests stops the correct fix from passing',
     () => {
       const root = workspaceWith('guard-fail-closed', 'plugin-runner', 'correct');
-      cpSync(join(REFERENCES, 'plugin-runner', 'mutation-tests-deleted'), root, { recursive: true });
+      cpSync(join(REFERENCES, 'plugin-runner', 'mutation-tests-deleted'), root, {
+        recursive: true,
+      });
       const verdicts = verdictsFor('guard-fail-closed', root);
       expect(verdicts.some((verdict) => verdict.status !== 'proven')).toBe(true);
     },
