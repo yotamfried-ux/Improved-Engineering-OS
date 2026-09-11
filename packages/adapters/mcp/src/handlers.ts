@@ -83,6 +83,18 @@ export interface AgentContractDeps {
   /** Passed straight through to the resolver; see `ResolveDeps`. */
   readonly projectFacts?: Readonly<Record<string, string>>;
   readonly capabilities?: readonly string[];
+  /**
+   * A ranking mode the caller may not override (D24, Q-06).
+   *
+   * Absent normally: the resolver's own default applies and a client may ask for
+   * what it likes. Set for a qualification trial, where the harness pins
+   * `recorded` with a fixed score view so a score change between two trials
+   * cannot reorder their results. It overrides the request rather than defaulting
+   * it, for the same reason D36 takes `origin_class` away from the agent: a
+   * subject that can choose the conditions it is measured under is not being
+   * measured.
+   */
+  readonly pinnedRankingMode?: 'live_overlay' | 'recorded';
 }
 
 /** The adapter carries no ranking policy of its own -- it forwards one (F2). */
@@ -111,7 +123,16 @@ export async function resolve(
   store: SnapshotStore,
   request: ResolveRequest,
 ): Promise<unknown> {
-  return resolverResolve(resolverDeps(deps), store, request);
+  return resolverResolve(resolverDeps(deps), store, pinRanking(deps, request));
+}
+
+/** Apply a pinned ranking mode over whatever the caller asked for. */
+function pinRanking<TRequest extends { ranking_mode?: 'live_overlay' | 'recorded' | undefined }>(
+  deps: AgentContractDeps,
+  request: TRequest,
+): TRequest {
+  if (deps.pinnedRankingMode === undefined) return request;
+  return { ...request, ranking_mode: deps.pinnedRankingMode };
 }
 
 export async function expand(
@@ -119,6 +140,7 @@ export async function expand(
   store: SnapshotStore,
   request: ExpandRequest,
 ): Promise<unknown> {
+  // `expand` carries no ranking mode of its own, so there is nothing to pin here.
   return resolverExpand(resolverDeps(deps), store, request);
 }
 

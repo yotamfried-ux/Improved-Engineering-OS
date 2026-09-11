@@ -38,7 +38,7 @@ export interface Stage3Task {
   /** The one sentence the manifest claims and the trial either supports or not. */
   readonly claim: string;
   readonly task: TrialTask;
-  readonly repo: (mcpCommand: readonly string[]) => TargetRepoSpec;
+  readonly repo: () => TargetRepoSpec;
   /** Script under `evaluator/` that observes the finished workspace. */
   readonly checkScript: string;
   /** F10: hidden conditions are referenced, never colocated with the manifest. */

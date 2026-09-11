@@ -159,13 +159,17 @@ export const FITNESS_RULES: readonly FitnessRule[] = [
   {
     id: 'F10',
     invariant: 'every Simulation Manifest references an evaluator entry outside simulations/',
-    status: 'partial',
+    status: 'enforced',
     mechanisms: ['source-scan', 'behavioural'],
     note:
-      'No simulations/ directory exists yet, so there is nothing to lint. The contract-level half ' +
-      'is enforced: simulationManifestSchema rejects a hidden_conditions_ref that is not under ' +
-      'the evaluator-only:// scheme.',
-    dormantWhileAbsent: ['simulations'],
+      'Enforced from Stage 3, when simulations/ came into existence and there was something to ' +
+      'lint. Both halves hold: simulationManifestSchema rejects a hidden_conditions_ref outside ' +
+      'the evaluator-only:// scheme, and fitness/checks/simulation-manifests.test.ts parses every ' +
+      'manifest, refuses a ref under simulations/ or containing .., and requires the referenced ' +
+      'target to exist -- a manifest pointing at a deleted check is not stricter, it is ungraded. ' +
+      'A non-vacuity assertion fails if the directory is ever emptied, so deleting the manifests ' +
+      'cannot turn the rule green.',
+    dormantWhileAbsent: [],
   },
   {
     id: 'F11',

@@ -154,11 +154,20 @@ describe('MCP 2026-07-28 conformance smoke', () => {
       });
     });
 
-    it('rejects a request that names no protocol version at all', async () => {
+    it('treats a request naming no protocol version as the 2025 era, and serves it', async () => {
+      // This asserted `-32022` until Stage 3 (finding S-6). A claim-less opening
+      // is a 2025-era opening, and refusing it refused every real client: the
+      // primary agent's own MCP client opens exactly this way, was answered
+      // -32022, and offered the agent no EOS tools at all.
+      //
+      // The modern guarantee this control was protecting is not lost -- it moved
+      // to where it can actually be held. A stdio connection pins its era for its
+      // lifetime, so "the envelope is re-read on every request" is only testable
+      // where each request is its own serving unit, which is the HTTP block below.
       await withSession(async (client) => {
         const reply = await client.request('tools/list', {}, null);
-        expect(reply.error?.code).toBe(-32022);
-        expect(reply.error?.data?.['supported']).toEqual([MODERN_VERSION]);
+        expect(reply.error).toBeUndefined();
+        expect((reply.result?.['tools'] as unknown[]).length).toBe(TOOL_NAMES.length);
       });
     });
 
@@ -176,7 +185,11 @@ describe('MCP 2026-07-28 conformance smoke', () => {
       });
     });
 
-    it('rejects the 2025 initialize handshake this endpoint does not serve', async () => {
+    it('serves the 2025 initialize handshake a real client opens with', async () => {
+      // The regression test for S-6, in the shape of an actual client rather than
+      // of this repository's reading of the specification. A conformance suite
+      // whose client always sends the modern envelope can never discover that
+      // real clients do not, which is why Stage 1's gate passed over this.
       await withSession(async (client) => {
         const reply = await client.request(
           'initialize',
@@ -187,7 +200,26 @@ describe('MCP 2026-07-28 conformance smoke', () => {
           },
           null,
         );
+        expect(reply.error).toBeUndefined();
+        expect(reply.result?.['protocolVersion']).toBeDefined();
+
+        // Reaching the tools is the point: an accepted handshake that offered no
+        // tools would leave the agent exactly as empty-handed as the refusal did.
+        const list = await client.request('tools/list', {}, null);
+        expect(list.error).toBeUndefined();
+        expect((list.result?.['tools'] as { name: string }[]).map((tool) => tool.name)).toEqual([
+          ...TOOL_NAMES,
+        ]);
+      });
+    });
+
+    it('still refuses a modern-era request that names an unsupported revision', async () => {
+      // The control that must survive: serving the older era is not the same as
+      // accepting any era on a connection that claimed the modern one.
+      await withSession(async (client) => {
+        const reply = await client.request('tools/list', {}, metaEnvelope('2024-01-01'));
         expect(reply.error?.code).toBe(-32022);
+        expect(reply.error?.data?.['supported']).toEqual([MODERN_VERSION]);
       });
     });
   });

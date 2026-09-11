@@ -81,9 +81,15 @@ describe('declared status matches what is actually on disk', () => {
     expect(rule('F11').dormantWhileAbsent).toEqual([]);
   });
 
-  it('F10 is partial because no simulations/ directory exists', () => {
-    expect(exists('simulations')).toBe(false);
-    expect(rule('F10').status).toBe('partial');
+  it('F10 is enforced now that simulations/ exists', () => {
+    // Stage 3 created the directory, the dormancy guard fired, and the rule was
+    // armed rather than have its excuse rewritten. The linter is what arms it:
+    // the scheme regex in the contract cannot tell whether the referenced check
+    // is still there, and a manifest pointing at a deleted check is ungraded
+    // rather than stricter.
+    expect(exists('simulations')).toBe(true);
+    expect(rule('F10').status).toBe('enforced');
+    expect(rule('F10').dormantWhileAbsent).toEqual([]);
   });
 
   it('F2 is enforced now that packages/adapters exists', () => {
@@ -193,10 +199,12 @@ describe('the honest summary', () => {
     // fired: F7 to partial (packages/releases), F2 to enforced
     // (packages/adapters). Stage 2 moved one more: F11 to enforced, when
     // packages/resolver appeared and gave Champion selection a code path to
-    // constrain. F4 stays partial -- the resolver exists, assurance and
-    // evidence-derivation do not. Each stage's own documents still record the
-    // mix at that stage, correctly: they are history, not a claim about now.
-    expect(summarize()).toBe('9 enforced, 3 partial, 1 not yet enforceable');
+    // constrain. Stage 3 moved F10 to enforced, when simulations/ appeared and
+    // gave the manifest linter something to lint. F4 stays partial -- the
+    // resolver exists, assurance and evidence-derivation do not. Each stage's own
+    // documents still record the mix at that stage, correctly: they are history,
+    // not a claim about now.
+    expect(summarize()).toBe('10 enforced, 2 partial, 1 not yet enforceable');
   });
 
   it('does not claim all thirteen rule entries are green', () => {

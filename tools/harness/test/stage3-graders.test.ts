@@ -35,7 +35,7 @@ function workspaceWith(taskId: string, repoName: string, variant: string | null)
   const task = taskById(taskId);
   const root = mkdtempSync(join(tmpdir(), `ieos-s3-${taskId}-`));
   workspaces.push(root);
-  writeTargetRepo(root, task.repo(['node', 'server-cli.ts']));
+  writeTargetRepo(root, task.repo());
   if (variant !== null) {
     cpSync(join(REFERENCES, repoName, variant), root, { recursive: true });
   }
