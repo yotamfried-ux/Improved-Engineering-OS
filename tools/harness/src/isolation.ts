@@ -111,8 +111,22 @@ export function findingFor(
 /**
  * Compute eligibility from probe findings.
  *
- * A boundary the policy requires but the probe never examined counts as
+ * A boundary the policy requires but nothing ever examined counts as
  * `unproven`, which is a failure. Silence never counts as isolation.
+ *
+ * Several probers may report on the same boundary, and they are aggregated
+ * differently from two probes by the *same* prober (for which see
+ * {@link strictestOf}). Across probers: a violation anywhere wins, otherwise one
+ * prover is enough. That is not a softening. `unproven` is not a negative
+ * result, it is the absence of one -- the directory sandbox's network finding
+ * says "a temporary directory cannot constrain egress", which is a fact about
+ * the prober. Letting it outrank a mechanism that built the boundary and then
+ * watched a control destination be refused would discard the only real evidence
+ * in favour of an admission of ignorance.
+ *
+ * The ordering stays fail-closed where it matters: nothing at all is
+ * `unproven`, and anything `violated` stays violated however many other probers
+ * were happy.
  */
 export function deriveQualificationEligibility(
   policy: IsolationPolicy,
@@ -121,20 +135,27 @@ export function deriveQualificationEligibility(
   const reasons: string[] = [];
 
   for (const boundary of policy.requiredBoundaries) {
-    const finding = findings.find((candidate) => candidate.boundary === boundary);
-    if (finding === undefined) {
+    const forBoundary = findings.filter((candidate) => candidate.boundary === boundary);
+    if (forBoundary.length === 0) {
       reasons.push(
         `${boundary}: required by the policy but never probed, so it is unproven; ` +
           'a boundary that was not checked is not a boundary',
       );
       continue;
     }
-    if (finding.verdict === 'unproven') {
-      reasons.push(`${boundary}: unproven -- ${finding.evidence}`);
+
+    const violations = forBoundary.filter((finding) => finding.verdict === 'violated');
+    if (violations.length > 0) {
+      for (const violation of violations) {
+        reasons.push(`${boundary}: violated -- ${violation.evidence}`);
+      }
       continue;
     }
-    if (finding.verdict === 'violated') {
-      reasons.push(`${boundary}: violated -- ${finding.evidence}`);
+
+    if (!forBoundary.some((finding) => finding.verdict === 'proven')) {
+      for (const finding of forBoundary) {
+        reasons.push(`${boundary}: unproven -- ${finding.evidence}`);
+      }
     }
   }
 
@@ -212,6 +233,47 @@ export function buildIsolationReport(
  * will report true only once a mechanism that can enforce them exists. Nothing
  * about that has to be remembered by a person.
  */
+/**
+ * The policy for a Stage 3 real-agent trial under the namespace mechanism.
+ *
+ * Two things differ from {@link defaultTrialPolicy}, and neither is a
+ * convenience.
+ *
+ * `network` is `allowlist` rather than `deny` because the inference channel is
+ * the agent: a trial with no egress is not an isolated real-agent trial, it is
+ * no trial. The allowlist names that one destination, and the same rule that
+ * proves the boundary drops package registries, code search and the rest of the
+ * internet -- so a trial cannot fetch its own answer.
+ *
+ * `process` lists the executables the trial legitimately needs. The PID
+ * namespace is what makes the boundary provable; the list is what makes a
+ * surprise in the process tree legible as a surprise.
+ */
+export function namespaceTrialPolicy(options: {
+  readonly workspaceRoot: string;
+  readonly evaluatorRoot: string;
+  readonly allowedHosts: readonly string[];
+  readonly allowedExecutables?: readonly string[];
+  readonly allowedEnvironment?: readonly string[];
+}): IsolationPolicy {
+  return {
+    filesystem: {
+      allowedRoots: [options.workspaceRoot],
+      deniedRoots: [options.evaluatorRoot],
+    },
+    environment: {
+      // HOME is granted deliberately: the agent's credential store lives there
+      // and a trial that cannot authenticate cannot run. It is a grant, recorded
+      // as one, not an oversight -- and the evaluator tree is absent inside the
+      // namespace regardless of what HOME reaches.
+      allowedNames: options.allowedEnvironment ?? ['PATH', 'HOME', 'TMPDIR', 'NODE_EXTRA_CA_CERTS'],
+    },
+    process: { allowedExecutables: options.allowedExecutables ?? [] },
+    network: { mode: 'allowlist', allowedHosts: options.allowedHosts },
+    requiredBoundaries: ['filesystem', 'environment', 'process', 'network'],
+  };
+}
+
 export function defaultTrialPolicy(options: {
   readonly workspaceRoot: string;
   readonly evaluatorRoot: string;

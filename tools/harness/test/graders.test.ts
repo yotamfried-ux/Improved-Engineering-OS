@@ -308,7 +308,7 @@ describe('trial reports are conjunctive and never overclaim', () => {
       trialId: 't1',
       taskId: 'task-1',
       driverKind: 'fake',
-      result: { completed: true, toolCalls: [], transcriptRef: null },
+      result: { completed: true, toolCalls: [], transcriptRef: null, usage: null },
       isolation: { findings: [], qualificationEligible: true, reasons: [] },
       qualificationEligible: true,
       reasons: [],
@@ -363,7 +363,7 @@ describe('trial reports are conjunctive and never overclaim', () => {
   it('is unproven when the driver never reported completion', () => {
     const report = buildTrialReport({
       outcome: outcome({
-        result: { completed: false, toolCalls: [], transcriptRef: null },
+        result: { completed: false, toolCalls: [], transcriptRef: null, usage: null },
       }),
       verdicts: [passing],
       budget: { wallClockSeconds: 60, maxToolCalls: 20 },

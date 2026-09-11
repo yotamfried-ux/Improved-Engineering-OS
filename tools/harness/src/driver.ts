@@ -26,10 +26,31 @@ export interface ToolCallRecord {
   readonly at: string;
 }
 
+/**
+ * What one agent run consumed.
+ *
+ * Nullable on {@link DriverResult} rather than optional, because "this driver
+ * cannot report cost" and "this run cost nothing" are different facts and a
+ * missing field would collapse them. TD-20 exists because trial cost went
+ * unmeasured, so a driver that can report it must, and one that cannot has to
+ * say so out loud.
+ */
+export interface AgentRunUsage {
+  readonly wallClockSeconds: number;
+  readonly costUsd: number;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly cacheReadInputTokens: number;
+  readonly cacheCreationInputTokens: number;
+  readonly turns: number;
+}
+
 export interface DriverResult {
   readonly completed: boolean;
   readonly toolCalls: readonly ToolCallRecord[];
   readonly transcriptRef: string | null;
+  /** `null` when the driver has no way to report consumption. */
+  readonly usage: AgentRunUsage | null;
 }
 
 /**
@@ -75,6 +96,17 @@ export class FakeAgentDriver implements AgentDriver {
       // no reason and hide real nondeterminism behind noise.
       toolCalls: this.#toolCalls.map((name) => ({ name, at: '2026-09-04T00:00:00.000Z' })),
       transcriptRef: null,
+      // Zeroes, not null: a fake really does consume nothing, and that is a
+      // measurement rather than an inability to measure.
+      usage: {
+        wallClockSeconds: 0,
+        costUsd: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        turns: 0,
+      },
     });
   }
 }
