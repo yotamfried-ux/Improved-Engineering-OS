@@ -721,8 +721,9 @@ ambiguous, per the owner's instruction not to silently leave it that way.
 ## 4h. Stage 3 findings (real agent vertical slice, 2026-09-11)
 
 **Gate: NOT PASSED — 7 pass, 2 fail, 0 unproven**, per
-`qualification/reports/stage-03-2026-09-11.md`, harness-generated from six trial
-records at revision `4371506`. Nothing in this document closed or opened that
+`qualification/reports/stage-03-2026-09-11.md`, harness-generated from six first-bank
+trial records at revision `4371506`, plus eight paired hard-bank trials reported
+alongside them. Nothing in this document closed or opened that
 gate, and this section is one of the things that report is meant to be able to
 contradict.
 
@@ -862,6 +863,80 @@ nothing from Stage 4 onward is built until this passes._
 agent call `resolve`" — coaching it would destroy the only measurement that matters
 — but whether the tasks were too easy to need prior knowledge, which is a question
 about the task bank and can be answered by building harder ones.
+
+### S-9 A trial the agent was refused was graded as a trial it failed
+
+Four hard-bank trials came back with every rule failed, and none of it was about the
+agent. The task asked for a file under `.claude/plans/`; the Write tool refuses a
+settings directory and `acceptEdits` does not cover it. Each agent composed the plan,
+was refused, retried once, was refused again, and then said plainly that it could not
+proceed — which is the correct behaviour. The harness graded the untouched workspace.
+
+S-8's guard missed it because the run _did_ complete: the agent finished its turn by
+explaining it was blocked. So the driver now records `permission_denials` and the
+runner declines to grade any trial carrying one. Deliberately conservative — a denial
+the agent legitimately worked around lands here too, and a wasted re-run costs one
+trial where a graded obstruction costs the conclusion.
+
+The four trials are kept under `qualification/evidence/stage-3/obstructed/`, and their
+denial records are worth reading: all four agents put "CI is green on the pull request"
+inside the `## DoD` checklist, in both arms. That is exactly the structure the recorded
+control forbids, and it is suggestive rather than evidence — grading blocked content
+would score an intention rather than an outcome.
+
+### S-10 Availability changes nothing: the agent does not ask
+
+This is the finding Stage 3 exists to produce, and the paired design is what turns it
+from a suspicion into a result.
+
+The first bank could not distinguish "EOS was not needed" from "EOS was not reached
+for", because every task was solvable without it. So a second bank was built from two
+assets that were in the corpus before the tasks existed, and every trial was run
+twice: once with the EOS tools offered, once with the server removed and nothing else
+changed.
+
+|                                          |                                              |
+| ---------------------------------------- | -------------------------------------------- |
+| `resolve` calls across both banks        | **0 of 12 trials**                           |
+| `plan-dod-external-gates`, eos arm       | 4/6 rules — fails on the recorded convention |
+| `plan-dod-external-gates`, native arm    | 4/6 rules — **fails identically, same rule** |
+| `plugin-install-marketplace`, native arm | passed 1 of 2                                |
+
+Each link in the chain was checked before the conclusion was drawn:
+
+- **The task discriminates.** The correct reference passes every rule; the naive one
+  fails exactly the trap rule with its suite green; the untouched fixture fails.
+- **The knowledge is there.** A `control_guidance` in the corpus states the rule.
+- **Retrieval works.** `resolve` ranks that asset first for a plausible hint, verified
+  before the task was written, so a miss is not a search failure.
+- **The tools were connected.** Each session's own init event lists all four, after
+  S-6.
+- **The block was present.** `ieos init --with-hooks` wrote it, not a fixture.
+
+So this is not a knowledge problem and not a retrieval problem. It is an **adoption**
+problem: the agent never asks, so the quality of the knowledge base cannot matter.
+
+`plugin-install-marketplace` retires itself as a discriminator and is worth more for
+it: the native arm passed, because the marketplace name is in the model's training
+data after all. Without the native arm that task would have read as EOS supplying a
+fact the agent could not have known, and the conclusion would have been confidently
+wrong. That is the whole argument for pairing.
+
+**Where this points.** The only thing that tells an agent EOS exists is the D18.4
+bootstrap block, and its second paragraph reads: _"The tools are available if you want
+them. Nothing here instructs you to call them, and no tool call is required to
+complete work in this repository."_ That sentence was written to avoid coaching, which
+is right — coaching would invalidate the hidden condition and is not how a real
+installation behaves. But it travels past neutrality into discouragement, and the
+block never says what the knowledge is _for_: it names four tools and a "curated
+knowledge base", which is a description of a mechanism rather than a reason to consult
+it. D18.4 asks the block to state that the tools exist **and what they are for**, and
+the second half is currently missing.
+
+That is a specific, testable, falsifiable next step, and the harness to test it now
+exists: change the block, re-run the same manifests at a new version, compare arms.
+It is also a change to a frozen-guide deliverable's content and sits close enough to
+coaching to be the owner's call rather than mine, so it is recorded here and not made.
 
 ### Explicitly not done at Stage 3
 

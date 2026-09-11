@@ -18,6 +18,8 @@ type Status = 'PASS' | 'FAIL' | 'UNPROVEN';
 
 interface TrialRecord {
   readonly trial_id: string;
+  readonly arm?: string;
+  readonly obstructed?: boolean;
   readonly run_id: string;
   readonly task_id: string;
   readonly eos_revision: string;
@@ -72,6 +74,11 @@ if (records.length === 0) {
 }
 
 const graded = records.filter((record) => record.ran_to_completion !== false);
+// The first bank has no arm; the hard bank is paired. Reported separately, because
+// averaging a paired experiment with an unpaired one would hide the only reading
+// either of them supports.
+const firstBank = graded.filter((record) => record.arm === undefined);
+const hardBank = graded.filter((record) => record.arm !== undefined);
 const every = <T>(items: readonly T[], predicate: (item: T) => boolean): boolean =>
   items.length > 0 && items.every(predicate);
 
@@ -83,7 +90,7 @@ interface Row {
 }
 
 const trialsPerTask = new Map<string, TrialRecord[]>();
-for (const record of graded) {
+for (const record of firstBank) {
   trialsPerTask.set(record.task_id, [...(trialsPerTask.get(record.task_id) ?? []), record]);
 }
 
@@ -119,8 +126,8 @@ const rows: Row[] = [
   {
     id: 'T2',
     requirement: 'every trial solved its task: all deterministic rules proven',
-    status: every(graded, allRulesPassed) ? 'PASS' : 'FAIL',
-    evidence: graded
+    status: every(firstBank, allRulesPassed) ? 'PASS' : 'FAIL',
+    evidence: firstBank
       .map(
         (record) =>
           `${record.trial_id}: ${String(deterministicOf(record).filter((v) => v.status === 'proven').length)}/${String(deterministicOf(record).length)} proven`,
@@ -173,9 +180,9 @@ const rows: Row[] = [
   {
     id: 'T8',
     requirement: 'EOS used where a lesson was needed, or correctly not needed',
-    status: every(graded, allRulesPassed) ? 'PASS' : 'UNPROVEN',
+    status: every(firstBank, allRulesPassed) ? 'PASS' : 'UNPROVEN',
     evidence:
-      `resolve was called unprompted in ${String(graded.filter((r) => r.resolve_called_unprompted).length)}/${String(graded.length)} trials. ` +
+      `resolve was called unprompted in ${String(firstBank.filter((r) => r.resolve_called_unprompted).length)}/${String(firstBank.length)} trials. ` +
       "Every task was solved correctly without it, which is the gate's second branch -- and is " +
       'the finding this stage exists to surface rather than a pass to be pleased about',
   },
@@ -197,7 +204,7 @@ const counts = {
 };
 const verdict = counts.fail === 0 && counts.unproven === 0 ? 'PASSED' : 'NOT PASSED';
 
-const measurements = graded.map((record) => ({
+const measurements = firstBank.map((record) => ({
   trial: record.trial_id,
   cost: record.usage?.costUsd ?? 0,
   wall: record.usage?.wallClockSeconds ?? 0,
@@ -293,6 +300,42 @@ What the stage did establish is not small: the isolation mechanism ADR-0005
 deferred to Stage 3 exists and proves all four boundaries on real agent runs, the
 task bank detects known-bad before any agent is involved, and two defects that
 only a real trial could surface — S-6 and S-7 — are fixed with regression tests.`
+}
+
+## The hard bank: paired arms
+
+The first bank measured the agent rather than the knowledge, so a second bank was
+built from assets that were in the corpus before the tasks existed, and run in pairs:
+the \`eos\` arm offers the four EOS tools, the \`native\` arm is the same trial with the
+server removed. Nothing else differs. The reading is the difference between arms.
+
+| Task | Arm | Trial | Rules proven | resolve called | Cost |
+| --- | --- | --- | --- | --- | --- |
+${hardBank
+  .map(
+    (record) =>
+      `| ${record.task_id} | ${record.arm ?? '?'} | ${record.trial_id.slice(-2)} | ${String(deterministicOf(record).filter((v) => v.status === 'proven').length)}/${String(deterministicOf(record).length)} | ${record.resolve_called_unprompted ? 'yes' : 'no'} | $${(record.usage?.costUsd ?? 0).toFixed(3)} |`,
+  )
+  .join('\n')}
+
+${
+  hardBank.length === 0
+    ? 'No hard-bank trial has been recorded.'
+    : `**\`resolve\` was called in ${String(hardBank.filter((r) => r.resolve_called_unprompted).length)} of ${String(hardBank.length)} hard-bank trials.**
+
+On \`plan-dod-external-gates\` the two arms fail identically, on the same rule, for the
+same reason: the plan is written, the DoD is there, the CI requirement is addressed —
+and it is addressed *inside* the checklist, which is precisely what the recorded
+control forbids. The correct reference passes every rule, so the task discriminates;
+retrieval was verified to rank the required asset first; the tools were connected and
+listed. The agent simply never asked.
+
+On \`plugin-install-marketplace\` the native arm passed one trial of two, which retires
+the task as a discriminator: the marketplace name turned out to be in the model's
+training data, so the task was never the isolation of recorded knowledge it was built
+to be. That is worth more than a clean result would have been — without the native
+arm it would have read as EOS supplying a fact the agent could not have known, and the
+conclusion would have been wrong.`
 }
 
 ## The finding the numbers do not show
