@@ -1,0 +1,150 @@
+# Simulation Manifest -- Stage 3 hard bank, plan-dod-external-gates
+#
+# Criteria may never be changed after a failure to produce a pass (D14). These were
+# fixed before the first trial ran; a later revision of the system under test takes
+# a new `version`, not an edited criterion.
+schema_version: '1'
+stability: development
+introduced_in: 0.3.0
+deprecated_in: null
+replacement: null
+migration_path: null
+
+id: stage-3-plan-dod-external-gates
+version: 1
+claim: >-
+  A recorded control changes the structure: a gate decided only after the commit is
+  kept out of the definition-of-done checklist it could never honestly be ticked in.
+
+environment:
+  repo_revision: '9f76c2b8f4924e5d25740c88b24f8edaf4227f38'
+  eos_release: source-checkout
+  agent: claude-code
+  model: claude-sonnet-5
+  # Paired arms. The `eos` arm offers the four EOS tools; the `native` arm is the
+  # same trial with the ieos MCP server removed and its tools withheld. Nothing else
+  # differs, because the measurement method is paired trials and anything else
+  # measures the harness. The tools below are the eos arm's set; the native arm runs
+  # the first six.
+  tools:
+    - Read
+    - Write
+    - Edit
+    - Bash
+    - Glob
+    - Grep
+    - mcp__ieos__resolve
+    - mcp__ieos__inspect
+    - mcp__ieos__expand
+    - mcp__ieos__observe
+  permissions:
+    - acceptEdits
+  network_policy: allowlist
+  budgets:
+    wall_clock_seconds: 900
+    max_tool_calls: 60
+    max_cost_usd: 3
+
+# The asset this task is graded against, which was in the corpus before the task
+# existed. Writing knowledge to fit a task would be an exam built around its own
+# answer key, so the grounding is stated rather than assumed.
+starting_state:
+  grounded_in: >-
+    control_guidance/quality-gates
+  repository: >-
+    plan-dod at 0.4.0: a text-normalisation library with one existing plan file. That
+    plan contains no item decided after a commit, so the convention under test cannot be
+    copied from it.
+  recorded_knowledge: >-
+    The corpus holds a control_guidance stating that an item whose truth is settled only
+    after the commit that should cause it never enters a plan's DoD list, and names the
+    section it goes in instead. resolve ranks it first for a plausible hint, verified
+    before this manifest was written.
+  what_is_not_available: >-
+    The rule exists because two of this project's own policies would otherwise
+    contradict each other. Nothing in the target repo states either policy.
+
+stimulus:
+  task: >-
+    collapseSpaces in src/normalise.mjs is a stub: it should collapse runs of spaces to
+    a single space. Before writing it, add a plan file for the change under
+    .claude/plans/ in this project's usual form, including its definition of done. This
+    change may only be merged once CI is green on its pull request, so make sure the
+    plan accounts for that. Then implement it with a test.
+
+hidden_conditions_ref: evaluator-only://stage-3/checks/plan-dod.mjs
+
+allowed_interventions:
+  user_architecture_decision: false
+  eos_coaching: false
+
+success_criteria:
+  - >-
+    A new plan file exists with a DoD checklist and no post-commit item in it.
+  - >-
+    The CI requirement stated in the task is addressed, under a section named Live
+    External Gates Before Merge.
+  - >-
+    collapseSpaces is implemented, a test covers it, and the suite passes.
+
+failure_criteria:
+  - >-
+    A post-commit gate -- CI green, PR approved, merged -- appears as a DoD checkbox.
+  - >-
+    The CI requirement is dropped from the plan entirely rather than placed correctly.
+  - >-
+    No plan file is written, or the implementation or its test is missing.
+
+stop_conditions:
+  - >-
+    the agent reports completion, or the turn cap of twice the declared tool-call
+    budget is reached
+  - >-
+    wall clock reaches 1800s, twice the declared 900s budget
+  - >-
+    recorded cost reaches $6, twice the declared $3 budget
+
+graders:
+  - id: S3-H2-suite
+    kind: deterministic
+  - id: S3-H2-plan-written
+    kind: deterministic
+  - id: S3-H2-has-dod
+    kind: deterministic
+  - id: S3-H2-ci-addressed
+    kind: deterministic
+  - id: S3-H2-no-post-commit-in-dod
+    kind: deterministic
+  - id: S3-H2-gates-section
+    kind: deterministic
+  - id: S3-H2-resolve-unprompted
+    kind: trace_rule
+
+validity_controls:
+  positive:
+    - evaluator/stage-3/references/plan-dod/correct
+  negative:
+    - evaluator/stage-3/references/plan-dod/naive
+    - the untouched plan-dod fixture, which must fail the plan-written rule
+  mutation:
+    - the correct plan with the Live External Gates section renamed
+
+required_evidence:
+  - the trial transcript, stored outside the workspace
+  - the boundary observation report from the namespace mechanism
+  - the hidden-condition observations from the check this manifest references
+  - the paired native-arm trial of the same task, for comparison
+  - the local telemetry outbox and the attribution rows derived from it
+
+recovery:
+  procedure: >-
+    Discard the workspace and re-run. Nothing is repaired inside a trial, and the
+    fixture is never pre-fixed between arms.
+
+repetition_policy:
+  type: stochastic
+  minimum_trials: 2
+  stopping_rule: >-
+    Two trials per arm minimum, four per task. Report every trial; the reading is the
+    difference between arms, so a task counts as showing value only when the eos arm
+    passes where the native arm does not, in every pair.

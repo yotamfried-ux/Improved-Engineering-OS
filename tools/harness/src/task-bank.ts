@@ -24,6 +24,8 @@ import type { TrialTask } from './driver.ts';
 import type { DeterministicRule, Gradeable, TraceRule } from './graders.ts';
 import {
   configMergeRepo,
+  contributorSetupRepo,
+  planDodRepo,
   pluginRunnerRepo,
   retryBackoffRepo,
   type TargetRepoSpec,
@@ -144,7 +146,7 @@ export const STAGE_3_TASKS: readonly Stage3Task[] = [
 ];
 
 export function taskById(taskId: string): Stage3Task {
-  const found = STAGE_3_TASKS.find((candidate) => candidate.taskId === taskId);
+  const found = ALL_STAGE_3_TASKS.find((candidate) => candidate.taskId === taskId);
   if (found === undefined) throw new Error(`no Stage 3 task named ${taskId}`);
   return found;
 }
@@ -201,3 +203,98 @@ export function gradeableFor(input: {
 }): Gradeable {
   return { outcomes: input.outcomes, toolCalls: input.toolCalls, transcript: input.transcript };
 }
+
+// ---------------------------------------------------------------------------
+// The hard bank
+// ---------------------------------------------------------------------------
+
+/**
+ * Tasks whose answer is not in the repository and not in general knowledge.
+ *
+ * The first bank answered its question and the answer was uncomfortable: a capable
+ * agent solved all three tasks without consulting EOS once, so the trials measured
+ * the agent's competence rather than the knowledge base's value. The tasks were
+ * inside what the model already knew.
+ *
+ * These two are built from the other end. Each is grounded in one asset that was in
+ * the corpus before the task existed -- a `failed_solution` and a
+ * `control_guidance` -- and each is graded on a fact that asset is the only source
+ * for. One is a marketplace name belonging to a third-party repository; the other is
+ * a project convention that exists because two of its own policies would otherwise
+ * contradict each other. No amount of reading the target repository yields either,
+ * and neither is a reasonable guess.
+ *
+ * That makes them unfair in the arm where EOS is absent, and unfairness is the
+ * instrument: a task an agent can solve either way measures nothing about the
+ * knowledge, which is exactly what the first bank demonstrated. Retrieval was
+ * verified before either task was written -- `resolve` ranks the required asset
+ * first for a plausible hint -- so a failure in the EOS arm is about the agent or
+ * the knowledge, not about search.
+ */
+export const STAGE_3_HARD_TASKS: readonly Stage3Task[] = [
+  {
+    taskId: 'plugin-install-marketplace',
+    claim:
+      'a recorded failed solution changes the outcome: the agent installs from the marketplace ' +
+      'the record names rather than the one the record says was tried and failed',
+    task: {
+      taskId: 'plugin-install-marketplace',
+      prompt:
+        'scripts/setup.sh brings a clean machine up. Add a step that installs the "superpowers" ' +
+        'plugin for Claude Code, so a new contributor gets it from the setup script rather than ' +
+        'having to be told. Keep the script idempotent and keep the existing tests passing.',
+      budget: BUDGET,
+    },
+    repo: contributorSetupRepo,
+    checkScript: resolve(CHECKS, 'contributor-setup.mjs'),
+    hiddenConditionsRef: 'evaluator-only://stage-3/checks/contributor-setup.mjs',
+    deterministicRules: [
+      { id: 'S3-H1-suite', key: 'suite_green', equals: true },
+      { id: 'S3-H1-correct-marketplace', key: 'correct_marketplace_added', equals: true },
+      { id: 'S3-H1-installs-from-it', key: 'installs_from_that_marketplace', equals: true },
+      { id: 'S3-H1-order', key: 'marketplace_added_before_install', equals: true },
+      {
+        id: 'S3-H1-not-recorded-failure',
+        key: 'reached_for_recorded_failure_official_marketplace',
+        equals: false,
+      },
+      {
+        id: 'S3-H1-not-slash-command',
+        key: 'reached_for_recorded_failure_slash_command',
+        equals: false,
+      },
+    ],
+    traceRules: [{ id: 'S3-H1-resolve-unprompted', tool: 'resolve', expectation: 'called' }],
+  },
+  {
+    taskId: 'plan-dod-external-gates',
+    claim:
+      'a recorded control changes the structure: a post-commit gate is kept out of the ' +
+      'definition-of-done checklist it cannot honestly be ticked in',
+    task: {
+      taskId: 'plan-dod-external-gates',
+      prompt:
+        'collapseSpaces in src/normalise.mjs is a stub: it should collapse runs of spaces to a ' +
+        'single space. Before writing it, add a plan file for the change under .claude/plans/ in ' +
+        "this project's usual form, including its definition of done. This change may only be " +
+        'merged once CI is green on its pull request, so make sure the plan accounts for that. ' +
+        'Then implement it with a test.',
+      budget: BUDGET,
+    },
+    repo: planDodRepo,
+    checkScript: resolve(CHECKS, 'plan-dod.mjs'),
+    hiddenConditionsRef: 'evaluator-only://stage-3/checks/plan-dod.mjs',
+    deterministicRules: [
+      { id: 'S3-H2-suite', key: 'suite_green', equals: true },
+      { id: 'S3-H2-plan-written', key: 'new_plan_written', equals: true },
+      { id: 'S3-H2-has-dod', key: 'has_dod_section', equals: true },
+      { id: 'S3-H2-ci-addressed', key: 'ci_requirement_addressed_somewhere', equals: true },
+      { id: 'S3-H2-no-post-commit-in-dod', key: 'post_commit_items_in_dod', equals: 0 },
+      { id: 'S3-H2-gates-section', key: 'has_external_gates_section', equals: true },
+    ],
+    traceRules: [{ id: 'S3-H2-resolve-unprompted', tool: 'resolve', expectation: 'called' }],
+  },
+];
+
+/** Every Stage 3 task, both banks, for lookup by id. */
+export const ALL_STAGE_3_TASKS: readonly Stage3Task[] = [...STAGE_3_TASKS, ...STAGE_3_HARD_TASKS];

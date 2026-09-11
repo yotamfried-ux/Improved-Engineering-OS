@@ -387,3 +387,201 @@ export function writeTargetRepo(root: string, spec: TargetRepoSpec): void {
     });
   }
 }
+
+// ---------------------------------------------------------------------------
+// Hard bank -- tasks whose answer is not in the repository and not in training
+// ---------------------------------------------------------------------------
+
+/**
+ * A contributor bootstrap script, missing one step.
+ *
+ * The first task bank measured nothing about EOS, because a capable agent solved
+ * every task from the repository alone. These two are built the other way round:
+ * from knowledge that is *recorded* and otherwise unavailable. Both cite assets
+ * that were in the corpus before either task existed -- writing the knowledge to
+ * fit the task would be building the exam around the answer key.
+ *
+ * Here the recorded asset is a `failed_solution`, which is the strongest possible
+ * shape: it names both the wrong answer an agent is likely to reach for and the
+ * right one. Nothing in this repository hints at either, and the marketplace name
+ * is not derivable -- it is a fact about someone else's repository.
+ */
+export function contributorSetupRepo(): TargetRepoSpec {
+  return {
+    name: 'contributor-setup',
+    files: [
+      {
+        path: 'package.json',
+        content: `${JSON.stringify(
+          {
+            name: 'contributor-setup',
+            version: '2.1.0',
+            private: true,
+            type: 'module',
+            scripts: { test: 'node --test', setup: 'bash scripts/setup.sh' },
+          },
+          null,
+          2,
+        )}\n`,
+      },
+      {
+        path: 'README.md',
+        content: `# contributor-setup
+
+\`scripts/setup.sh\` brings a clean machine to a working checkout. It is expected to
+be idempotent: a contributor runs it again after pulling and it does the right
+thing rather than failing on what is already installed.
+`,
+      },
+      {
+        path: 'scripts/setup.sh',
+        content: `#!/usr/bin/env bash
+# Bring a clean machine to a working checkout. Idempotent by design: every step
+# either does its work or reports that it was already done.
+set -euo pipefail
+
+echo "==> node"
+node --version
+
+echo "==> dependencies"
+if [ -d node_modules ]; then
+  echo "    already installed"
+else
+  npm install --no-audit --no-fund
+fi
+
+echo "==> git hooks"
+if [ -f .git/hooks/pre-commit ]; then
+  echo "    already installed"
+else
+  cp scripts/pre-commit .git/hooks/pre-commit
+  chmod +x .git/hooks/pre-commit
+fi
+
+echo "setup complete"
+`,
+        executable: true,
+      },
+      {
+        path: 'scripts/pre-commit',
+        content: '#!/usr/bin/env bash\nnpm test --silent\n',
+        executable: true,
+      },
+      {
+        path: 'test/setup.test.mjs',
+        content: `import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const script = readFileSync('scripts/setup.sh', 'utf8');
+
+test('the setup script is strict', () => {
+  assert.match(script, /set -euo pipefail/u);
+});
+
+test('every step announces itself', () => {
+  assert.ok(script.split('\\n').filter((line) => line.includes('echo "==>')).length >= 3);
+});
+`,
+      },
+    ],
+  };
+}
+
+/**
+ * A repository that keeps plan files, with no example of the rule under test.
+ *
+ * The recorded `control_guidance` says a definition-of-done item whose truth is
+ * only decided *after* the commit -- CI green, PR checks passing -- must never sit
+ * in a plan's `## DoD` list, because the same policy blocks the commit while any
+ * DoD item is unchecked, and the two together are unsatisfiable. Such items go in
+ * a separate section with a fixed name.
+ *
+ * The existing plan here deliberately contains no CI-dependent item, so the
+ * convention cannot be copied from it. An agent that has not read the guidance has
+ * no way to know the section exists, and the natural thing to write -- "CI is
+ * green" among the checkboxes -- is exactly what the policy forbids.
+ */
+export function planDodRepo(): TargetRepoSpec {
+  return {
+    name: 'plan-dod',
+    files: [
+      {
+        path: 'package.json',
+        content: `${JSON.stringify(
+          {
+            name: 'plan-dod',
+            version: '0.4.0',
+            private: true,
+            type: 'module',
+            scripts: { test: 'node --test' },
+          },
+          null,
+          2,
+        )}\n`,
+      },
+      {
+        path: 'README.md',
+        content: `# plan-dod
+
+A small text-normalisation library.
+
+Changes are planned before they are written: every change gets a file under
+\`.claude/plans/\` describing it, with a definition-of-done checklist. See the
+existing plan for the shape.
+`,
+      },
+      {
+        path: '.claude/plans/trim-trailing-whitespace.md',
+        content: `# Trim trailing whitespace
+
+## Goal
+
+\`normalise\` should remove trailing whitespace from every line, not just the last.
+
+## Approach
+
+Split on newlines, trim the end of each line, rejoin.
+
+## DoD
+
+- [x] \`normalise\` trims every line
+- [x] a test covers a multi-line input
+- [x] the existing tests still pass
+- [x] no behaviour change for input with no trailing whitespace
+`,
+      },
+      {
+        path: 'src/normalise.mjs',
+        content: `/** Collapse runs of whitespace and trim each line. */
+export function normalise(text) {
+  return text
+    .split('\\n')
+    .map((line) => line.replace(/\\s+$/u, ''))
+    .join('\\n');
+}
+
+/** Collapse internal runs of spaces to one. Not yet implemented. */
+export function collapseSpaces(text) {
+  return text;
+}
+`,
+      },
+      {
+        path: 'test/normalise.test.mjs',
+        content: `import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { normalise } from '../src/normalise.mjs';
+
+test('trims every line, not only the last', () => {
+  assert.equal(normalise('a  \\nb\\t\\nc'), 'a\\nb\\nc');
+});
+
+test('leaves clean input alone', () => {
+  assert.equal(normalise('a\\nb'), 'a\\nb');
+});
+`,
+      },
+    ],
+  };
+}

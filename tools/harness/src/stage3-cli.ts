@@ -53,9 +53,28 @@ const eosRoot = resolve(import.meta.dirname, '..', '..', '..');
 const outDir = resolve(flag('--out') ?? join(eosRoot, 'qualification', 'evidence', 'stage-3'));
 const settingSources = flag('--setting-sources');
 
-const trialId = `${taskId}-t${String(trialNumber)}`;
+/**
+ * Which arm of the pair this trial is.
+ *
+ * `eos` offers the agent the four EOS tools; `native` is the same trial with the
+ * `ieos` MCP server removed and its tools withheld. Everything else is held
+ * constant -- same fixture, same namespace, same budget, same prompt, same model,
+ * same telemetry hooks -- because the guide's measurement method is paired trials
+ * and anything else measures the harness.
+ *
+ * This exists because the first bank measured the wrong thing. "Was `resolve`
+ * called" is a proxy for value; whether the outcome differs when the knowledge is
+ * reachable is the thing itself, and it is the only reading that can say EOS helped.
+ */
+const arm = flag('--arm') ?? 'eos';
+if (arm !== 'eos' && arm !== 'native') {
+  process.stderr.write(`--arm must be "eos" or "native", not "${arm}"\n`);
+  process.exit(64);
+}
+
+const trialId = `${taskId}-${arm}-t${String(trialNumber)}`;
 // A run id the plane can carry, and one a reader can trace back to a manifest.
-const runId = `run_s3_${taskId.replace(/-/gu, '_')}_t${String(trialNumber)}`;
+const runId = `run_s3_${taskId.replace(/-/gu, '_')}_${arm}_t${String(trialNumber)}`;
 
 mkdirSync(outDir, { recursive: true });
 const transcriptDir = join(outDir, 'transcripts');
@@ -196,10 +215,10 @@ const driver = new ClaudeCodeDriver({
     'Bash',
     'Glob',
     'Grep',
-    'mcp__ieos__resolve',
-    'mcp__ieos__inspect',
-    'mcp__ieos__expand',
-    'mcp__ieos__observe',
+    // Withheld in the native arm, so the two arms differ in exactly one thing.
+    ...(arm === 'native'
+      ? []
+      : ['mcp__ieos__resolve', 'mcp__ieos__inspect', 'mcp__ieos__expand', 'mcp__ieos__observe']),
   ],
   allowedHosts: ['api.anthropic.com:443'],
   deniedRoots: [join(eosRoot, 'evaluator'), join(eosRoot, 'simulations')],
@@ -282,6 +301,7 @@ const trialRecord = {
   run_id: runId,
   simulation_id: `stage-3-${taskId}`,
   task_id: taskId,
+  arm,
   recorded_at: new Date().toISOString(),
   eos_revision: execFileSync('git', ['rev-parse', 'HEAD'], {
     cwd: eosRoot,
@@ -321,6 +341,7 @@ if (!ranToCompletion) {
     `  NOT GRADED -- the run did not complete: ${record?.terminalReason ?? 'no reason recorded'}\n`,
   );
 }
+process.stdout.write(`  arm: ${arm}\n`);
 process.stdout.write(`  resolve called unprompted: ${String(resolveCalled)}\n`);
 process.stdout.write(
   `  cost: $${String(usage?.costUsd ?? 0)}  tool calls: ${String(toolCalls.length)}\n`,

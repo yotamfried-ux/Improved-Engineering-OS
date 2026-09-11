@@ -13,14 +13,15 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { cpSync, mkdtempSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gradeDeterministic } from '../src/graders.ts';
 import { runCheck, STAGE_3_TASKS, taskById, EVALUATOR_ROOT } from '../src/task-bank.ts';
-import { writeTargetRepo } from '../src/target-repo.ts';
+import { contributorSetupRepo, planDodRepo, writeTargetRepo } from '../src/target-repo.ts';
 
 const REFERENCES = join(EVALUATOR_ROOT, 'stage-3', 'references');
+const REPO_ROOT = join(EVALUATOR_ROOT, '..');
 const CHECK_TIMEOUT = 180_000;
 const workspaces: string[] = [];
 
@@ -221,6 +222,126 @@ describe('backoff-breaks-a-test: the graders detect known-bad', () => {
       );
       const byId = new Map(verdicts.map((verdict) => [verdict.graderId, verdict.status]));
       expect(byId.get('S3-T3-delay-real')).toBe('failed');
+    },
+    CHECK_TIMEOUT,
+  );
+});
+
+describe('the hard bank is grounded, not invented', () => {
+  it('cites assets that exist in the corpus', () => {
+    // The hard tasks are graded on facts only a corpus asset carries. If the asset
+    // is not there, the task is not hard, it is impossible -- and if it were added
+    // to make a task passable, the experiment would be the exam written around its
+    // own answer key. Both cited assets predate both tasks.
+    for (const relative of [
+      join('failed_solution', 'slash-command-from-bash'),
+      join('control_guidance', 'quality-gates'),
+    ]) {
+      const asset = join(REPO_ROOT, 'knowledge', 'assets', relative, 'asset.yaml');
+      expect(
+        existsSync(asset),
+        `${relative} is cited by a hard task but is not in the corpus`,
+      ).toBe(true);
+    }
+  });
+
+  it('grades on facts the target repository does not contain', () => {
+    // If the answer is in the fixture, the task measures reading rather than
+    // retrieval, which is how the first bank came to measure nothing.
+    const setup = contributorSetupRepo();
+    const setupText = setup.files.map((file) => file.content).join('\n');
+    expect(setupText).not.toContain('obra/superpowers-marketplace');
+    expect(setupText).not.toContain('superpowers');
+
+    const planRepo = planDodRepo();
+    const planText = planRepo.files.map((file) => file.content).join('\n');
+    expect(planText).not.toContain('Live External Gates');
+  });
+});
+
+describe('plugin-install-marketplace: the graders detect known-bad', () => {
+  it(
+    'the correct fix passes every rule',
+    () => {
+      const verdicts = verdictsFor(
+        'plugin-install-marketplace',
+        workspaceWith('plugin-install-marketplace', 'contributor-setup', 'correct'),
+      );
+      expect(statuses(verdicts).filter((entry) => !entry.endsWith('=proven'))).toEqual([]);
+    },
+    CHECK_TIMEOUT,
+  );
+
+  it(
+    'reaching for the recorded failed marketplace fails',
+    () => {
+      const verdicts = verdictsFor(
+        'plugin-install-marketplace',
+        workspaceWith('plugin-install-marketplace', 'contributor-setup', 'naive'),
+      );
+      const byId = new Map(verdicts.map((verdict) => [verdict.graderId, verdict.status]));
+      expect(byId.get('S3-H1-correct-marketplace')).toBe('failed');
+      expect(byId.get('S3-H1-not-recorded-failure')).toBe('failed');
+    },
+    CHECK_TIMEOUT,
+  );
+
+  it(
+    'the untouched repository fails: the step really is missing',
+    () => {
+      const verdicts = verdictsFor(
+        'plugin-install-marketplace',
+        workspaceWith('plugin-install-marketplace', 'contributor-setup', null),
+      );
+      const byId = new Map(verdicts.map((verdict) => [verdict.graderId, verdict.status]));
+      expect(byId.get('S3-H1-correct-marketplace')).toBe('failed');
+      // The suite still passes, so the row that fails is the one about the task.
+      expect(byId.get('S3-H1-suite')).toBe('proven');
+    },
+    CHECK_TIMEOUT,
+  );
+});
+
+describe('plan-dod-external-gates: the graders detect known-bad', () => {
+  it(
+    'the correct plan passes every rule',
+    () => {
+      const verdicts = verdictsFor(
+        'plan-dod-external-gates',
+        workspaceWith('plan-dod-external-gates', 'plan-dod', 'correct'),
+      );
+      expect(statuses(verdicts).filter((entry) => !entry.endsWith('=proven'))).toEqual([]);
+    },
+    CHECK_TIMEOUT,
+  );
+
+  it(
+    'a post-commit gate inside the DoD checklist fails, plan and tests notwithstanding',
+    () => {
+      const verdicts = verdictsFor(
+        'plan-dod-external-gates',
+        workspaceWith('plan-dod-external-gates', 'plan-dod', 'naive'),
+      );
+      const byId = new Map(verdicts.map((verdict) => [verdict.graderId, verdict.status]));
+      expect(byId.get('S3-H2-no-post-commit-in-dod')).toBe('failed');
+      expect(byId.get('S3-H2-gates-section')).toBe('failed');
+      // Everything else about this solution is right, which is the point: the rule
+      // is structural and nothing else catches it.
+      expect(byId.get('S3-H2-suite')).toBe('proven');
+      expect(byId.get('S3-H2-plan-written')).toBe('proven');
+    },
+    CHECK_TIMEOUT,
+  );
+
+  it(
+    'the untouched repository fails: no plan was written',
+    () => {
+      const verdicts = verdictsFor(
+        'plan-dod-external-gates',
+        workspaceWith('plan-dod-external-gates', 'plan-dod', null),
+      );
+      const byId = new Map(verdicts.map((verdict) => [verdict.graderId, verdict.status]));
+      expect(byId.get('S3-H2-plan-written')).toBe('failed');
     },
     CHECK_TIMEOUT,
   );
