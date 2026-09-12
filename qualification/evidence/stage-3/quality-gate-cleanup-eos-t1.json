@@ -1,0 +1,403 @@
+{
+  "trial_id": "quality-gate-cleanup-eos-t1",
+  "run_id": "run_s3_quality_gate_cleanup_eos_t1",
+  "simulation_id": "stage-3-quality-gate-cleanup",
+  "task_id": "quality-gate-cleanup",
+  "arm": "eos",
+  "recorded_at": "2026-09-12T08:44:55.502Z",
+  "eos_revision": "dd550eac1900944c39fbd2c7350613b1bae8c9f4",
+  "setting_sources": "project",
+  "ranking_mode": "recorded",
+  "registration": {
+    "confirmed": false,
+    "reason": "no Evidence Plane is enrolled for this harness"
+  },
+  "status": "unproven",
+  "ran_to_completion": true,
+  "obstructed": false,
+  "permission_denials": [],
+  "terminal_reason": null,
+  "qualification_eligible": false,
+  "origin_class_the_plane_would_stamp": "operational",
+  "budget": {
+    "state": "within",
+    "reasons": []
+  },
+  "usage": {
+    "wallClockSeconds": 691.949,
+    "costUsd": 1.512527,
+    "inputTokens": 56,
+    "outputTokens": 62434,
+    "cacheReadInputTokens": 2426420,
+    "cacheCreationInputTokens": 100442,
+    "turns": 40
+  },
+  "tool_calls": [
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:33:32.228Z"
+    },
+    {
+      "name": "ToolSearch",
+      "at": "2026-09-12T08:33:33.141Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T08:33:36.230Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T08:33:36.732Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T08:33:37.256Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T08:33:37.891Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T08:33:37.977Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:33:42.593Z"
+    },
+    {
+      "name": "resolve",
+      "at": "2026-09-12T08:33:46.491Z"
+    },
+    {
+      "name": "inspect",
+      "at": "2026-09-12T08:33:50.664Z"
+    },
+    {
+      "name": "inspect",
+      "at": "2026-09-12T08:33:51.587Z"
+    },
+    {
+      "name": "inspect",
+      "at": "2026-09-12T08:33:51.980Z"
+    },
+    {
+      "name": "resolve",
+      "at": "2026-09-12T08:34:14.044Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:40:32.205Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:40:47.378Z"
+    },
+    {
+      "name": "Write",
+      "at": "2026-09-12T08:41:08.634Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:41:19.431Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:41:40.892Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:41:53.534Z"
+    },
+    {
+      "name": "Write",
+      "at": "2026-09-12T08:42:47.671Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:42:51.726Z"
+    },
+    {
+      "name": "Edit",
+      "at": "2026-09-12T08:42:59.287Z"
+    },
+    {
+      "name": "Edit",
+      "at": "2026-09-12T08:43:01.566Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:43:03.935Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:43:08.491Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T08:43:18.349Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T08:43:29.271Z"
+    },
+    {
+      "name": "Edit",
+      "at": "2026-09-12T08:43:52.560Z"
+    },
+    {
+      "name": "Edit",
+      "at": "2026-09-12T08:43:53.872Z"
+    },
+    {
+      "name": "Edit",
+      "at": "2026-09-12T08:43:54.913Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:44:02.838Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:44:07.583Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:44:13.403Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:44:19.566Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:44:22.643Z"
+    },
+    {
+      "name": "observe",
+      "at": "2026-09-12T08:44:32.426Z"
+    },
+    {
+      "name": "observe",
+      "at": "2026-09-12T08:44:36.154Z"
+    },
+    {
+      "name": "observe",
+      "at": "2026-09-12T08:44:38.596Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:44:42.615Z"
+    }
+  ],
+  "resolve_called_unprompted": true,
+  "eos_tools_used": [
+    "resolve",
+    "inspect",
+    "observe"
+  ],
+  "isolation": {
+    "findings": [
+      {
+        "boundary": "filesystem",
+        "verdict": "proven",
+        "evidence": "before and after the trial ran: workspace /tmp/ieos-trial-quality-gate-cleanup-eos-t1-O3BO1T contains no path resolving outside its allowed roots, and no denied root is reachable from it"
+      },
+      {
+        "boundary": "environment",
+        "verdict": "proven",
+        "evidence": "before and after the trial ran: trial environment contains only the 4 explicitly granted name(s); nothing was inherited"
+      },
+      {
+        "boundary": "process",
+        "verdict": "unproven",
+        "evidence": "before and after the trial ran: a temporary directory cannot constrain process creation. Proving this boundary needs a container, namespace or equivalent mechanism, which is a Stage 3 precondition (ADR-0005)."
+      },
+      {
+        "boundary": "network",
+        "verdict": "unproven",
+        "evidence": "before and after the trial ran: a temporary directory cannot constrain network egress, and SDK settings isolation says nothing about what a spawned process can reach (research finding R5). Proving this boundary needs a container, namespace or equivalent mechanism (ADR-0005)."
+      },
+      {
+        "boundary": "filesystem",
+        "verdict": "proven",
+        "evidence": "inside the namespace, /home/user/Improved-Engineering-OS/evaluator /home/user/Improved-Engineering-OS/simulations showed 0 entries: an empty directory is mounted over every denied root, so the evaluator tree is absent rather than merely unreferenced"
+      },
+      {
+        "boundary": "environment",
+        "verdict": "proven",
+        "evidence": "the trial process was started with a replaced environment rather than a filtered one, so only the names the policy granted exist inside it"
+      },
+      {
+        "boundary": "process",
+        "verdict": "proven",
+        "evidence": "the trial is pid 1 in its own PID namespace and sees 4 process(es): its own tree and nothing of the host"
+      },
+      {
+        "boundary": "network",
+        "verdict": "proven",
+        "evidence": "egress is lo,tap0 with OUTPUT dropped by default and api.anthropic.com(160.79.104.10):443 allowed; the control destination 93.184.216.34:443 was refused:timeout"
+      }
+    ],
+    "qualificationEligible": true,
+    "reasons": []
+  },
+  "namespace_observations": {
+    "denied_roots": " /home/user/Improved-Engineering-OS/evaluator /home/user/Improved-Engineering-OS/simulations",
+    "denied_entries_visible": 0,
+    "allowlist": " api.anthropic.com(160.79.104.10):443",
+    "control_host": "93.184.216.34:443",
+    "control_result": "refused:timeout",
+    "interfaces": "lo,tap0",
+    "pid_namespace_self": 1,
+    "pid_namespace_visible_processes": 4
+  },
+  "mechanism_unavailable": null,
+  "check": {
+    "failure": null,
+    "outcomes": {
+      "suite_green": true,
+      "script_present": true,
+      "clean_diff_allowed": true,
+      "debugger_blocked": true,
+      "python_pdb_blocked": true,
+      "ruby_byebug_blocked": true,
+      "merge_marker_blocked": true,
+      "console_log_allowed": true,
+      "console_log_warned": true,
+      "named_bypass_works": true
+    }
+  },
+  "verdicts": [
+    {
+      "graderId": "S3-H4-suite",
+      "kind": "deterministic",
+      "status": "proven",
+      "evidence": "suite_green = true, expected true"
+    },
+    {
+      "graderId": "S3-H4-clean-allowed",
+      "kind": "deterministic",
+      "status": "proven",
+      "evidence": "clean_diff_allowed = true, expected true"
+    },
+    {
+      "graderId": "S3-H4-debugger-blocked",
+      "kind": "deterministic",
+      "status": "proven",
+      "evidence": "debugger_blocked = true, expected true"
+    },
+    {
+      "graderId": "S3-H4-pdb-blocked",
+      "kind": "deterministic",
+      "status": "proven",
+      "evidence": "python_pdb_blocked = true, expected true"
+    },
+    {
+      "graderId": "S3-H4-merge-marker-blocked",
+      "kind": "deterministic",
+      "status": "proven",
+      "evidence": "merge_marker_blocked = true, expected true"
+    },
+    {
+      "graderId": "S3-H4-log-allowed",
+      "kind": "deterministic",
+      "status": "proven",
+      "evidence": "console_log_allowed = true, expected true"
+    },
+    {
+      "graderId": "S3-H4-log-warned",
+      "kind": "deterministic",
+      "status": "proven",
+      "evidence": "console_log_warned = true, expected true"
+    },
+    {
+      "graderId": "S3-H4-named-bypass",
+      "kind": "deterministic",
+      "status": "proven",
+      "evidence": "named_bypass_works = true, expected true"
+    },
+    {
+      "graderId": "S3-H4-resolve-unprompted",
+      "kind": "trace_rule",
+      "status": "proven",
+      "evidence": "resolve was called (position 8 of 39)"
+    }
+  ],
+  "grading": {
+    "status": "proven",
+    "decidedBy": [
+      {
+        "graderId": "S3-H4-suite",
+        "kind": "deterministic",
+        "status": "proven",
+        "evidence": "suite_green = true, expected true"
+      },
+      {
+        "graderId": "S3-H4-clean-allowed",
+        "kind": "deterministic",
+        "status": "proven",
+        "evidence": "clean_diff_allowed = true, expected true"
+      },
+      {
+        "graderId": "S3-H4-debugger-blocked",
+        "kind": "deterministic",
+        "status": "proven",
+        "evidence": "debugger_blocked = true, expected true"
+      },
+      {
+        "graderId": "S3-H4-pdb-blocked",
+        "kind": "deterministic",
+        "status": "proven",
+        "evidence": "python_pdb_blocked = true, expected true"
+      },
+      {
+        "graderId": "S3-H4-merge-marker-blocked",
+        "kind": "deterministic",
+        "status": "proven",
+        "evidence": "merge_marker_blocked = true, expected true"
+      },
+      {
+        "graderId": "S3-H4-log-allowed",
+        "kind": "deterministic",
+        "status": "proven",
+        "evidence": "console_log_allowed = true, expected true"
+      },
+      {
+        "graderId": "S3-H4-log-warned",
+        "kind": "deterministic",
+        "status": "proven",
+        "evidence": "console_log_warned = true, expected true"
+      },
+      {
+        "graderId": "S3-H4-named-bypass",
+        "kind": "deterministic",
+        "status": "proven",
+        "evidence": "named_bypass_works = true, expected true"
+      }
+    ],
+    "overruled": [],
+    "reasons": [
+      "S3-H4-suite (deterministic): suite_green = true, expected true",
+      "S3-H4-clean-allowed (deterministic): clean_diff_allowed = true, expected true",
+      "S3-H4-debugger-blocked (deterministic): debugger_blocked = true, expected true",
+      "S3-H4-pdb-blocked (deterministic): python_pdb_blocked = true, expected true",
+      "S3-H4-merge-marker-blocked (deterministic): merge_marker_blocked = true, expected true",
+      "S3-H4-log-allowed (deterministic): console_log_allowed = true, expected true",
+      "S3-H4-log-warned (deterministic): console_log_warned = true, expected true",
+      "S3-H4-named-bypass (deterministic): named_bypass_works = true, expected true"
+    ]
+  },
+  "reasons": [
+    "S3-H4-suite (deterministic): suite_green = true, expected true",
+    "S3-H4-clean-allowed (deterministic): clean_diff_allowed = true, expected true",
+    "S3-H4-debugger-blocked (deterministic): debugger_blocked = true, expected true",
+    "S3-H4-pdb-blocked (deterministic): python_pdb_blocked = true, expected true",
+    "S3-H4-merge-marker-blocked (deterministic): merge_marker_blocked = true, expected true",
+    "S3-H4-log-allowed (deterministic): console_log_allowed = true, expected true",
+    "S3-H4-log-warned (deterministic): console_log_warned = true, expected true",
+    "S3-H4-named-bypass (deterministic): named_bypass_works = true, expected true",
+    "run run_s3_quality_gate_cleanup_eos_t1 was registered locally but not with the Evidence Plane, so the plane will stamp its events \"operational\" and this trial is not qualification evidence (D36)"
+  ],
+  "transcript_ref": "/home/user/Improved-Engineering-OS/qualification/evidence/stage-3/transcripts/quality-gate-cleanup-eos-t1-quality-gate-cleanup.ndjson"
+}

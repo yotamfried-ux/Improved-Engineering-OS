@@ -1,24 +1,47 @@
 # Stage 3 — Real agent vertical slice
 
-**Status: gate NOT PASSED.** `qualification/reports/stage-03-2026-09-11.md` —
-harness-generated, 7 pass, 2 fail, 0 unproven, from six trial records at revision
-`4371506`. Nothing in this document decided that, and this document is one of the
-things that report is meant to be able to contradict.
+**Status: gate NOT PASSED.** `qualification/reports/stage-03-2026-09-12.md` —
+harness-generated, 7 pass, 2 fail, 0 unproven. Nothing in this document decided that,
+and this document is one of the things that report is meant to be able to contradict.
+An earlier report, `stage-03-2026-09-11.md`, is kept and marked superseded rather than
+replaced.
 
-Both failing rows have one cause and neither is about the agent or the tasks: this
-environment's egress policy does not reach the Evidence Plane, so no run could be
-confirmed as `qualification` (T4) and every trial ended `telemetry_state:
-INCOMPLETE` (T7), which this repository's own rule excludes from measurement. The
-remedy is an environment whose network policy permits that host; the trials re-run
-unmodified.
+**Both failing rows are environmental and neither is about the agent or the tasks.**
+This session's egress policy does not reach the Evidence Plane, so no run could be
+confirmed as `qualification` (T4) and every trial ended `telemetry_state: INCOMPLETE`
+(T7), which this repository's own rule excludes from measurement. The remedy is an
+environment whose network policy permits that host; the trials re-run unmodified, and no
+code change is implied.
 
-The separate finding is the one worth reading twice: `resolve` was called in **0 of
-6** trials, with the tools connected and verified in each session's own init event.
-Every task was solved correctly without EOS, including the one built on a Stage 2
-lesson whose trap the agent was never told about. The gate's letter allows that —
-"or correctly did not need it" — and the stage's question was whether EOS is
-natural, so the answer is no, not on work a capable agent can already do. Stage 4
-is not started, per the guide's own clause.
+## What the stage actually found
+
+The first bank — three tasks, six trials — was passed by the agent without consulting
+EOS once, so it measured the agent's competence rather than the knowledge base. That was
+the honest finding and it was not the end of it.
+
+A second bank was then built from assets that were already in the corpus, and run in
+**paired arms**: the `eos` arm offers the four EOS tools, the `native` arm is a project
+without EOS at all. With the original bootstrap block, both arms failed identically and
+`resolve` was called in **0 of 12** trials. Rewriting the block to say what the record is
+_for_ (C-14) changed that on every task where the knowledge is genuinely not derivable:
+
+| Task                         | native arm                              | eos arm                 |
+| ---------------------------- | --------------------------------------- | ----------------------- |
+| `plan-dod-external-gates`    | 4/6 rules, resolve not called           | **6/6, resolve called** |
+| `commit-message-protocol`    | 3/5 rules, resolve not called           | **5/5, resolve called** |
+| `quality-gate-cleanup`       | 6/8 rules, resolve not called           | see the report          |
+| `plugin-install-marketplace` | passed — **retired as a discriminator** |                         |
+
+So the binding constraint was never retrieval or the corpus. It was that nothing gave
+the agent a reason to look, and the block was the only thing that could. The overhead
+this buys is recorded in `docs/budgets.md` and is not small.
+
+The corrections along the way are in the decision log rather than smoothed over: S-6
+(the MCP server refused the era its clients speak), S-7 (the harness and the hooks used
+different run ids), S-8 and S-9 (trials graded that the agent never attempted, or was
+refused), S-12 (the `native` arm was mislabelled for three rounds — it withheld the tools
+without removing the server), and two graders that fooled themselves, one of which
+reproduced the very corpus lesson it was not testing.
 
 ## What the guide asks for
 

@@ -999,6 +999,67 @@ The lesson is the ordinary one and I had it backwards in my own loop: an edit is
 change until something confirms it landed. Every earlier claim about the native arm
 should be read as "tools connected and refused".
 
+### S-13 C-14's effect is a property of the mechanism, not one lucky task
+
+Two more tasks were built in the `plan-dod` shape — an answer recorded in the corpus,
+arbitrary enough that it cannot be derived or guessed, and mechanically checkable — and
+run in the same paired arms. Both are grounded in the `control_guidance` asset that has
+been in the corpus since Stage 2, and retrieval was verified to rank it first for each
+hint before either task was written.
+
+| Task                      | native arm                      | eos arm         |
+| ------------------------- | ------------------------------- | --------------- |
+| `plan-dod-external-gates` | 4/6 rules, `resolve` not called | **6/6, called** |
+| `commit-message-protocol` | 3/5 rules, `resolve` not called | **5/5, called** |
+| `quality-gate-cleanup`    | 6/8 rules, `resolve` not called | **8/8, called** |
+
+Three for three, six EOS trials and six native, `resolve` called in all six of the
+former and none of the latter. Before C-14 the count was 0 of 12 across both arms. That
+is enough to call the effect a property of the mechanism rather than an accident of one
+task — with the sample stated rather than hidden: two trials per arm is the contract's
+minimum, not a comfortable number.
+
+Each native failure landed on the rule the record decides and nowhere else. The gates
+kept their suites green, kept the behaviour the fixture already had, and got wrong
+exactly the arbitrary part: the four commit sections, the tests-section rule, the Python
+leftovers, the bypass variable's name. `quality-gate-cleanup` is the instructive one --
+the native arm got the block-versus-warn distinction _right_, because the fixture's
+README hints that not every finding deserves a block, so that rule was more derivable
+than intended. It still failed, on the two parts nothing hints at. A task can be
+partially derivable and still discriminate, as long as the graded set is not.
+
+**What it costs is in `docs/budgets.md` and is not small**: roughly double to triple the
+cost, and up to triple the wall clock, on the tasks where the knowledge decides the
+outcome. The retired `plugin-install-marketplace` supplies the noise floor for reading
+those numbers — `resolve` was never called in either of its arms, so its ±13-21% spread
+is pure variance.
+
+### S-14 Two graders fooled themselves, one by reproducing the lesson it was not testing
+
+Both were caught by their own controls before any trial ran, which is the entire reason
+the controls exist.
+
+The commit-gate check counted "refused when a section is missing". A hook that refuses
+_every_ message satisfies that four times over — and the naive reference does exactly
+that, since its Conventional Commits subject rule rejects the probe. So a hook knowing
+nothing about the four sections scored 4 of 4. That is the corpus lesson
+`negative-test-passing-for-the-wrong-reason` verbatim: asserting that an operation failed
+does not establish which check refused it. Both outcomes are now measured relative to an
+accepted baseline, so a section counts as required only when removing it flips acceptance
+to refusal.
+
+The quality gate's own filter was `grep -v '^\+\+\+'`, meant to drop a diff header. In
+a basic regular expression GNU grep reads `\+` as the one-or-more quantifier rather than
+a literal plus, so the pattern matched every line and the filter deleted the entire
+diff. The gate then found nothing and allowed everything while reading as correct. Fixed
+with `-Ev`. Worth keeping because the failure is silent in the direction that matters: a
+gate that blocks nothing passes its own happy path.
+
+A third, smaller one: the `commit-gate` fixture asserted that a long message with no
+sections is accepted — which the task requires changing, so "leave the existing tests
+passing" was unsatisfiable. A fixture that contradicts its own task is not a hard task,
+it is an impossible one.
+
 ### Explicitly not done at Stage 3
 
 - **No second agent.** Stage 8's, per T-07. `drivers/codex.ts` is not written, and

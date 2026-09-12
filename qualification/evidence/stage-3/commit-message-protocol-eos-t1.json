@@ -1,0 +1,296 @@
+{
+  "trial_id": "commit-message-protocol-eos-t1",
+  "run_id": "run_s3_commit_message_protocol_eos_t1",
+  "simulation_id": "stage-3-commit-message-protocol",
+  "task_id": "commit-message-protocol",
+  "arm": "eos",
+  "recorded_at": "2026-09-12T08:23:04.906Z",
+  "eos_revision": "dd550eac1900944c39fbd2c7350613b1bae8c9f4",
+  "setting_sources": "project",
+  "ranking_mode": "recorded",
+  "registration": {
+    "confirmed": false,
+    "reason": "no Evidence Plane is enrolled for this harness"
+  },
+  "status": "unproven",
+  "ran_to_completion": true,
+  "obstructed": false,
+  "permission_denials": [],
+  "terminal_reason": null,
+  "qualification_eligible": false,
+  "origin_class_the_plane_would_stamp": "operational",
+  "budget": {
+    "state": "within",
+    "reasons": []
+  },
+  "usage": {
+    "wallClockSeconds": 193.432,
+    "costUsd": 0.5218750000000001,
+    "inputTokens": 36,
+    "outputTokens": 16113,
+    "cacheReadInputTokens": 879130,
+    "cacheCreationInputTokens": 45957,
+    "turns": 24
+  },
+  "tool_calls": [
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:19:59.363Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T08:20:02.696Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T08:20:03.217Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T08:20:03.731Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T08:20:03.976Z"
+    },
+    {
+      "name": "ToolSearch",
+      "at": "2026-09-12T08:20:07.068Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T08:20:11.155Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T08:20:11.504Z"
+    },
+    {
+      "name": "resolve",
+      "at": "2026-09-12T08:20:15.098Z"
+    },
+    {
+      "name": "inspect",
+      "at": "2026-09-12T08:20:22.715Z"
+    },
+    {
+      "name": "resolve",
+      "at": "2026-09-12T08:20:24.115Z"
+    },
+    {
+      "name": "resolve",
+      "at": "2026-09-12T08:20:33.684Z"
+    },
+    {
+      "name": "expand",
+      "at": "2026-09-12T08:20:35.820Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T08:21:54.600Z"
+    },
+    {
+      "name": "Write",
+      "at": "2026-09-12T08:22:03.061Z"
+    },
+    {
+      "name": "Edit",
+      "at": "2026-09-12T08:22:16.585Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:22:19.909Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:22:27.926Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:22:33.399Z"
+    },
+    {
+      "name": "Edit",
+      "at": "2026-09-12T08:22:42.549Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:22:45.381Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:22:48.401Z"
+    },
+    {
+      "name": "observe",
+      "at": "2026-09-12T08:22:55.614Z"
+    }
+  ],
+  "resolve_called_unprompted": true,
+  "eos_tools_used": [
+    "resolve",
+    "inspect",
+    "expand",
+    "observe"
+  ],
+  "isolation": {
+    "findings": [
+      {
+        "boundary": "filesystem",
+        "verdict": "proven",
+        "evidence": "before and after the trial ran: workspace /tmp/ieos-trial-commit-message-protocol-eos-t1-CR0kUk contains no path resolving outside its allowed roots, and no denied root is reachable from it"
+      },
+      {
+        "boundary": "environment",
+        "verdict": "proven",
+        "evidence": "before and after the trial ran: trial environment contains only the 4 explicitly granted name(s); nothing was inherited"
+      },
+      {
+        "boundary": "process",
+        "verdict": "unproven",
+        "evidence": "before and after the trial ran: a temporary directory cannot constrain process creation. Proving this boundary needs a container, namespace or equivalent mechanism, which is a Stage 3 precondition (ADR-0005)."
+      },
+      {
+        "boundary": "network",
+        "verdict": "unproven",
+        "evidence": "before and after the trial ran: a temporary directory cannot constrain network egress, and SDK settings isolation says nothing about what a spawned process can reach (research finding R5). Proving this boundary needs a container, namespace or equivalent mechanism (ADR-0005)."
+      },
+      {
+        "boundary": "filesystem",
+        "verdict": "proven",
+        "evidence": "inside the namespace, /home/user/Improved-Engineering-OS/evaluator /home/user/Improved-Engineering-OS/simulations showed 0 entries: an empty directory is mounted over every denied root, so the evaluator tree is absent rather than merely unreferenced"
+      },
+      {
+        "boundary": "environment",
+        "verdict": "proven",
+        "evidence": "the trial process was started with a replaced environment rather than a filtered one, so only the names the policy granted exist inside it"
+      },
+      {
+        "boundary": "process",
+        "verdict": "proven",
+        "evidence": "the trial is pid 1 in its own PID namespace and sees 4 process(es): its own tree and nothing of the host"
+      },
+      {
+        "boundary": "network",
+        "verdict": "proven",
+        "evidence": "egress is lo,tap0 with OUTPUT dropped by default and api.anthropic.com(160.79.104.10):443 allowed; the control destination 93.184.216.34:443 was refused:timeout"
+      }
+    ],
+    "qualificationEligible": true,
+    "reasons": []
+  },
+  "namespace_observations": {
+    "denied_roots": " /home/user/Improved-Engineering-OS/evaluator /home/user/Improved-Engineering-OS/simulations",
+    "denied_entries_visible": 0,
+    "allowlist": " api.anthropic.com(160.79.104.10):443",
+    "control_host": "93.184.216.34:443",
+    "control_result": "refused:timeout",
+    "interfaces": "lo,tap0",
+    "pid_namespace_self": 1,
+    "pid_namespace_visible_processes": 4
+  },
+  "mechanism_unavailable": null,
+  "check": {
+    "failure": null,
+    "outcomes": {
+      "suite_green": true,
+      "hook_present": true,
+      "complete_message_accepted": true,
+      "sections_required_count": 4,
+      "sections_required": "✅❌🔄🧪",
+      "empty_tests_section_refused": true,
+      "short_message_still_refused": true,
+      "did_not_reach_for_conventional_commits": true
+    }
+  },
+  "verdicts": [
+    {
+      "graderId": "S3-H3-suite",
+      "kind": "deterministic",
+      "status": "proven",
+      "evidence": "suite_green = true, expected true"
+    },
+    {
+      "graderId": "S3-H3-complete-accepted",
+      "kind": "deterministic",
+      "status": "proven",
+      "evidence": "complete_message_accepted = true, expected true"
+    },
+    {
+      "graderId": "S3-H3-all-four-sections",
+      "kind": "deterministic",
+      "status": "proven",
+      "evidence": "sections_required_count = 4, expected 4"
+    },
+    {
+      "graderId": "S3-H3-empty-tests-refused",
+      "kind": "deterministic",
+      "status": "proven",
+      "evidence": "empty_tests_section_refused = true, expected true"
+    },
+    {
+      "graderId": "S3-H3-length-kept",
+      "kind": "deterministic",
+      "status": "proven",
+      "evidence": "short_message_still_refused = true, expected true"
+    },
+    {
+      "graderId": "S3-H3-resolve-unprompted",
+      "kind": "trace_rule",
+      "status": "proven",
+      "evidence": "resolve was called (position 8 of 23)"
+    }
+  ],
+  "grading": {
+    "status": "proven",
+    "decidedBy": [
+      {
+        "graderId": "S3-H3-suite",
+        "kind": "deterministic",
+        "status": "proven",
+        "evidence": "suite_green = true, expected true"
+      },
+      {
+        "graderId": "S3-H3-complete-accepted",
+        "kind": "deterministic",
+        "status": "proven",
+        "evidence": "complete_message_accepted = true, expected true"
+      },
+      {
+        "graderId": "S3-H3-all-four-sections",
+        "kind": "deterministic",
+        "status": "proven",
+        "evidence": "sections_required_count = 4, expected 4"
+      },
+      {
+        "graderId": "S3-H3-empty-tests-refused",
+        "kind": "deterministic",
+        "status": "proven",
+        "evidence": "empty_tests_section_refused = true, expected true"
+      },
+      {
+        "graderId": "S3-H3-length-kept",
+        "kind": "deterministic",
+        "status": "proven",
+        "evidence": "short_message_still_refused = true, expected true"
+      }
+    ],
+    "overruled": [],
+    "reasons": [
+      "S3-H3-suite (deterministic): suite_green = true, expected true",
+      "S3-H3-complete-accepted (deterministic): complete_message_accepted = true, expected true",
+      "S3-H3-all-four-sections (deterministic): sections_required_count = 4, expected 4",
+      "S3-H3-empty-tests-refused (deterministic): empty_tests_section_refused = true, expected true",
+      "S3-H3-length-kept (deterministic): short_message_still_refused = true, expected true"
+    ]
+  },
+  "reasons": [
+    "S3-H3-suite (deterministic): suite_green = true, expected true",
+    "S3-H3-complete-accepted (deterministic): complete_message_accepted = true, expected true",
+    "S3-H3-all-four-sections (deterministic): sections_required_count = 4, expected 4",
+    "S3-H3-empty-tests-refused (deterministic): empty_tests_section_refused = true, expected true",
+    "S3-H3-length-kept (deterministic): short_message_still_refused = true, expected true",
+    "run run_s3_commit_message_protocol_eos_t1 was registered locally but not with the Evidence Plane, so the plane will stamp its events \"operational\" and this trial is not qualification evidence (D36)"
+  ],
+  "transcript_ref": "/home/user/Improved-Engineering-OS/qualification/evidence/stage-3/transcripts/commit-message-protocol-eos-t1-commit-message-protocol.ndjson"
+}
