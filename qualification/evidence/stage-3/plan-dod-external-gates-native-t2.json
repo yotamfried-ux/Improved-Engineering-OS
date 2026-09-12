@@ -4,8 +4,8 @@
   "simulation_id": "stage-3-plan-dod-external-gates",
   "task_id": "plan-dod-external-gates",
   "arm": "native",
-  "recorded_at": "2026-09-11T23:44:30.572Z",
-  "eos_revision": "bfa927ea5e0232a319972f975b4f082d9f402a69",
+  "recorded_at": "2026-09-12T08:01:46.850Z",
+  "eos_revision": "6464569beeeb49c04dac522ade2c2b37eaf54936",
   "setting_sources": "project",
   "ranking_mode": "recorded",
   "registration": {
@@ -24,70 +24,86 @@
     "reasons": []
   },
   "usage": {
-    "wallClockSeconds": 79.654,
-    "costUsd": 0.19551720000000003,
-    "inputTokens": 20,
-    "outputTokens": 5877,
-    "cacheReadInputTokens": 326736,
-    "cacheCreationInputTokens": 17575,
-    "turns": 15
+    "wallClockSeconds": 66.644,
+    "costUsd": 0.2029732,
+    "inputTokens": 22,
+    "outputTokens": 5436,
+    "cacheReadInputTokens": 365436,
+    "cacheCreationInputTokens": 18608,
+    "turns": 19
   },
   "tool_calls": [
     {
       "name": "Bash",
-      "at": "2026-09-11T23:43:19.568Z"
+      "at": "2026-09-12T08:00:47.653Z"
     },
     {
       "name": "Read",
-      "at": "2026-09-11T23:43:23.311Z"
+      "at": "2026-09-12T08:00:50.284Z"
     },
     {
       "name": "Read",
-      "at": "2026-09-11T23:43:23.833Z"
+      "at": "2026-09-12T08:00:50.844Z"
     },
     {
       "name": "Read",
-      "at": "2026-09-11T23:43:24.390Z"
-    },
-    {
-      "name": "Read",
-      "at": "2026-09-11T23:43:24.926Z"
-    },
-    {
-      "name": "Read",
-      "at": "2026-09-11T23:43:25.441Z"
-    },
-    {
-      "name": "Read",
-      "at": "2026-09-11T23:43:25.632Z"
+      "at": "2026-09-12T08:00:51.248Z"
     },
     {
       "name": "Bash",
-      "at": "2026-09-11T23:43:28.396Z"
+      "at": "2026-09-12T08:00:53.113Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T08:00:56.213Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T08:00:56.759Z"
     },
     {
       "name": "Bash",
-      "at": "2026-09-11T23:43:58.122Z"
+      "at": "2026-09-12T08:00:57.640Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T08:01:01.169Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T08:01:01.673Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T08:01:02.171Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T08:01:02.623Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:01:09.615Z"
     },
     {
       "name": "Write",
-      "at": "2026-09-11T23:44:04.504Z"
+      "at": "2026-09-12T08:01:26.784Z"
     },
     {
       "name": "Edit",
-      "at": "2026-09-11T23:44:07.827Z"
+      "at": "2026-09-12T08:01:29.302Z"
     },
     {
       "name": "Edit",
-      "at": "2026-09-11T23:44:14.244Z"
+      "at": "2026-09-12T08:01:33.731Z"
     },
     {
       "name": "Bash",
-      "at": "2026-09-11T23:44:16.751Z"
+      "at": "2026-09-12T08:01:35.751Z"
     },
     {
       "name": "Edit",
-      "at": "2026-09-11T23:44:21.503Z"
+      "at": "2026-09-12T08:01:39.347Z"
     }
   ],
   "resolve_called_unprompted": false,
@@ -97,7 +113,7 @@
       {
         "boundary": "filesystem",
         "verdict": "proven",
-        "evidence": "before and after the trial ran: workspace /tmp/ieos-trial-plan-dod-external-gates-native-t2-hNztZP contains no path resolving outside its allowed roots, and no denied root is reachable from it"
+        "evidence": "before and after the trial ran: workspace /tmp/ieos-trial-plan-dod-external-gates-native-t2-y3MjuP contains no path resolving outside its allowed roots, and no denied root is reachable from it"
       },
       {
         "boundary": "environment",
@@ -153,7 +169,7 @@
     "failure": null,
     "outcomes": {
       "suite_green": true,
-      "suite_tail": "ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 ℹ duration_ms 80.755644 ",
+      "suite_tail": "ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 ℹ duration_ms 63.571284 ",
       "plans_dir_present": true,
       "plan_count": 2,
       "new_plan_written": true,
@@ -161,7 +177,7 @@
       "has_dod_section": true,
       "dod_checkbox_count": 5,
       "post_commit_items_in_dod": 1,
-      "post_commit_items_in_dod_text": "- [ ] CI is green on the pull request",
+      "post_commit_items_in_dod_text": "- [ ] CI is green on the pull request (external gate, confirmed on the PR",
       "has_external_gates_section": false,
       "external_gates_item_count": 0,
       "ci_requirement_addressed_somewhere": true
@@ -208,7 +224,7 @@
       "graderId": "S3-H2-resolve-unprompted",
       "kind": "trace_rule",
       "status": "failed",
-      "evidence": "resolve was never called; trace was [Bash, Read, Read, Read, Read, Read, Read, Bash, Bash, Write, Edit, Edit, Bash, Edit]"
+      "evidence": "resolve was never called; trace was [Bash, Read, Read, Read, Bash, Read, Read, Bash, Read, Read, Read, Read, Bash, Write, Edit, Edit, Bash, Edit]"
     }
   ],
   "grading": {

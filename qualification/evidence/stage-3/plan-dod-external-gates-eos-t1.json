@@ -4,15 +4,15 @@
   "simulation_id": "stage-3-plan-dod-external-gates",
   "task_id": "plan-dod-external-gates",
   "arm": "eos",
-  "recorded_at": "2026-09-11T23:45:36.002Z",
-  "eos_revision": "bfa927ea5e0232a319972f975b4f082d9f402a69",
+  "recorded_at": "2026-09-12T07:52:36.537Z",
+  "eos_revision": "6464569beeeb49c04dac522ade2c2b37eaf54936",
   "setting_sources": "project",
   "ranking_mode": "recorded",
   "registration": {
     "confirmed": false,
     "reason": "no Evidence Plane is enrolled for this harness"
   },
-  "status": "failed",
+  "status": "unproven",
   "ran_to_completion": true,
   "obstructed": false,
   "permission_denials": [],
@@ -24,80 +24,96 @@
     "reasons": []
   },
   "usage": {
-    "wallClockSeconds": 53.385,
-    "costUsd": 0.16680880000000003,
-    "inputTokens": 20,
-    "outputTokens": 3940,
-    "cacheReadInputTokens": 317254,
-    "cacheCreationInputTokens": 15717,
-    "turns": 15
+    "wallClockSeconds": 81.357,
+    "costUsd": 0.256195,
+    "inputTokens": 22,
+    "outputTokens": 5433,
+    "cacheReadInputTokens": 441215,
+    "cacheCreationInputTokens": 28132,
+    "turns": 18
   },
   "tool_calls": [
     {
-      "name": "Bash",
-      "at": "2026-09-11T23:44:50.160Z"
+      "name": "ToolSearch",
+      "at": "2026-09-12T07:51:26.013Z"
     },
     {
       "name": "Read",
-      "at": "2026-09-11T23:44:53.029Z"
+      "at": "2026-09-12T07:51:26.977Z"
     },
     {
-      "name": "Read",
-      "at": "2026-09-11T23:44:53.584Z"
-    },
-    {
-      "name": "Read",
-      "at": "2026-09-11T23:44:54.081Z"
-    },
-    {
-      "name": "Read",
-      "at": "2026-09-11T23:44:54.588Z"
-    },
-    {
-      "name": "Read",
-      "at": "2026-09-11T23:44:55.037Z"
-    },
-    {
-      "name": "Read",
-      "at": "2026-09-11T23:44:55.472Z"
+      "name": "Glob",
+      "at": "2026-09-12T07:51:27.201Z"
     },
     {
       "name": "Bash",
-      "at": "2026-09-11T23:44:59.910Z"
+      "at": "2026-09-12T07:51:28.113Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T07:51:31.871Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T07:51:32.399Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T07:51:32.994Z"
+    },
+    {
+      "name": "resolve",
+      "at": "2026-09-12T07:51:33.859Z"
+    },
+    {
+      "name": "inspect",
+      "at": "2026-09-12T07:51:38.210Z"
     },
     {
       "name": "Bash",
-      "at": "2026-09-11T23:45:05.844Z"
+      "at": "2026-09-12T07:51:50.013Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T07:51:50.693Z"
     },
     {
       "name": "Write",
-      "at": "2026-09-11T23:45:15.921Z"
+      "at": "2026-09-12T07:52:02.130Z"
     },
     {
       "name": "Edit",
-      "at": "2026-09-11T23:45:18.627Z"
+      "at": "2026-09-12T07:52:07.378Z"
     },
     {
       "name": "Edit",
-      "at": "2026-09-11T23:45:22.619Z"
+      "at": "2026-09-12T07:52:12.840Z"
     },
     {
       "name": "Bash",
-      "at": "2026-09-11T23:45:24.369Z"
+      "at": "2026-09-12T07:52:15.310Z"
     },
     {
       "name": "Edit",
-      "at": "2026-09-11T23:45:28.761Z"
+      "at": "2026-09-12T07:52:20.399Z"
+    },
+    {
+      "name": "observe",
+      "at": "2026-09-12T07:52:27.871Z"
     }
   ],
-  "resolve_called_unprompted": false,
-  "eos_tools_used": [],
+  "resolve_called_unprompted": true,
+  "eos_tools_used": [
+    "resolve",
+    "inspect",
+    "observe"
+  ],
   "isolation": {
     "findings": [
       {
         "boundary": "filesystem",
         "verdict": "proven",
-        "evidence": "before and after the trial ran: workspace /tmp/ieos-trial-plan-dod-external-gates-eos-t1-n1XlEV contains no path resolving outside its allowed roots, and no denied root is reachable from it"
+        "evidence": "before and after the trial ran: workspace /tmp/ieos-trial-plan-dod-external-gates-eos-t1-oILgVa contains no path resolving outside its allowed roots, and no denied root is reachable from it"
       },
       {
         "boundary": "environment",
@@ -153,17 +169,17 @@
     "failure": null,
     "outcomes": {
       "suite_green": true,
-      "suite_tail": "ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 ℹ duration_ms 81.486081 ",
+      "suite_tail": "ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 ℹ duration_ms 59.271635 ",
       "plans_dir_present": true,
       "plan_count": 2,
       "new_plan_written": true,
       "new_plan_files": "collapse-spaces.md",
       "has_dod_section": true,
-      "dod_checkbox_count": 5,
-      "post_commit_items_in_dod": 1,
-      "post_commit_items_in_dod_text": "- [ ] CI is green on the pull request (external gate; merge is blocked until",
-      "has_external_gates_section": false,
-      "external_gates_item_count": 0,
+      "dod_checkbox_count": 4,
+      "post_commit_items_in_dod": 0,
+      "post_commit_items_in_dod_text": "",
+      "has_external_gates_section": true,
+      "external_gates_item_count": 1,
       "ci_requirement_addressed_somewhere": true
     }
   },
@@ -195,24 +211,24 @@
     {
       "graderId": "S3-H2-no-post-commit-in-dod",
       "kind": "deterministic",
-      "status": "failed",
-      "evidence": "post_commit_items_in_dod = 1, expected 0"
+      "status": "proven",
+      "evidence": "post_commit_items_in_dod = 0, expected 0"
     },
     {
       "graderId": "S3-H2-gates-section",
       "kind": "deterministic",
-      "status": "failed",
-      "evidence": "has_external_gates_section = false, expected true"
+      "status": "proven",
+      "evidence": "has_external_gates_section = true, expected true"
     },
     {
       "graderId": "S3-H2-resolve-unprompted",
       "kind": "trace_rule",
-      "status": "failed",
-      "evidence": "resolve was never called; trace was [Bash, Read, Read, Read, Read, Read, Read, Bash, Bash, Write, Edit, Edit, Bash, Edit]"
+      "status": "proven",
+      "evidence": "resolve was called (position 7 of 17)"
     }
   ],
   "grading": {
-    "status": "failed",
+    "status": "proven",
     "decidedBy": [
       {
         "graderId": "S3-H2-suite",
@@ -241,14 +257,14 @@
       {
         "graderId": "S3-H2-no-post-commit-in-dod",
         "kind": "deterministic",
-        "status": "failed",
-        "evidence": "post_commit_items_in_dod = 1, expected 0"
+        "status": "proven",
+        "evidence": "post_commit_items_in_dod = 0, expected 0"
       },
       {
         "graderId": "S3-H2-gates-section",
         "kind": "deterministic",
-        "status": "failed",
-        "evidence": "has_external_gates_section = false, expected true"
+        "status": "proven",
+        "evidence": "has_external_gates_section = true, expected true"
       }
     ],
     "overruled": [],
@@ -257,8 +273,8 @@
       "S3-H2-plan-written (deterministic): new_plan_written = true, expected true",
       "S3-H2-has-dod (deterministic): has_dod_section = true, expected true",
       "S3-H2-ci-addressed (deterministic): ci_requirement_addressed_somewhere = true, expected true",
-      "S3-H2-no-post-commit-in-dod (deterministic): post_commit_items_in_dod = 1, expected 0",
-      "S3-H2-gates-section (deterministic): has_external_gates_section = false, expected true"
+      "S3-H2-no-post-commit-in-dod (deterministic): post_commit_items_in_dod = 0, expected 0",
+      "S3-H2-gates-section (deterministic): has_external_gates_section = true, expected true"
     ]
   },
   "reasons": [
@@ -266,8 +282,8 @@
     "S3-H2-plan-written (deterministic): new_plan_written = true, expected true",
     "S3-H2-has-dod (deterministic): has_dod_section = true, expected true",
     "S3-H2-ci-addressed (deterministic): ci_requirement_addressed_somewhere = true, expected true",
-    "S3-H2-no-post-commit-in-dod (deterministic): post_commit_items_in_dod = 1, expected 0",
-    "S3-H2-gates-section (deterministic): has_external_gates_section = false, expected true",
+    "S3-H2-no-post-commit-in-dod (deterministic): post_commit_items_in_dod = 0, expected 0",
+    "S3-H2-gates-section (deterministic): has_external_gates_section = true, expected true",
     "run run_s3_plan_dod_external_gates_eos_t1 was registered locally but not with the Evidence Plane, so the plane will stamp its events \"operational\" and this trial is not qualification evidence (D36)"
   ],
   "transcript_ref": "/home/user/Improved-Engineering-OS/qualification/evidence/stage-3/transcripts/plan-dod-external-gates-eos-t1-plan-dod-external-gates.ndjson"

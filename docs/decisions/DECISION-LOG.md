@@ -892,8 +892,10 @@ from a suspicion into a result.
 The first bank could not distinguish "EOS was not needed" from "EOS was not reached
 for", because every task was solvable without it. So a second bank was built from two
 assets that were in the corpus before the tasks existed, and every trial was run
-twice: once with the EOS tools offered, once with the server removed and nothing else
-changed.
+twice: once with the EOS tools offered, once with them withheld and nothing else
+changed. (S-12: "withheld" meant refused rather than absent at the time, which is a
+correction to this sentence and not to its conclusion -- both arms failed identically
+either way.)
 
 |                                          |                                              |
 | ---------------------------------------- | -------------------------------------------- |
@@ -937,6 +939,65 @@ That is a specific, testable, falsifiable next step, and the harness to test it 
 exists: change the block, re-run the same manifests at a new version, compare arms.
 It is also a change to a frozen-guide deliverable's content and sits close enough to
 coaching to be the owner's call rather than mine, so it is recorded here and not made.
+
+### S-11 The bootstrap block was the binding constraint, and changing it worked
+
+C-14 rewrote the D18.4 block to say what the record is for and to stop telling the
+agent that no tool call is required. The same criteria, the same fixture, the same
+model, re-run at manifest version 3:
+
+| Arm                               | Trials | Deterministic rules | `resolve` called |
+| --------------------------------- | ------ | ------------------- | ---------------- |
+| `eos` — server present, new block | 2      | **6 / 6**           | **yes, both**    |
+| `native` — no server, no block    | 2      | 4 / 6               | no               |
+
+Both native trials made precisely the mistake the recorded `control_guidance`
+forbids: the CI gate placed inside the `## DoD` checklist, no separate section. Both
+EOS trials consulted the record and placed it correctly. Before C-14, with the same
+tools connected, both arms failed identically and `resolve` was called in 0 of 12
+trials.
+
+The block cannot be the source of the answer. It names no task word — `init.test.ts`
+asserts the absence of "definition of done", "CI" and the rest mechanically — and the
+native arm does not carry it at all. What changed is that the agent asked.
+
+So the chain is closed end to end, and every link was measured rather than assumed:
+the knowledge was in the corpus, retrieval ranked it first, the tools were reachable,
+and the one remaining gap was that nothing gave the agent a reason to look. Saying
+what the record holds was enough; no instruction to use it was needed, and none was
+added.
+
+### S-12 The `native` arm was mislabelled for three rounds of trials, and I said so wrongly
+
+This one is a correction to my own record rather than a defect in the system.
+
+The paired design was described — in a commit message, in PR #9's body, and in S-10
+above — as running the native arm "with the `ieos` MCP server removed". The code never
+removed it. It only withheld the four tools from `allowedTools`, so `native` meant
+_listed and refused_, not _absent_. The edit that would have removed the server was
+written, never landed, and was not verified before the claim was published.
+
+It went unnoticed for exactly as long as it could not matter. While the agent never
+reached for EOS in either arm, both arms behaved identically and the distinction had no
+effect — which is why S-10's conclusion survives it: the two arms failed identically on
+the same rule with `resolve` uncalled, and that remains true however the tools were
+withheld. What the mislabelling cost was precision, not the finding.
+
+C-14 is what exposed it. Once the block gave the agent a reason to look, the native arm
+tried `resolve`, was denied, and the obstruction guard from S-9 refused to grade the
+trial — a guard written for one cause catching another.
+
+Fixed properly: the native arm now deletes the server from `.mcp.json` **and** strips
+the bootstrap block from `CLAUDE.md` and `AGENTS.md`, which is what a project without
+EOS looks like. Stripping throws if the markers are absent, so a silently unstripped
+block fails the trial instead of quietly advertising tools that are not there. The
+two arms now differ in two things at once; that is the right shape for "does an EOS
+installation change the outcome" and the wrong one for isolating the block alone, which
+is stated rather than glossed.
+
+The lesson is the ordinary one and I had it backwards in my own loop: an edit is not a
+change until something confirms it landed. Every earlier claim about the native arm
+should be read as "tools connected and refused".
 
 ### Explicitly not done at Stage 3
 

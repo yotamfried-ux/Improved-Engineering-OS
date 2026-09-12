@@ -4,8 +4,8 @@
   "simulation_id": "stage-3-plan-dod-external-gates",
   "task_id": "plan-dod-external-gates",
   "arm": "native",
-  "recorded_at": "2026-09-11T23:43:10.194Z",
-  "eos_revision": "bfa927ea5e0232a319972f975b4f082d9f402a69",
+  "recorded_at": "2026-09-12T08:00:39.609Z",
+  "eos_revision": "6464569beeeb49c04dac522ade2c2b37eaf54936",
   "setting_sources": "project",
   "ranking_mode": "recorded",
   "registration": {
@@ -24,58 +24,66 @@
     "reasons": []
   },
   "usage": {
-    "wallClockSeconds": 57.85,
-    "costUsd": 0.15058320000000003,
-    "inputTokens": 16,
-    "outputTokens": 3868,
-    "cacheReadInputTokens": 248586,
-    "cacheCreationInputTokens": 15276,
-    "turns": 12
+    "wallClockSeconds": 81.351,
+    "costUsd": 0.2025182,
+    "inputTokens": 24,
+    "outputTokens": 5455,
+    "cacheReadInputTokens": 388431,
+    "cacheCreationInputTokens": 17296,
+    "turns": 14
   },
   "tool_calls": [
     {
       "name": "Bash",
-      "at": "2026-09-11T23:42:20.425Z"
+      "at": "2026-09-12T07:59:26.531Z"
     },
     {
       "name": "Read",
-      "at": "2026-09-11T23:42:24.545Z"
-    },
-    {
-      "name": "Read",
-      "at": "2026-09-11T23:42:25.064Z"
-    },
-    {
-      "name": "Read",
-      "at": "2026-09-11T23:42:25.762Z"
-    },
-    {
-      "name": "Read",
-      "at": "2026-09-11T23:42:26.070Z"
-    },
-    {
-      "name": "Read",
-      "at": "2026-09-11T23:42:26.483Z"
+      "at": "2026-09-12T07:59:30.586Z"
     },
     {
       "name": "Bash",
-      "at": "2026-09-11T23:42:29.089Z"
+      "at": "2026-09-12T07:59:31.449Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T07:59:35.351Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T07:59:35.980Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T07:59:42.712Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T07:59:57.508Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:00:04.108Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:00:07.689Z"
     },
     {
       "name": "Write",
-      "at": "2026-09-11T23:42:51.466Z"
+      "at": "2026-09-12T08:00:21.207Z"
     },
     {
       "name": "Edit",
-      "at": "2026-09-11T23:42:54.553Z"
+      "at": "2026-09-12T08:00:24.510Z"
     },
     {
       "name": "Edit",
-      "at": "2026-09-11T23:42:59.327Z"
+      "at": "2026-09-12T08:00:29.204Z"
     },
     {
       "name": "Bash",
-      "at": "2026-09-11T23:43:01.622Z"
+      "at": "2026-09-12T08:00:31.419Z"
     }
   ],
   "resolve_called_unprompted": false,
@@ -85,7 +93,7 @@
       {
         "boundary": "filesystem",
         "verdict": "proven",
-        "evidence": "before and after the trial ran: workspace /tmp/ieos-trial-plan-dod-external-gates-native-t1-hA1ZAO contains no path resolving outside its allowed roots, and no denied root is reachable from it"
+        "evidence": "before and after the trial ran: workspace /tmp/ieos-trial-plan-dod-external-gates-native-t1-6ST6iq contains no path resolving outside its allowed roots, and no denied root is reachable from it"
       },
       {
         "boundary": "environment",
@@ -141,7 +149,7 @@
     "failure": null,
     "outcomes": {
       "suite_green": true,
-      "suite_tail": "ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 ℹ duration_ms 96.752376 ",
+      "suite_tail": "ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 ℹ duration_ms 61.539131 ",
       "plans_dir_present": true,
       "plan_count": 2,
       "new_plan_written": true,
@@ -149,7 +157,7 @@
       "has_dod_section": true,
       "dod_checkbox_count": 5,
       "post_commit_items_in_dod": 1,
-      "post_commit_items_in_dod_text": "- [ ] CI is green on the pull request — this is a required external gate;",
+      "post_commit_items_in_dod_text": "- [ ] CI is green on the pull request for this change (external gate,",
       "has_external_gates_section": false,
       "external_gates_item_count": 0,
       "ci_requirement_addressed_somewhere": true
@@ -196,7 +204,7 @@
       "graderId": "S3-H2-resolve-unprompted",
       "kind": "trace_rule",
       "status": "failed",
-      "evidence": "resolve was never called; trace was [Bash, Read, Read, Read, Read, Read, Bash, Write, Edit, Edit, Bash]"
+      "evidence": "resolve was never called; trace was [Bash, Read, Bash, Read, Bash, Bash, Bash, Bash, Bash, Write, Edit, Edit, Bash]"
     }
   ],
   "grading": {

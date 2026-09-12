@@ -215,6 +215,68 @@ const measurements = firstBank.map((record) => ({
   resolve: record.resolve_called_unprompted,
 }));
 
+/**
+ * The hard bank's paragraph, built here rather than inside the report template.
+ *
+ * It was inline once, and nesting template literals three deep inside an
+ * interpolation produced a syntax error whose message pointed at an escape rather
+ * than at the nesting. Plain code is the right tool for text with this much logic in
+ * it, and it keeps the prose from contradicting the table above it -- which it did
+ * while the paragraph was hardcoded from an earlier run.
+ */
+function armSummary(forTask: readonly TrialRecord[], armName: string): string {
+  const arm = forTask.filter((record) => record.arm === armName);
+  if (arm.length === 0) return 'not run';
+  const passed = arm.filter(allRulesPassed).length;
+  const asked = arm.filter((record) => record.resolve_called_unprompted).length;
+  return (
+    `${String(passed)}/${String(arm.length)} trials passed every rule, ` +
+    `resolve called in ${String(asked)}/${String(arm.length)}`
+  );
+}
+
+const hardBankLines = [...new Set(hardBank.map((record) => record.task_id))]
+  .sort()
+  .map((taskId) => {
+    const forTask = hardBank.filter((record) => record.task_id === taskId);
+    const eosArm = forTask.filter((record) => record.arm === 'eos');
+    const nativeArm = forTask.filter((record) => record.arm === 'native');
+    const eosPasses = eosArm.length > 0 && eosArm.every(allRulesPassed);
+    const nativePasses = nativeArm.some(allRulesPassed);
+    const verdict = !eosPasses
+      ? 'the eos arm does not pass, so nothing about value is shown here'
+      : nativePasses
+        ? 'both arms can pass, so this task does not isolate the knowledge'
+        : '**the eos arm passes where the native arm does not — the knowledge changed the outcome**';
+    return (
+      `- **${taskId}** — eos: ${armSummary(forTask, 'eos')}; ` +
+      `native: ${armSummary(forTask, 'native')}.\n  ${verdict}.`
+    );
+  });
+
+const asked = hardBank.filter((record) => record.resolve_called_unprompted).length;
+const hardBankProse = [
+  `**\`resolve\` was called in ${String(asked)} of ${String(hardBank.length)} hard-bank trials.**`,
+  '',
+  'Per task, by arm — the only reading a paired design supports:',
+  '',
+  hardBankLines.join('\n'),
+  '',
+  'The verdict to be careful about is the middle one. A task both arms can pass measures',
+  'the agent rather than the knowledge, which is how the first bank came to measure',
+  'nothing, and why `plugin-install-marketplace` is retired rather than counted: its',
+  "native arm passed, because the marketplace name is in the model's training data after",
+  'all. Without a native arm it would have read as EOS supplying a fact the agent could',
+  'not have known, and the conclusion would have been confidently wrong.',
+  '',
+  'Two corrections belong with these numbers rather than buried. The native arm was',
+  'mislabelled until S-12 — it withheld the tools from the allowlist while leaving the',
+  'server connected, so "native" meant refused rather than absent, and every earlier',
+  'claim about it should be read that way. And the `plan-dod-external-gates` comparison',
+  'only became measurable after C-14: until then the agent reached for EOS in neither',
+  'arm, so version 3 is the first version whose arms differ at all.',
+].join('\n');
+
 const notGraded = records.filter((record) => record.ran_to_completion === false);
 
 const report = `# Stage 3 qualification report — ${today}
@@ -318,25 +380,7 @@ ${hardBank
   )
   .join('\n')}
 
-${
-  hardBank.length === 0
-    ? 'No hard-bank trial has been recorded.'
-    : `**\`resolve\` was called in ${String(hardBank.filter((r) => r.resolve_called_unprompted).length)} of ${String(hardBank.length)} hard-bank trials.**
-
-On \`plan-dod-external-gates\` the two arms fail identically, on the same rule, for the
-same reason: the plan is written, the DoD is there, the CI requirement is addressed —
-and it is addressed *inside* the checklist, which is precisely what the recorded
-control forbids. The correct reference passes every rule, so the task discriminates;
-retrieval was verified to rank the required asset first; the tools were connected and
-listed. The agent simply never asked.
-
-On \`plugin-install-marketplace\` the native arm passed one trial of two, which retires
-the task as a discriminator: the marketplace name turned out to be in the model's
-training data, so the task was never the isolation of recorded knowledge it was built
-to be. That is worth more than a clean result would have been — without the native
-arm it would have read as EOS supplying a fact the agent could not have known, and the
-conclusion would have been wrong.`
-}
+${hardBank.length === 0 ? 'No hard-bank trial has been recorded.' : hardBankProse}
 
 ## The finding the numbers do not show
 

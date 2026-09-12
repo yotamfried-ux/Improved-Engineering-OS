@@ -9,6 +9,11 @@
 # the agent composed the plan twice and was refused twice. Plans now live in
 # `docs/plans/`, which the guidance is indifferent to, and the harness now declines
 # to grade an obstructed trial at all.
+#
+# Version 3 changes the system under test, not a criterion: the D18.4 bootstrap block
+# now states what the record is for and no longer says a tool call is unnecessary
+# (C-14). Version 2's arms failed identically on the same rule with resolve never
+# called, which is what prompted the change. The criteria are byte-identical.
 schema_version: '1'
 stability: development
 introduced_in: 0.3.0
@@ -17,13 +22,13 @@ replacement: null
 migration_path: null
 
 id: stage-3-plan-dod-external-gates
-version: 2
+version: 3
 claim: >-
   A recorded control changes the structure: a gate decided only after the commit is
   kept out of the definition-of-done checklist it could never honestly be ticked in.
 
 environment:
-  repo_revision: '9f76c2b8f4924e5d25740c88b24f8edaf4227f38'
+  repo_revision: '6464569beeeb49c04dac522ade2c2b37eaf54936'
   eos_release: source-checkout
   agent: claude-code
   model: claude-sonnet-5
