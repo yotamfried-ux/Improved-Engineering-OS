@@ -1,0 +1,150 @@
+# Simulation Manifest -- Stage 3 hard bank, quality-gate-cleanup
+#
+# Criteria may never be changed after a failure to produce a pass (D14). Fixed before
+# the first trial; a later revision of the system under test takes a new `version`.
+schema_version: '1'
+stability: development
+introduced_in: 0.3.0
+deprecated_in: null
+replacement: null
+migration_path: null
+
+id: stage-3-quality-gate-cleanup
+version: 1
+claim: >-
+  A recorded control supplies a distinction nobody would invent: some leftovers block
+  a commit, a stray log only warns, and the bypass has a name that cannot be guessed.
+
+environment:
+  repo_revision: 'dd550eac1900944c39fbd2c7350613b1bae8c9f4'
+  eos_release: source-checkout
+  agent: claude-code
+  model: claude-sonnet-5
+  # Paired arms. `eos` offers the four EOS tools; `native` removes the server and strips
+  # the bootstrap block, which is what a project without EOS looks like (S-12). The list
+  # below is the eos arm's; the native arm runs the first six.
+  tools:
+    - Read
+    - Write
+    - Edit
+    - Bash
+    - Glob
+    - Grep
+    - mcp__ieos__resolve
+    - mcp__ieos__inspect
+    - mcp__ieos__expand
+    - mcp__ieos__observe
+  permissions:
+    - acceptEdits
+  network_policy: allowlist
+  budgets:
+    wall_clock_seconds: 900
+    max_tool_calls: 60
+    max_cost_usd: 3
+
+# The asset this task is graded against, in the corpus since Stage 2 and before this
+# task existed. Writing knowledge to fit a task would be an exam built around its own
+# answer key.
+starting_state:
+  grounded_in: >-
+    control_guidance/quality-gates
+  repository: >-
+    quality-gate at 0.7.2: a stub gate wired into pre-commit, with tests that it runs
+    and is wired. The README says some findings deserve a block and some do not, and
+    never says which.
+  recorded_knowledge: >-
+    The control_guidance names the leftovers that block, states that console.log and
+    print warn without blocking, and names the bypass variable. resolve ranks it first
+    for a plausible hint, verified before this manifest was written.
+  what_is_not_available: >-
+    That a stray log warns while a stray debugger blocks is a project decision, not a
+    derivable one. The bypass variable's name cannot be guessed at all.
+
+stimulus:
+  task: >-
+    scripts/enforce-quality.sh is a stub that allows everything. Make it enforce this
+    project's cleanup rules against the staged diff, blocking what must not reach a
+    commit and allowing what only needs reporting. Add tests for the behaviour you
+    implement, and leave the existing tests passing.
+
+hidden_conditions_ref: evaluator-only://stage-3/checks/quality-gate.mjs
+
+allowed_interventions:
+  user_architecture_decision: false
+  eos_coaching: false
+
+success_criteria:
+  - >-
+    A debug leftover or a merge-conflict marker in the staged diff blocks the commit.
+  - >-
+    A staged console.log is allowed through and reported rather than blocked.
+  - >-
+    The recorded bypass variable allows a blocked diff through, and a clean diff is
+    allowed.
+
+failure_criteria:
+  - >-
+    Everything that looks like debug output is blocked, including the log line the
+    record allows.
+  - >-
+    A log line is allowed silently, so the developer is never told.
+  - >-
+    No bypass exists, or it is spelled differently from the recorded one.
+
+stop_conditions:
+  - >-
+    the agent reports completion, or the turn cap of twice the declared tool-call budget
+    is reached
+  - >-
+    wall clock reaches 1800s, twice the declared 900s budget
+  - >-
+    recorded cost reaches $6, twice the declared $3 budget
+
+graders:
+  - id: S3-H4-suite
+    kind: deterministic
+  - id: S3-H4-clean-allowed
+    kind: deterministic
+  - id: S3-H4-debugger-blocked
+    kind: deterministic
+  - id: S3-H4-pdb-blocked
+    kind: deterministic
+  - id: S3-H4-merge-marker-blocked
+    kind: deterministic
+  - id: S3-H4-log-allowed
+    kind: deterministic
+  - id: S3-H4-log-warned
+    kind: deterministic
+  - id: S3-H4-named-bypass
+    kind: deterministic
+  - id: S3-H4-resolve-unprompted
+    kind: trace_rule
+
+validity_controls:
+  positive:
+    - evaluator/stage-3/references/quality-gate/correct
+  negative:
+    - evaluator/stage-3/references/quality-gate/naive
+    - the untouched quality-gate fixture, whose stub allows everything
+  mutation:
+    - the correct gate with the bypass removed
+
+required_evidence:
+  - the trial transcript, stored outside the workspace
+  - the boundary observation report from the namespace mechanism
+  - the hidden-condition observations from the check this manifest references
+  - the paired native-arm trial of the same task, for comparison
+  - the local telemetry outbox and the attribution rows derived from it
+
+recovery:
+  procedure: >-
+    Discard the workspace and re-run. Nothing is repaired inside a trial, and the
+    fixture is never pre-fixed between arms.
+
+repetition_policy:
+  type: stochastic
+  minimum_trials: 2
+  stopping_rule: >-
+    Two trials per arm minimum, four per task. The reading is the difference between
+    arms: a task shows value only where the eos arm passes and the native arm does not,
+    in every pair.

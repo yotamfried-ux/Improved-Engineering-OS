@@ -173,8 +173,41 @@ if (ieosServer === undefined) {
     '`ieos init` did not register an ieos MCP server, so no trial could call resolve',
   );
 }
-ieosServer.args = [...(ieosServer.args ?? []), '--ranking-mode', 'recorded'];
-writeFileSync(mcpConfigPath, `${JSON.stringify(mcpConfig, null, 2)}\n`, 'utf8');
+if (arm === 'native') {
+  // A project without EOS, which is what this arm was always meant to be and for
+  // three rounds of trials was not.
+  //
+  // The arm only ever withheld the four tools from `allowedTools`, leaving the server
+  // connected: "native" therefore meant *listed and refused*, not *absent*. It went
+  // unnoticed while the agent never reached for EOS in either arm -- both arms failed
+  // identically, so the distinction did not bite. Rewriting the bootstrap block (C-14)
+  // made the agent reach, the calls were denied, and the obstruction guard correctly
+  // refused to grade the trial. That is what exposed it.
+  //
+  // So the server goes, and the block with it. Both, because a block advertising tools
+  // that are not there produces a refusal rather than a baseline. The two arms then
+  // differ in two things at once, which is the right shape for "does an EOS
+  // installation change the outcome" and the wrong one for isolating the block alone --
+  // and the block cannot be the source of any answer regardless, since `init.test.ts`
+  // asserts it carries no task word.
+  delete mcpConfig.mcpServers['ieos'];
+  writeFileSync(mcpConfigPath, `${JSON.stringify(mcpConfig, null, 2)}\n`, 'utf8');
+  for (const file of ['CLAUDE.md', 'AGENTS.md']) {
+    const path = join(trial.workspaceRoot, file);
+    const before = readFileSync(path, 'utf8');
+    const stripped = before.replace(/<!-- ieos:begin -->[\s\S]*?<!-- ieos:end -->\n?/gu, '');
+    if (stripped === before) {
+      throw new Error(
+        `the native arm could not strip the EOS block from ${file}: its markers were absent, ` +
+          'so this trial would have advertised tools it does not have',
+      );
+    }
+    writeFileSync(path, stripped, 'utf8');
+  }
+} else {
+  ieosServer.args = [...(ieosServer.args ?? []), '--ranking-mode', 'recorded'];
+  writeFileSync(mcpConfigPath, `${JSON.stringify(mcpConfig, null, 2)}\n`, 'utf8');
+}
 
 // --- registration, before the first event (D36) ----------------------------
 const registry = new RunRegistry();
@@ -215,7 +248,7 @@ const driver = new ClaudeCodeDriver({
     'Bash',
     'Glob',
     'Grep',
-    // Withheld in the native arm, so the two arms differ in exactly one thing.
+    // Withheld in the native arm, where the server is removed too.
     ...(arm === 'native'
       ? []
       : ['mcp__ieos__resolve', 'mcp__ieos__inspect', 'mcp__ieos__expand', 'mcp__ieos__observe']),

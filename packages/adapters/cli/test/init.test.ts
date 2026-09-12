@@ -130,13 +130,57 @@ describe('the bootstrap paragraph says what EOS is and nothing about the task', 
     }
   });
 
+  /**
+   * The block with its line wrapping collapsed.
+   *
+   * The paragraph is hard-wrapped, so a multi-word phrase straddles a newline and a
+   * pattern written with plain spaces silently fails to match -- which is how a
+   * green assertion comes to mean nothing about the text it is checking. Normalising
+   * once here is the fix for the whole class, rather than one `\s+` per regex.
+   */
+  const prose = (text: string): string => text.replace(/\s+/gu, ' ');
+
   it('does not instruct the agent to call anything', () => {
-    // TD-07's failure mode: a bootstrap that drifts into task-specific hints
-    // leaks evaluation conditions into a target project, and Stage 3's trials
-    // would then measure the hint rather than the system.
-    const text = bootstrapParagraph(input);
-    expect(text).toMatch(/Nothing here instructs you to call them/u);
-    expect(text).not.toMatch(/you should|you must|always call|first call/iu);
+    // TD-07's failure mode: a bootstrap that drifts into task-specific hints leaks
+    // evaluation conditions into a target project, and Stage 3's trials would then
+    // measure the hint rather than the system.
+    //
+    // This used to assert the literal sentence "Nothing here instructs you to call
+    // them", which pinned the wording rather than the property -- and that sentence
+    // is exactly what C-14 removed, because it discouraged use rather than merely
+    // declining to encourage it. So the guarantee is asserted as a property now, and
+    // in both directions: no instruction, and no persuasion either.
+    const text = prose(bootstrapParagraph(input));
+    expect(text).not.toMatch(/you should|you must|always call|first call|be sure to/iu);
+    expect(text).not.toMatch(
+      /\b(call|use|consult|query|check)\s+`?(resolve|inspect|expand|observe)/iu,
+    );
+    expect(text).not.toMatch(/\brecommended\b|\bencouraged\b|\bremember to\b/iu);
+    // No task-specific hint, and no asset named: either would be the leak itself.
+    expect(text).not.toMatch(/guard|precondition|marketplace|definition of done|backoff/iu);
+  });
+
+  it('says what the record is for, not only that four tools exist (D18.4, C-14)', () => {
+    // The half D18.4 asks for and the block did not carry until Stage 3. Naming the
+    // tools describes a mechanism; an agent deciding whether to look has to know what
+    // is in there. Asserted by meaning rather than by sentence, so a rewrite that
+    // keeps the substance passes and one that drops it does not.
+    const text = prose(bootstrapParagraph(input));
+    expect(text).toMatch(/prior engineering work|previous work|past work/iu);
+    expect(text).toMatch(/conventions?|decisions?/iu);
+    expect(text).toMatch(/defects?|bugs?|failures?/iu);
+    expect(text).toMatch(/tried and abandoned|did not work|failed/iu);
+    // The point of the whole thing: it holds what the code cannot tell you.
+    expect(text).toMatch(/cannot be derived from|not inferable|recorded nowhere/iu);
+  });
+
+  it('no longer tells the agent a tool call is unnecessary (C-14)', () => {
+    // The regression this exists to catch is a well-meaning revert: the removed
+    // sentence reads as scrupulous neutrality, and putting it back would restore the
+    // measured cost along with it.
+    const text = prose(bootstrapParagraph(input));
+    expect(text).not.toMatch(/no tool call is required/iu);
+    expect(text).not.toMatch(/if you want them/iu);
   });
 
   it('is fenced by the markers that make it regenerable', () => {

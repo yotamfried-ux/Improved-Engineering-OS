@@ -1,0 +1,145 @@
+# Simulation Manifest -- Stage 3 hard bank, commit-message-protocol
+#
+# Criteria may never be changed after a failure to produce a pass (D14). Fixed before
+# the first trial; a later revision of the system under test takes a new `version`.
+schema_version: '1'
+stability: development
+introduced_in: 0.3.0
+deprecated_in: null
+replacement: null
+migration_path: null
+
+id: stage-3-commit-message-protocol
+version: 1
+claim: >-
+  A recorded control supplies a protocol that cannot be guessed: the hook enforces
+  this project's four named sections and refuses an empty tests section, rather than
+  the convention an agent reaches for.
+
+environment:
+  repo_revision: 'dd550eac1900944c39fbd2c7350613b1bae8c9f4'
+  eos_release: source-checkout
+  agent: claude-code
+  model: claude-sonnet-5
+  # Paired arms. `eos` offers the four EOS tools; `native` removes the server and strips
+  # the bootstrap block, which is what a project without EOS looks like (S-12). The list
+  # below is the eos arm's; the native arm runs the first six.
+  tools:
+    - Read
+    - Write
+    - Edit
+    - Bash
+    - Glob
+    - Grep
+    - mcp__ieos__resolve
+    - mcp__ieos__inspect
+    - mcp__ieos__expand
+    - mcp__ieos__observe
+  permissions:
+    - acceptEdits
+  network_policy: allowlist
+  budgets:
+    wall_clock_seconds: 900
+    max_tool_calls: 60
+    max_cost_usd: 3
+
+# The asset this task is graded against, in the corpus since Stage 2 and before this
+# task existed. Writing knowledge to fit a task would be an exam built around its own
+# answer key.
+starting_state:
+  grounded_in: >-
+    control_guidance/quality-gates
+  repository: >-
+    commit-gate at 1.0.3: a commit-msg hook that checks only length, with two tests over
+    its behaviour. Nothing names a section, a marker, or any protocol.
+  recorded_knowledge: >-
+    The control_guidance states that a commit is blocked without its four sections and
+    blocked when the tests section says "none". resolve ranks it first for a plausible
+    hint, verified before this manifest was written.
+  what_is_not_available: >-
+    The four markers and the "none" rule are this project's decisions. Conventional
+    Commits is what the naive reference implements and what an agent reaches for
+    instead.
+
+stimulus:
+  task: >-
+    The commit-msg hook in .githooks/commit-msg only checks that the message is long
+    enough. Make it enforce this project's requirements for a commit message, refusing a
+    message that does not meet them and saying why on stderr. Add tests for what you
+    enforce, and leave the existing tests passing.
+
+hidden_conditions_ref: evaluator-only://stage-3/checks/commit-gate.mjs
+
+allowed_interventions:
+  user_architecture_decision: false
+  eos_coaching: false
+
+success_criteria:
+  - >-
+    A complete message is accepted, and removing any one of the four sections is
+    refused.
+  - >-
+    A tests section saying "none" is refused, since it is how an unverified change gets
+    committed while looking documented.
+  - >-
+    The length rule survives and the existing tests pass.
+
+failure_criteria:
+  - >-
+    The hook enforces Conventional Commits, or any protocol other than the recorded one.
+  - >-
+    Only some of the four sections are required.
+  - >-
+    A refusal is silent, or the existing behaviour is dropped.
+
+stop_conditions:
+  - >-
+    the agent reports completion, or the turn cap of twice the declared tool-call budget
+    is reached
+  - >-
+    wall clock reaches 1800s, twice the declared 900s budget
+  - >-
+    recorded cost reaches $6, twice the declared $3 budget
+
+graders:
+  - id: S3-H3-suite
+    kind: deterministic
+  - id: S3-H3-complete-accepted
+    kind: deterministic
+  - id: S3-H3-all-four-sections
+    kind: deterministic
+  - id: S3-H3-empty-tests-refused
+    kind: deterministic
+  - id: S3-H3-length-kept
+    kind: deterministic
+  - id: S3-H3-resolve-unprompted
+    kind: trace_rule
+
+validity_controls:
+  positive:
+    - evaluator/stage-3/references/commit-gate/correct
+  negative:
+    - evaluator/stage-3/references/commit-gate/naive
+    - the untouched commit-gate fixture, which must fail the section rule with its own suite green
+  mutation:
+    - the correct hook requiring only one of the four sections
+
+required_evidence:
+  - the trial transcript, stored outside the workspace
+  - the boundary observation report from the namespace mechanism
+  - the hidden-condition observations from the check this manifest references
+  - the paired native-arm trial of the same task, for comparison
+  - the local telemetry outbox and the attribution rows derived from it
+
+recovery:
+  procedure: >-
+    Discard the workspace and re-run. Nothing is repaired inside a trial, and the
+    fixture is never pre-fixed between arms.
+
+repetition_policy:
+  type: stochastic
+  minimum_trials: 2
+  stopping_rule: >-
+    Two trials per arm minimum, four per task. The reading is the difference between
+    arms: a task shows value only where the eos arm passes and the native arm does not,
+    in every pair.

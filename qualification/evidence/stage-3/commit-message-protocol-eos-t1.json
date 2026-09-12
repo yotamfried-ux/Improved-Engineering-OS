@@ -1,11 +1,11 @@
 {
-  "trial_id": "plan-dod-external-gates-eos-t1",
-  "run_id": "run_s3_plan_dod_external_gates_eos_t1",
-  "simulation_id": "stage-3-plan-dod-external-gates",
-  "task_id": "plan-dod-external-gates",
+  "trial_id": "commit-message-protocol-eos-t1",
+  "run_id": "run_s3_commit_message_protocol_eos_t1",
+  "simulation_id": "stage-3-commit-message-protocol",
+  "task_id": "commit-message-protocol",
   "arm": "eos",
-  "recorded_at": "2026-09-12T07:52:36.537Z",
-  "eos_revision": "6464569beeeb49c04dac522ade2c2b37eaf54936",
+  "recorded_at": "2026-09-12T08:23:04.906Z",
+  "eos_revision": "dd550eac1900944c39fbd2c7350613b1bae8c9f4",
   "setting_sources": "project",
   "ranking_mode": "recorded",
   "registration": {
@@ -24,88 +24,113 @@
     "reasons": []
   },
   "usage": {
-    "wallClockSeconds": 81.357,
-    "costUsd": 0.256195,
-    "inputTokens": 22,
-    "outputTokens": 5433,
-    "cacheReadInputTokens": 441215,
-    "cacheCreationInputTokens": 28132,
-    "turns": 18
+    "wallClockSeconds": 193.432,
+    "costUsd": 0.5218750000000001,
+    "inputTokens": 36,
+    "outputTokens": 16113,
+    "cacheReadInputTokens": 879130,
+    "cacheCreationInputTokens": 45957,
+    "turns": 24
   },
   "tool_calls": [
     {
-      "name": "ToolSearch",
-      "at": "2026-09-12T07:51:26.013Z"
-    },
-    {
-      "name": "Read",
-      "at": "2026-09-12T07:51:26.977Z"
-    },
-    {
-      "name": "Glob",
-      "at": "2026-09-12T07:51:27.201Z"
-    },
-    {
       "name": "Bash",
-      "at": "2026-09-12T07:51:28.113Z"
+      "at": "2026-09-12T08:19:59.363Z"
     },
     {
       "name": "Read",
-      "at": "2026-09-12T07:51:31.871Z"
+      "at": "2026-09-12T08:20:02.696Z"
     },
     {
       "name": "Read",
-      "at": "2026-09-12T07:51:32.399Z"
+      "at": "2026-09-12T08:20:03.217Z"
     },
     {
       "name": "Read",
-      "at": "2026-09-12T07:51:32.994Z"
+      "at": "2026-09-12T08:20:03.731Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T08:20:03.976Z"
+    },
+    {
+      "name": "ToolSearch",
+      "at": "2026-09-12T08:20:07.068Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T08:20:11.155Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T08:20:11.504Z"
     },
     {
       "name": "resolve",
-      "at": "2026-09-12T07:51:33.859Z"
+      "at": "2026-09-12T08:20:15.098Z"
     },
     {
       "name": "inspect",
-      "at": "2026-09-12T07:51:38.210Z"
+      "at": "2026-09-12T08:20:22.715Z"
     },
     {
-      "name": "Bash",
-      "at": "2026-09-12T07:51:50.013Z"
+      "name": "resolve",
+      "at": "2026-09-12T08:20:24.115Z"
     },
     {
-      "name": "Bash",
-      "at": "2026-09-12T07:51:50.693Z"
+      "name": "resolve",
+      "at": "2026-09-12T08:20:33.684Z"
+    },
+    {
+      "name": "expand",
+      "at": "2026-09-12T08:20:35.820Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-12T08:21:54.600Z"
     },
     {
       "name": "Write",
-      "at": "2026-09-12T07:52:02.130Z"
+      "at": "2026-09-12T08:22:03.061Z"
     },
     {
       "name": "Edit",
-      "at": "2026-09-12T07:52:07.378Z"
-    },
-    {
-      "name": "Edit",
-      "at": "2026-09-12T07:52:12.840Z"
+      "at": "2026-09-12T08:22:16.585Z"
     },
     {
       "name": "Bash",
-      "at": "2026-09-12T07:52:15.310Z"
+      "at": "2026-09-12T08:22:19.909Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:22:27.926Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:22:33.399Z"
     },
     {
       "name": "Edit",
-      "at": "2026-09-12T07:52:20.399Z"
+      "at": "2026-09-12T08:22:42.549Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:22:45.381Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-12T08:22:48.401Z"
     },
     {
       "name": "observe",
-      "at": "2026-09-12T07:52:27.871Z"
+      "at": "2026-09-12T08:22:55.614Z"
     }
   ],
   "resolve_called_unprompted": true,
   "eos_tools_used": [
     "resolve",
     "inspect",
+    "expand",
     "observe"
   ],
   "isolation": {
@@ -113,7 +138,7 @@
       {
         "boundary": "filesystem",
         "verdict": "proven",
-        "evidence": "before and after the trial ran: workspace /tmp/ieos-trial-plan-dod-external-gates-eos-t1-oILgVa contains no path resolving outside its allowed roots, and no denied root is reachable from it"
+        "evidence": "before and after the trial ran: workspace /tmp/ieos-trial-commit-message-protocol-eos-t1-CR0kUk contains no path resolving outside its allowed roots, and no denied root is reachable from it"
       },
       {
         "boundary": "environment",
@@ -169,122 +194,103 @@
     "failure": null,
     "outcomes": {
       "suite_green": true,
-      "suite_tail": "ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 ℹ duration_ms 59.271635 ",
-      "plans_dir_present": true,
-      "plan_count": 2,
-      "new_plan_written": true,
-      "new_plan_files": "collapse-spaces.md",
-      "has_dod_section": true,
-      "dod_checkbox_count": 4,
-      "post_commit_items_in_dod": 0,
-      "post_commit_items_in_dod_text": "",
-      "has_external_gates_section": true,
-      "external_gates_item_count": 1,
-      "ci_requirement_addressed_somewhere": true
+      "hook_present": true,
+      "complete_message_accepted": true,
+      "sections_required_count": 4,
+      "sections_required": "✅❌🔄🧪",
+      "empty_tests_section_refused": true,
+      "short_message_still_refused": true,
+      "did_not_reach_for_conventional_commits": true
     }
   },
   "verdicts": [
     {
-      "graderId": "S3-H2-suite",
+      "graderId": "S3-H3-suite",
       "kind": "deterministic",
       "status": "proven",
       "evidence": "suite_green = true, expected true"
     },
     {
-      "graderId": "S3-H2-plan-written",
+      "graderId": "S3-H3-complete-accepted",
       "kind": "deterministic",
       "status": "proven",
-      "evidence": "new_plan_written = true, expected true"
+      "evidence": "complete_message_accepted = true, expected true"
     },
     {
-      "graderId": "S3-H2-has-dod",
+      "graderId": "S3-H3-all-four-sections",
       "kind": "deterministic",
       "status": "proven",
-      "evidence": "has_dod_section = true, expected true"
+      "evidence": "sections_required_count = 4, expected 4"
     },
     {
-      "graderId": "S3-H2-ci-addressed",
+      "graderId": "S3-H3-empty-tests-refused",
       "kind": "deterministic",
       "status": "proven",
-      "evidence": "ci_requirement_addressed_somewhere = true, expected true"
+      "evidence": "empty_tests_section_refused = true, expected true"
     },
     {
-      "graderId": "S3-H2-no-post-commit-in-dod",
+      "graderId": "S3-H3-length-kept",
       "kind": "deterministic",
       "status": "proven",
-      "evidence": "post_commit_items_in_dod = 0, expected 0"
+      "evidence": "short_message_still_refused = true, expected true"
     },
     {
-      "graderId": "S3-H2-gates-section",
-      "kind": "deterministic",
-      "status": "proven",
-      "evidence": "has_external_gates_section = true, expected true"
-    },
-    {
-      "graderId": "S3-H2-resolve-unprompted",
+      "graderId": "S3-H3-resolve-unprompted",
       "kind": "trace_rule",
       "status": "proven",
-      "evidence": "resolve was called (position 7 of 17)"
+      "evidence": "resolve was called (position 8 of 23)"
     }
   ],
   "grading": {
     "status": "proven",
     "decidedBy": [
       {
-        "graderId": "S3-H2-suite",
+        "graderId": "S3-H3-suite",
         "kind": "deterministic",
         "status": "proven",
         "evidence": "suite_green = true, expected true"
       },
       {
-        "graderId": "S3-H2-plan-written",
+        "graderId": "S3-H3-complete-accepted",
         "kind": "deterministic",
         "status": "proven",
-        "evidence": "new_plan_written = true, expected true"
+        "evidence": "complete_message_accepted = true, expected true"
       },
       {
-        "graderId": "S3-H2-has-dod",
+        "graderId": "S3-H3-all-four-sections",
         "kind": "deterministic",
         "status": "proven",
-        "evidence": "has_dod_section = true, expected true"
+        "evidence": "sections_required_count = 4, expected 4"
       },
       {
-        "graderId": "S3-H2-ci-addressed",
+        "graderId": "S3-H3-empty-tests-refused",
         "kind": "deterministic",
         "status": "proven",
-        "evidence": "ci_requirement_addressed_somewhere = true, expected true"
+        "evidence": "empty_tests_section_refused = true, expected true"
       },
       {
-        "graderId": "S3-H2-no-post-commit-in-dod",
+        "graderId": "S3-H3-length-kept",
         "kind": "deterministic",
         "status": "proven",
-        "evidence": "post_commit_items_in_dod = 0, expected 0"
-      },
-      {
-        "graderId": "S3-H2-gates-section",
-        "kind": "deterministic",
-        "status": "proven",
-        "evidence": "has_external_gates_section = true, expected true"
+        "evidence": "short_message_still_refused = true, expected true"
       }
     ],
     "overruled": [],
     "reasons": [
-      "S3-H2-suite (deterministic): suite_green = true, expected true",
-      "S3-H2-plan-written (deterministic): new_plan_written = true, expected true",
-      "S3-H2-has-dod (deterministic): has_dod_section = true, expected true",
-      "S3-H2-ci-addressed (deterministic): ci_requirement_addressed_somewhere = true, expected true",
-      "S3-H2-no-post-commit-in-dod (deterministic): post_commit_items_in_dod = 0, expected 0",
-      "S3-H2-gates-section (deterministic): has_external_gates_section = true, expected true"
+      "S3-H3-suite (deterministic): suite_green = true, expected true",
+      "S3-H3-complete-accepted (deterministic): complete_message_accepted = true, expected true",
+      "S3-H3-all-four-sections (deterministic): sections_required_count = 4, expected 4",
+      "S3-H3-empty-tests-refused (deterministic): empty_tests_section_refused = true, expected true",
+      "S3-H3-length-kept (deterministic): short_message_still_refused = true, expected true"
     ]
   },
   "reasons": [
-    "S3-H2-suite (deterministic): suite_green = true, expected true",
-    "S3-H2-plan-written (deterministic): new_plan_written = true, expected true",
-    "S3-H2-has-dod (deterministic): has_dod_section = true, expected true",
-    "S3-H2-ci-addressed (deterministic): ci_requirement_addressed_somewhere = true, expected true",
-    "S3-H2-no-post-commit-in-dod (deterministic): post_commit_items_in_dod = 0, expected 0",
-    "S3-H2-gates-section (deterministic): has_external_gates_section = true, expected true",
-    "run run_s3_plan_dod_external_gates_eos_t1 was registered locally but not with the Evidence Plane, so the plane will stamp its events \"operational\" and this trial is not qualification evidence (D36)"
+    "S3-H3-suite (deterministic): suite_green = true, expected true",
+    "S3-H3-complete-accepted (deterministic): complete_message_accepted = true, expected true",
+    "S3-H3-all-four-sections (deterministic): sections_required_count = 4, expected 4",
+    "S3-H3-empty-tests-refused (deterministic): empty_tests_section_refused = true, expected true",
+    "S3-H3-length-kept (deterministic): short_message_still_refused = true, expected true",
+    "run run_s3_commit_message_protocol_eos_t1 was registered locally but not with the Evidence Plane, so the plane will stamp its events \"operational\" and this trial is not qualification evidence (D36)"
   ],
-  "transcript_ref": "/home/user/Improved-Engineering-OS/qualification/evidence/stage-3/transcripts/plan-dod-external-gates-eos-t1-plan-dod-external-gates.ndjson"
+  "transcript_ref": "/home/user/Improved-Engineering-OS/qualification/evidence/stage-3/transcripts/commit-message-protocol-eos-t1-commit-message-protocol.ndjson"
 }

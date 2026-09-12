@@ -13,6 +13,7 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest';
+import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -37,6 +38,16 @@ function workspaceWith(taskId: string, repoName: string, variant: string | null)
   const root = mkdtempSync(join(tmpdir(), `ieos-s3-${taskId}-`));
   workspaces.push(root);
   writeTargetRepo(root, task.repo());
+  // A git repository, because one fixture's whole subject is the staged diff. Done for
+  // every task rather than one, so the helper stays the same shape for all of them.
+  for (const args of [
+    ['init', '-q', '.'],
+    ['add', '-A'],
+    ['-c', 'user.email=g@ieos.invalid', '-c', 'user.name=graders', 'commit', '-q', '-m', 'fixture'],
+  ]) {
+    const run = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+    expect(run.status, `git ${args.join(' ')} failed: ${run.stderr ?? ''}`).toBe(0);
+  }
   if (variant !== null) {
     cpSync(join(REFERENCES, repoName, variant), root, { recursive: true });
   }
@@ -342,6 +353,97 @@ describe('plan-dod-external-gates: the graders detect known-bad', () => {
       );
       const byId = new Map(verdicts.map((verdict) => [verdict.graderId, verdict.status]));
       expect(byId.get('S3-H2-plan-written')).toBe('failed');
+    },
+    CHECK_TIMEOUT,
+  );
+});
+
+describe('commit-message-protocol: the graders detect known-bad', () => {
+  it(
+    'the correct hook passes every rule',
+    () => {
+      const verdicts = verdictsFor(
+        'commit-message-protocol',
+        workspaceWith('commit-message-protocol', 'commit-gate', 'correct'),
+      );
+      expect(statuses(verdicts).filter((entry) => !entry.endsWith('=proven'))).toEqual([]);
+    },
+    CHECK_TIMEOUT,
+  );
+
+  it(
+    'Conventional Commits -- the convention an agent reaches for -- fails',
+    () => {
+      const verdicts = verdictsFor(
+        'commit-message-protocol',
+        workspaceWith('commit-message-protocol', 'commit-gate', 'naive'),
+      );
+      const byId = new Map(verdicts.map((verdict) => [verdict.graderId, verdict.status]));
+      // Not a count: this is the trap, and a different rule failing would mean the
+      // trial measured something else.
+      expect(byId.get('S3-H3-all-four-sections')).toBe('failed');
+      expect(byId.get('S3-H3-empty-tests-refused')).toBe('failed');
+    },
+    CHECK_TIMEOUT,
+  );
+
+  it(
+    'the untouched repository fails: the hook really only checks length',
+    () => {
+      const verdicts = verdictsFor(
+        'commit-message-protocol',
+        workspaceWith('commit-message-protocol', 'commit-gate', null),
+      );
+      const byId = new Map(verdicts.map((verdict) => [verdict.graderId, verdict.status]));
+      expect(byId.get('S3-H3-all-four-sections')).toBe('failed');
+      // Its own suite passes, so the row that fails is the one about the task.
+      expect(byId.get('S3-H3-suite')).toBe('proven');
+    },
+    CHECK_TIMEOUT,
+  );
+});
+
+describe('quality-gate-cleanup: the graders detect known-bad', () => {
+  it(
+    'the correct gate passes every rule',
+    () => {
+      const verdicts = verdictsFor(
+        'quality-gate-cleanup',
+        workspaceWith('quality-gate-cleanup', 'quality-gate', 'correct'),
+      );
+      expect(statuses(verdicts).filter((entry) => !entry.endsWith('=proven'))).toEqual([]);
+    },
+    CHECK_TIMEOUT,
+  );
+
+  it(
+    'blocking everything that looks like debug output fails on the distinction',
+    () => {
+      const verdicts = verdictsFor(
+        'quality-gate-cleanup',
+        workspaceWith('quality-gate-cleanup', 'quality-gate', 'naive'),
+      );
+      const byId = new Map(verdicts.map((verdict) => [verdict.graderId, verdict.status]));
+      // The naive gate is defensible engineering and still wrong for this project:
+      // it blocks the log line and has no bypass.
+      expect(byId.get('S3-H4-log-allowed')).toBe('failed');
+      expect(byId.get('S3-H4-named-bypass')).toBe('failed');
+      // And it gets the easy half right, so the failure is about the distinction.
+      expect(byId.get('S3-H4-debugger-blocked')).toBe('proven');
+    },
+    CHECK_TIMEOUT,
+  );
+
+  it(
+    'the untouched repository fails: the stub allows everything',
+    () => {
+      const verdicts = verdictsFor(
+        'quality-gate-cleanup',
+        workspaceWith('quality-gate-cleanup', 'quality-gate', null),
+      );
+      const byId = new Map(verdicts.map((verdict) => [verdict.graderId, verdict.status]));
+      expect(byId.get('S3-H4-debugger-blocked')).toBe('failed');
+      expect(byId.get('S3-H4-merge-marker-blocked')).toBe('failed');
     },
     CHECK_TIMEOUT,
   );

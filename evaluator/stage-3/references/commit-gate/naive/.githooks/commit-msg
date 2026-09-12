@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# The plausible wrong answer: Conventional Commits, which is what an agent reaches for
+# when it has no record of what this project actually asks.
+set -euo pipefail
+
+message_file="$1"
+message="$(cat "$message_file")"
+
+if [ "${#message}" -lt 10 ]; then
+  echo "commit message is too short to be useful" >&2
+  exit 1
+fi
+
+first_line="$(head -1 "$message_file")"
+if ! printf '%s' "$first_line" | grep -Eq '^(feat|fix|chore|docs|test|refactor)(\([a-z-]+\))?: .+'; then
+  echo "commit subject must follow Conventional Commits, e.g. 'fix(resolver): ...'" >&2
+  exit 1
+fi
+
+exit 0
