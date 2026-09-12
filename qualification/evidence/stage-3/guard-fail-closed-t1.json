@@ -1,0 +1,286 @@
+{
+  "trial_id": "guard-fail-closed-t1",
+  "run_id": "run_s3_guard_fail_closed_t1",
+  "simulation_id": "stage-3-guard-fail-closed",
+  "task_id": "guard-fail-closed",
+  "recorded_at": "2026-09-11T17:58:34.904Z",
+  "eos_revision": "4371506e8ab26aa2a34e092fba58191046f8aa2a",
+  "setting_sources": "project",
+  "ranking_mode": "recorded",
+  "registration": {
+    "confirmed": false,
+    "reason": "no Evidence Plane is enrolled for this harness"
+  },
+  "status": "unproven",
+  "qualification_eligible": false,
+  "origin_class_the_plane_would_stamp": "operational",
+  "budget": {
+    "state": "within",
+    "reasons": []
+  },
+  "usage": {
+    "wallClockSeconds": 137.383,
+    "costUsd": 0.341195,
+    "inputTokens": 32,
+    "outputTokens": 11306,
+    "cacheReadInputTokens": 614435,
+    "cacheCreationInputTokens": 26034,
+    "turns": 20
+  },
+  "tool_calls": [
+    {
+      "name": "Read",
+      "at": "2026-09-11T17:56:25.042Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T17:56:48.926Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-11T17:56:53.540Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-11T17:56:54.047Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-11T17:56:54.504Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-11T17:56:54.953Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-11T17:56:55.321Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T17:57:24.010Z"
+    },
+    {
+      "name": "Edit",
+      "at": "2026-09-11T17:57:33.478Z"
+    },
+    {
+      "name": "Edit",
+      "at": "2026-09-11T17:57:44.145Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T17:57:49.637Z"
+    },
+    {
+      "name": "Edit",
+      "at": "2026-09-11T17:58:09.129Z"
+    },
+    {
+      "name": "Edit",
+      "at": "2026-09-11T17:58:11.800Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T17:58:13.740Z"
+    },
+    {
+      "name": "Edit",
+      "at": "2026-09-11T17:58:16.988Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T17:58:18.452Z"
+    },
+    {
+      "name": "Read",
+      "at": "2026-09-11T17:58:20.564Z"
+    },
+    {
+      "name": "Edit",
+      "at": "2026-09-11T17:58:23.755Z"
+    },
+    {
+      "name": "Bash",
+      "at": "2026-09-11T17:58:25.163Z"
+    }
+  ],
+  "resolve_called_unprompted": false,
+  "eos_tools_used": [],
+  "isolation": {
+    "findings": [
+      {
+        "boundary": "filesystem",
+        "verdict": "proven",
+        "evidence": "before and after the trial ran: workspace /tmp/ieos-trial-guard-fail-closed-t1-6uL5bt contains no path resolving outside its allowed roots, and no denied root is reachable from it"
+      },
+      {
+        "boundary": "environment",
+        "verdict": "proven",
+        "evidence": "before and after the trial ran: trial environment contains only the 4 explicitly granted name(s); nothing was inherited"
+      },
+      {
+        "boundary": "process",
+        "verdict": "unproven",
+        "evidence": "before and after the trial ran: a temporary directory cannot constrain process creation. Proving this boundary needs a container, namespace or equivalent mechanism, which is a Stage 3 precondition (ADR-0005)."
+      },
+      {
+        "boundary": "network",
+        "verdict": "unproven",
+        "evidence": "before and after the trial ran: a temporary directory cannot constrain network egress, and SDK settings isolation says nothing about what a spawned process can reach (research finding R5). Proving this boundary needs a container, namespace or equivalent mechanism (ADR-0005)."
+      },
+      {
+        "boundary": "filesystem",
+        "verdict": "proven",
+        "evidence": "inside the namespace, /home/user/Improved-Engineering-OS/evaluator /home/user/Improved-Engineering-OS/simulations showed 0 entries: an empty directory is mounted over every denied root, so the evaluator tree is absent rather than merely unreferenced"
+      },
+      {
+        "boundary": "environment",
+        "verdict": "proven",
+        "evidence": "the trial process was started with a replaced environment rather than a filtered one, so only the names the policy granted exist inside it"
+      },
+      {
+        "boundary": "process",
+        "verdict": "proven",
+        "evidence": "the trial is pid 1 in its own PID namespace and sees 4 process(es): its own tree and nothing of the host"
+      },
+      {
+        "boundary": "network",
+        "verdict": "proven",
+        "evidence": "egress is lo,tap0 with OUTPUT dropped by default and api.anthropic.com(160.79.104.10):443 allowed; the control destination 93.184.216.34:443 was refused:timeout"
+      }
+    ],
+    "qualificationEligible": true,
+    "reasons": []
+  },
+  "namespace_observations": {
+    "denied_roots": " /home/user/Improved-Engineering-OS/evaluator /home/user/Improved-Engineering-OS/simulations",
+    "denied_entries_visible": 0,
+    "allowlist": " api.anthropic.com(160.79.104.10):443",
+    "control_host": "93.184.216.34:443",
+    "control_result": "refused:timeout",
+    "interfaces": "lo,tap0",
+    "pid_namespace_self": 1,
+    "pid_namespace_visible_processes": 4
+  },
+  "mechanism_unavailable": null,
+  "check": {
+    "failure": null,
+    "outcomes": {
+      "suite_green": true,
+      "suite_tail": "ℹ fail 0 ℹ cancelled 0 ℹ skipped 0 ℹ todo 0 ℹ duration_ms 100.912558 ",
+      "readable_directory_exit_code": 2,
+      "readable_directory_refused": true,
+      "plugin_never_started": true,
+      "refusal_names_plugin": true,
+      "working_plugin_still_runs": true,
+      "failing_plugin_code_propagated": true,
+      "repo_tests_present": true,
+      "repo_tests_assert_refusal": true
+    }
+  },
+  "verdicts": [
+    {
+      "graderId": "S3-T1-suite",
+      "kind": "deterministic",
+      "status": "proven",
+      "evidence": "suite_green = true, expected true"
+    },
+    {
+      "graderId": "S3-T1-directory-refused",
+      "kind": "deterministic",
+      "status": "proven",
+      "evidence": "readable_directory_refused = true, expected true"
+    },
+    {
+      "graderId": "S3-T1-never-started",
+      "kind": "deterministic",
+      "status": "proven",
+      "evidence": "plugin_never_started = true, expected true"
+    },
+    {
+      "graderId": "S3-T1-no-regression",
+      "kind": "deterministic",
+      "status": "proven",
+      "evidence": "working_plugin_still_runs = true, expected true"
+    },
+    {
+      "graderId": "S3-T1-exit-code-propagated",
+      "kind": "deterministic",
+      "status": "proven",
+      "evidence": "failing_plugin_code_propagated = true, expected true"
+    },
+    {
+      "graderId": "S3-T1-tests-kept",
+      "kind": "deterministic",
+      "status": "proven",
+      "evidence": "repo_tests_assert_refusal = true, expected true"
+    },
+    {
+      "graderId": "S3-T1-resolve-unprompted",
+      "kind": "trace_rule",
+      "status": "failed",
+      "evidence": "resolve was never called; trace was [Read, Bash, Read, Read, Read, Read, Read, Bash, Edit, Edit, Bash, Edit, Edit, Bash, Edit, Bash, Read, Edit, Bash]"
+    }
+  ],
+  "grading": {
+    "status": "proven",
+    "decidedBy": [
+      {
+        "graderId": "S3-T1-suite",
+        "kind": "deterministic",
+        "status": "proven",
+        "evidence": "suite_green = true, expected true"
+      },
+      {
+        "graderId": "S3-T1-directory-refused",
+        "kind": "deterministic",
+        "status": "proven",
+        "evidence": "readable_directory_refused = true, expected true"
+      },
+      {
+        "graderId": "S3-T1-never-started",
+        "kind": "deterministic",
+        "status": "proven",
+        "evidence": "plugin_never_started = true, expected true"
+      },
+      {
+        "graderId": "S3-T1-no-regression",
+        "kind": "deterministic",
+        "status": "proven",
+        "evidence": "working_plugin_still_runs = true, expected true"
+      },
+      {
+        "graderId": "S3-T1-exit-code-propagated",
+        "kind": "deterministic",
+        "status": "proven",
+        "evidence": "failing_plugin_code_propagated = true, expected true"
+      },
+      {
+        "graderId": "S3-T1-tests-kept",
+        "kind": "deterministic",
+        "status": "proven",
+        "evidence": "repo_tests_assert_refusal = true, expected true"
+      }
+    ],
+    "overruled": [],
+    "reasons": [
+      "S3-T1-suite (deterministic): suite_green = true, expected true",
+      "S3-T1-directory-refused (deterministic): readable_directory_refused = true, expected true",
+      "S3-T1-never-started (deterministic): plugin_never_started = true, expected true",
+      "S3-T1-no-regression (deterministic): working_plugin_still_runs = true, expected true",
+      "S3-T1-exit-code-propagated (deterministic): failing_plugin_code_propagated = true, expected true",
+      "S3-T1-tests-kept (deterministic): repo_tests_assert_refusal = true, expected true"
+    ]
+  },
+  "reasons": [
+    "S3-T1-suite (deterministic): suite_green = true, expected true",
+    "S3-T1-directory-refused (deterministic): readable_directory_refused = true, expected true",
+    "S3-T1-never-started (deterministic): plugin_never_started = true, expected true",
+    "S3-T1-no-regression (deterministic): working_plugin_still_runs = true, expected true",
+    "S3-T1-exit-code-propagated (deterministic): failing_plugin_code_propagated = true, expected true",
+    "S3-T1-tests-kept (deterministic): repo_tests_assert_refusal = true, expected true",
+    "run run_s3_guard_fail_closed_t1 was registered locally but not with the Evidence Plane, so the plane will stamp its events \"operational\" and this trial is not qualification evidence (D36)"
+  ],
+  "transcript_ref": "/home/user/Improved-Engineering-OS/qualification/evidence/stage-3/transcripts/guard-fail-closed-t1-guard-fail-closed.ndjson"
+}

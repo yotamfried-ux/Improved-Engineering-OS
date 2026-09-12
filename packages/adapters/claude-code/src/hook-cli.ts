@@ -118,7 +118,25 @@ export async function runHook(raw: string, deps: HookDeps): Promise<HookOutcome>
             'recorded. Start a new session to begin one.',
         );
       }
-      const runId = mintId('run', deps.clock, deps.random);
+      // A pre-registered run id, when one was injected, and a fresh one otherwise.
+      //
+      // D36 has a service principal register `run_id -> origin_class` *before* the
+      // run's first event, which is impossible if the emitter invents the id
+      // afterwards: the registered run then produces no events and the emitting run
+      // was never registered, so the plane correctly stamps `operational` and the
+      // harness's registration describes a run that never happened. Stage 3 found
+      // exactly that (S-7) -- the harness registered `run_s3_...` and the outbox
+      // carried `run_01M28...`.
+      //
+      // Honouring the variable trusts whoever set the environment. For a trial that
+      // is the harness, which is the service principal; for anyone else it is no
+      // privilege escalation, because registering a class still needs the service
+      // token and this only names a run.
+      const injectedRunId = deps.env['IEOS_RUN_ID'];
+      const runId =
+        injectedRunId !== undefined && /^run_[A-Za-z0-9_]{1,64}$/u.test(injectedRunId)
+          ? injectedRunId
+          : mintId('run', deps.clock, deps.random);
       // Reachability is declared before any work, not inferred afterwards (D23).
       const reachable = await deps.ingest.isReachable();
       runs.begin(runId, reachable, deps.clock.nowIso(), sessionKey);

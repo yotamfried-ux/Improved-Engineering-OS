@@ -18,7 +18,7 @@
  */
 
 import { probe, type Trial } from './sandbox.ts';
-import { strictestOf } from './isolation.ts';
+import { buildIsolationReport, strictestOf, type BoundaryFinding } from './isolation.ts';
 import type { AgentDriver, TrialOutcome, TrialTask } from './driver.ts';
 import type { RunRegistry } from './run-registry.ts';
 
@@ -28,6 +28,21 @@ export interface RunTrialOptions {
   readonly driver: AgentDriver;
   readonly registry: RunRegistry;
   readonly runId: string;
+  /**
+   * Findings from a mechanism outside the directory sandbox, read after the run.
+   *
+   * A function rather than a value, because the mechanism's observations only
+   * exist once the trial has been through it -- passing them in would mean either
+   * running the driver twice or reporting on a namespace that had not been built
+   * yet.
+   *
+   * From Stage 3 the namespace sandbox reports what it established, and those
+   * findings sit alongside the probe's rather than replacing them: the probe's
+   * `network: unproven` is a statement about the probe, so
+   * `deriveQualificationEligibility` lets evidence outrank an admission of
+   * ignorance while a violation from either still decides the boundary.
+   */
+  readonly mechanismFindings?: () => readonly BoundaryFinding[];
 }
 
 export async function runTrial(options: RunTrialOptions): Promise<TrialOutcome> {
@@ -58,7 +73,12 @@ export async function runTrial(options: RunTrialOptions): Promise<TrialOutcome> 
   const result = await driver.run(trial, task);
 
   // Probed again, on the workspace the driver leaves behind.
-  const isolation = strictestOf(trial.policy, before.findings, probe(trial).findings);
+  const probed = strictestOf(trial.policy, before.findings, probe(trial).findings);
+  const mechanism = options.mechanismFindings?.() ?? [];
+  const isolation =
+    mechanism.length === 0
+      ? probed
+      : buildIsolationReport(trial.policy, [...probed.findings, ...mechanism]);
   const reasons = [...isolation.reasons, ...registrationReasons];
 
   return {

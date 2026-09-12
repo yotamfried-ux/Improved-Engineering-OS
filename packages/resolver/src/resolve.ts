@@ -63,6 +63,20 @@ export interface ResolveDeps {
    * a capability-matching design in its own right and is not pretended here.
    */
   readonly capabilities?: readonly string[];
+  /**
+   * A ranking mode the request may not override (D24, Q-06).
+   *
+   * Absent normally, so a caller gets the default posture and may ask for what it
+   * likes. Set by a harness running a qualification trial, which pins `recorded`
+   * so a score change between two trials cannot reorder their results.
+   *
+   * It lives here rather than in the adapter that passes it, because ranking
+   * policy is the resolver's (F2: adapters deliver the contract, they do not own
+   * knowledge semantics), and it overrides rather than defaults for the same
+   * reason D36 takes `origin_class` away from the agent: a subject that can choose
+   * the conditions it is measured under is not being measured.
+   */
+  readonly pinnedRankingMode?: RankingMode;
 }
 
 /** Everything both verbs need, computed once. */
@@ -82,7 +96,7 @@ async function prepare(
   // D24's default posture is a live overlay when one is reachable. None is at
   // Stage 2, which the response reports through `score_source` rather than by
   // relabelling the mode the caller asked for.
-  const rankingMode: RankingMode = request.ranking_mode ?? 'live_overlay';
+  const rankingMode: RankingMode = deps.pinnedRankingMode ?? request.ranking_mode ?? 'live_overlay';
   const viewId = effectiveViewIdFor(scores, rankingMode);
 
   // Q-06: `recorded` must reproduce the view it names.

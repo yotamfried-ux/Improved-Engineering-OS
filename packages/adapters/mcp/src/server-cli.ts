@@ -104,10 +104,23 @@ async function main(): Promise<number> {
   }
 
   const store = new Map<string, ContextSnapshot>();
+  // `--ranking-mode recorded` is how a Stage 3 trial pins its ranking: the agent
+  // cannot opt back into the live overlay, so two trials of one task stay
+  // comparable however the scores moved between them.
+  const pinned = flag('--ranking-mode');
+  if (pinned !== undefined && pinned !== 'recorded' && pinned !== 'live_overlay') {
+    process.stderr.write(`--ranking-mode must be "recorded" or "live_overlay", not "${pinned}"\n`);
+    return 64;
+  }
   serveIeosMcp(
     // Staging is null at Stage 1: `observe` refuses rather than accepting a
     // write that would reach nothing (T-04, D22).
-    { index, facts: observed, staging: null },
+    {
+      index,
+      facts: observed,
+      staging: null,
+      ...(pinned === undefined ? {} : { pinnedRankingMode: pinned }),
+    },
     store,
     // stderr, never stdout: stdout is the protocol's wire.
     { onerror: (error) => process.stderr.write(`${error.message}\n`) },

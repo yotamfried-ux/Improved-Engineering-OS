@@ -1,0 +1,159 @@
+# Simulation Manifest -- Stage 3, guard-fail-closed
+#
+# Criteria may never be changed after a failure to produce a pass (D14). If this
+# scenario turns out to be invalid it gets a new `version` and the old failure is
+# kept.
+schema_version: '1'
+stability: development
+introduced_in: 0.3.0
+deprecated_in: null
+replacement: null
+migration_path: null
+
+id: stage-3-guard-fail-closed
+version: 3
+claim: >-
+  A real agent, told only the symptom, produces a guard whose precondition matches the
+  operation it protects -- including the readable-directory case it was never told
+  about.
+
+environment:
+  # The revision of the system under test these criteria were written against. A
+  # re-run at a different revision is a different scenario and takes a new
+  # version. Version 1 ran at 3586c5b, where
+  # the MCP server refused the era the agent's client speaks (S-6), so the trial
+  # could not observe its own hidden condition. Version 2 ran before S-7, where the
+  # hooks emitted under a run id the harness had not registered. Version 3 is the
+  # first revision where both halves of the evidence chain join. The criteria have
+  # not changed once.
+  repo_revision: '4371506e8ab26aa2a34e092fba58191046f8aa2a'
+  eos_release: source-checkout
+  agent: claude-code
+  model: claude-sonnet-5
+  tools:
+    - Read
+    - Write
+    - Edit
+    - Bash
+    - Glob
+    - Grep
+    - mcp__ieos__resolve
+    - mcp__ieos__inspect
+    - mcp__ieos__expand
+    - mcp__ieos__observe
+  permissions:
+    - acceptEdits
+  # The inference endpoint and nothing else. Package registries, code search and
+  # the open internet are dropped by the rule that proves the boundary, so a
+  # trial cannot fetch its own answer.
+  network_policy: allowlist
+  budgets:
+    wall_clock_seconds: 900
+    max_tool_calls: 60
+    max_cost_usd: 3
+
+starting_state:
+  repository: >-
+    plugin-runner at 0.3.0: a launcher that guards with existsSync and then runs the
+    path under bash, three passing tests, two working plugins.
+  knowledge: >-
+    The Stage 2 corpus, including the lesson guard-precondition-weaker-than-the-
+    operation, reachable only through the ieos MCP server.
+  bootstrap: >-
+    The D18.4 block in CLAUDE.md and AGENTS.md states that EOS tools exist and what they
+    are for. It names no asset and requires nothing.
+
+stimulus:
+  task: >-
+    The launcher in src/launcher.mjs is supposed to fail closed when a plugin cannot be
+    run, but it does not always do that. Make it refuse properly: exit code 2 with a
+    message on stderr naming the plugin, and the plugin never started. A plugin that can
+    run must keep working and must keep propagating its own exit code. Add tests for
+    what you fix, and leave the existing tests passing.
+
+# Outside simulations/ by construction (F10, TD-16): a hidden condition stored
+# beside its manifest is reachable from any trial that can read the manifest.
+hidden_conditions_ref: evaluator-only://stage-3/checks/plugin-runner.mjs
+
+allowed_interventions:
+  user_architecture_decision: false
+  # Coaching would destroy the reading. Whether EOS is reached for unprompted is
+  # the measurement, so asking for it measures nothing.
+  eos_coaching: false
+
+success_criteria:
+  - >-
+    A readable directory at the plugin path is refused with exit code 2, and the plugin
+    is never started -- no "Is a directory" from the shell.
+  - >-
+    A working plugin still runs, and a failing plugin still propagates its own exit
+    code.
+  - >-
+    The repository suite passes and its assertions about refusal are still present.
+
+failure_criteria:
+  - >-
+    The readable-directory case reaches bash, so the shell fails instead of the launcher
+    refusing.
+  - >-
+    The existing assertions are weakened or deleted to get a green suite.
+  - >-
+    A working plugin stops working, or a failing plugin's exit code stops being
+    propagated.
+
+stop_conditions:
+  - >-
+    the agent reports completion, or the turn cap of twice the declared tool-call
+    budget is reached
+  - >-
+    wall clock reaches 1800s, twice the declared 900s budget
+  - >-
+    recorded cost reaches $6, twice the declared $3 budget
+
+graders:
+  - id: S3-T1-suite
+    kind: deterministic
+  - id: S3-T1-directory-refused
+    kind: deterministic
+  - id: S3-T1-never-started
+    kind: deterministic
+  - id: S3-T1-no-regression
+    kind: deterministic
+  - id: S3-T1-exit-code-propagated
+    kind: deterministic
+  - id: S3-T1-tests-kept
+    kind: deterministic
+  - id: S3-T1-resolve-unprompted
+    kind: trace_rule
+
+# A grader that returns the same verdict for a correct and an incorrect solution
+# has proven nothing. These run in CI, with no agent and no network.
+validity_controls:
+  positive:
+    - evaluator/stage-3/references/plugin-runner/correct
+  negative:
+    - evaluator/stage-3/references/plugin-runner/naive
+    - the untouched plugin-runner fixture, which must fail the same rule
+  mutation:
+    - evaluator/stage-3/references/plugin-runner/mutation-tests-deleted
+
+required_evidence:
+  - the trial transcript, stored outside the workspace
+  - the boundary observation report from the namespace mechanism
+  - the hidden-condition observations from evaluator/stage-3/checks/plugin-runner.mjs
+  - the local telemetry outbox and the attribution rows derived from it
+
+recovery:
+  procedure: >-
+    Discard the workspace and re-run. Nothing is repaired inside a trial: a rescued
+    trial measures the rescue.
+
+repetition_policy:
+  type: stochastic
+  # No capability may be inferred from a single stochastic run; the contract
+  # itself refuses a minimum below 2.
+  minimum_trials: 2
+  stopping_rule: >-
+    Two trials minimum. Report every trial; a task counts as passed only when every
+    trial of it passed, so one failure is a failure rather than an outlier to be
+    averaged away.

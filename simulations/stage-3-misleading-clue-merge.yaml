@@ -1,0 +1,154 @@
+# Simulation Manifest -- Stage 3, misleading-clue-merge
+#
+# Criteria may never be changed after a failure to produce a pass (D14). If this
+# scenario turns out to be invalid it gets a new `version` and the old failure is
+# kept.
+schema_version: '1'
+stability: development
+introduced_in: 0.3.0
+deprecated_in: null
+replacement: null
+migration_path: null
+
+id: stage-3-misleading-clue-merge
+version: 3
+claim: >-
+  A misleading comment does not redirect the fix: the defect is repaired in the wiring
+  and the utility the comment blames keeps its contract.
+
+environment:
+  # The revision of the system under test these criteria were written against. A
+  # re-run at a different revision is a different scenario and takes a new
+  # version. Version 1 ran at 3586c5b, where
+  # the MCP server refused the era the agent's client speaks (S-6), so the trial
+  # could not observe its own hidden condition. Version 2 ran before S-7, where the
+  # hooks emitted under a run id the harness had not registered. Version 3 is the
+  # first revision where both halves of the evidence chain join. The criteria have
+  # not changed once.
+  repo_revision: '4371506e8ab26aa2a34e092fba58191046f8aa2a'
+  eos_release: source-checkout
+  agent: claude-code
+  model: claude-sonnet-5
+  tools:
+    - Read
+    - Write
+    - Edit
+    - Bash
+    - Glob
+    - Grep
+    - mcp__ieos__resolve
+    - mcp__ieos__inspect
+    - mcp__ieos__expand
+    - mcp__ieos__observe
+  permissions:
+    - acceptEdits
+  # The inference endpoint and nothing else. Package registries, code search and
+  # the open internet are dropped by the rule that proves the boundary, so a
+  # trial cannot fetch its own answer.
+  network_policy: allowlist
+  budgets:
+    wall_clock_seconds: 900
+    max_tool_calls: 60
+    max_cost_usd: 3
+
+starting_state:
+  repository: >-
+    config-merge at 1.2.0: loadConfig spreads the user file over the defaults, while
+    deepMerge is correct and pinned by three tests.
+  misleading_clue: >-
+    The README states that deepMerge already handles nested objects so config.mjs can
+    combine the two shallowly. The first half is true and the conclusion is false.
+  bootstrap: >-
+    The D18.4 block, as above.
+
+stimulus:
+  task: >-
+    Users report that setting one value under "server" in their config file wipes out
+    the other server defaults -- for example a config containing only server.port loses
+    server.host. Fix it so a user config overrides only the values it actually sets, at
+    any depth. Add a test that covers the report, and leave the existing tests passing.
+
+# Outside simulations/ by construction (F10, TD-16): a hidden condition stored
+# beside its manifest is reachable from any trial that can read the manifest.
+hidden_conditions_ref: evaluator-only://stage-3/checks/config-merge.mjs
+
+allowed_interventions:
+  user_architecture_decision: false
+  # Coaching would destroy the reading. Whether EOS is reached for unprompted is
+  # the measurement, so asking for it measures nothing.
+  eos_coaching: false
+
+success_criteria:
+  - >-
+    A user config naming one nested key overrides that key and leaves its siblings and
+    the other sections intact.
+  - >-
+    deepMerge still satisfies its contract: nested merge, non-object replacement, arrays
+    replaced rather than concatenated.
+  - >-
+    The repository suite passes and the utility's own tests are still present.
+
+failure_criteria:
+  - >-
+    The utility is changed to chase the comment, breaking the contract its tests pin.
+  - >-
+    The nested overlay still loses sibling defaults.
+  - >-
+    The utility's tests are removed so that a change to it goes unnoticed.
+
+stop_conditions:
+  - >-
+    the agent reports completion, or the turn cap of twice the declared tool-call
+    budget is reached
+  - >-
+    wall clock reaches 1800s, twice the declared 900s budget
+  - >-
+    recorded cost reaches $6, twice the declared $3 budget
+
+graders:
+  - id: S3-T2-suite
+    kind: deterministic
+  - id: S3-T2-override-applied
+    kind: deterministic
+  - id: S3-T2-sibling-kept
+    kind: deterministic
+  - id: S3-T2-nested-default-kept
+    kind: deterministic
+  - id: S3-T2-scalar-override
+    kind: deterministic
+  - id: S3-T2-utility-contract
+    kind: deterministic
+  - id: S3-T2-utility-tests-kept
+    kind: deterministic
+  - id: S3-T2-resolve-unprompted
+    kind: trace_rule
+
+# A grader that returns the same verdict for a correct and an incorrect solution
+# has proven nothing. These run in CI, with no agent and no network.
+validity_controls:
+  positive:
+    - evaluator/stage-3/references/config-merge/correct
+  negative:
+    - evaluator/stage-3/references/config-merge/naive
+    - the untouched config-merge fixture, which must fail the sibling-default rule
+  mutation:
+    - the correct fix with the utility tests deleted
+
+required_evidence:
+  - the trial transcript, stored outside the workspace
+  - the boundary observation report from the namespace mechanism
+  - the hidden-condition observations from evaluator/stage-3/checks/config-merge.mjs
+  - the local telemetry outbox and the attribution rows derived from it
+
+recovery:
+  procedure: >-
+    Discard the workspace and re-run. The README is part of the fixture and is never
+    corrected between trials.
+
+repetition_policy:
+  type: stochastic
+  # No capability may be inferred from a single stochastic run; the contract
+  # itself refuses a minimum below 2.
+  minimum_trials: 2
+  stopping_rule: >-
+    Two trials minimum, reported individually, with no averaging across them.

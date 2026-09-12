@@ -83,6 +83,15 @@ export interface AgentContractDeps {
   /** Passed straight through to the resolver; see `ResolveDeps`. */
   readonly projectFacts?: Readonly<Record<string, string>>;
   readonly capabilities?: readonly string[];
+  /**
+   * Forwarded to the resolver, which decides what it means (F2).
+   *
+   * The adapter carries no ranking policy of its own: it does not default this,
+   * override with it, or inspect it. A harness running a qualification trial sets
+   * it so the trial's ranking cannot be chosen by the subject (D24, Q-06), and the
+   * rule that enforces it lives in `packages/resolver`.
+   */
+  readonly pinnedRankingMode?: 'live_overlay' | 'recorded';
 }
 
 /** The adapter carries no ranking policy of its own -- it forwards one (F2). */
@@ -92,6 +101,7 @@ function resolverDeps(deps: AgentContractDeps): ResolveDeps {
     facts: deps.facts,
     ...(deps.projectFacts === undefined ? {} : { projectFacts: deps.projectFacts }),
     ...(deps.capabilities === undefined ? {} : { capabilities: deps.capabilities }),
+    ...(deps.pinnedRankingMode === undefined ? {} : { pinnedRankingMode: deps.pinnedRankingMode }),
   };
 }
 
@@ -119,6 +129,7 @@ export async function expand(
   store: SnapshotStore,
   request: ExpandRequest,
 ): Promise<unknown> {
+  // `expand` carries no ranking mode of its own, so there is nothing to pin here.
   return resolverExpand(resolverDeps(deps), store, request);
 }
 

@@ -394,3 +394,39 @@ describe('a hostile or broken environment', () => {
     expect(outcome.exitCode).not.toBe(BLOCKING_EXIT_CODE);
   });
 });
+
+describe('a pre-registered run id (S-7, D36)', () => {
+  async function runIdFor(env: Record<string, string>): Promise<string | undefined> {
+    const shared = deps({ env });
+    await runHook(payload('SessionStart'), shared);
+    const db = await openOutbox(shared.outboxPath);
+    try {
+      return new SqliteRunStateStore(db).recent(1)[0]?.runId;
+    } finally {
+      db.close();
+    }
+  }
+
+  it('emits under the run the harness registered when one is injected', async () => {
+    // The whole of D36 in one assertion: a class fixed before the first event only
+    // means something if the event carries the run that was registered. Stage 3
+    // found the harness registering `run_s3_...` while the outbox carried a
+    // freshly minted id, so the registered run produced no events and the
+    // emitting run was never registered.
+    expect(await runIdFor({ CI: '1', IEOS_RUN_ID: 'run_s3_guard_fail_closed_t1' })).toBe(
+      'run_s3_guard_fail_closed_t1',
+    );
+  });
+
+  it('mints its own when nothing is injected', async () => {
+    const runId = await runIdFor({ CI: '1' });
+    expect(runId).toMatch(/^run_[0-9A-HJKMNP-TV-Z]{26}$/u);
+  });
+
+  it('refuses a malformed injected id rather than emitting under it', async () => {
+    // An unvalidated variable would put arbitrary text in the run identity of
+    // every event, where nothing downstream could tell it from an id.
+    const runId = await runIdFor({ CI: '1', IEOS_RUN_ID: 'not a run id; drop table runs' });
+    expect(runId).toMatch(/^run_[0-9A-HJKMNP-TV-Z]{26}$/u);
+  });
+});

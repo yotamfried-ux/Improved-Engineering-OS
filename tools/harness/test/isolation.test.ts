@@ -384,7 +384,7 @@ class EscapingDriver implements AgentDriver {
     // Exactly the move the whole boundary exists to stop: a link out of the
     // workspace, created after the workspace was inspected and found clean.
     symlinkSync(this.#outside, join(trial.workspaceRoot, 'escape'), 'dir');
-    return { completed: true, toolCalls: [], transcriptRef: null };
+    return { completed: true, toolCalls: [], transcriptRef: null, usage: null };
   }
 }
 

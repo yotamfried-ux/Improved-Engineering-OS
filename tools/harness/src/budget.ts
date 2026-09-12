@@ -12,6 +12,14 @@
 export interface TrialBudget {
   readonly wallClockSeconds: number;
   readonly maxToolCalls: number;
+  /**
+   * Currency ceiling per trial.
+   *
+   * Nullable because the axis only exists for a driver that reports cost. A
+   * budget of 0 would abort every real trial and a budget of Infinity would be
+   * the unbudgeted state TD-20 records, so neither is a safe default.
+   */
+  readonly maxCostUsd?: number;
 }
 
 /** The guide's rule: the harness aborts at twice the declared budget. */
@@ -20,6 +28,7 @@ export const ABORT_MULTIPLIER = 2;
 export interface BudgetUsage {
   readonly wallClockSeconds: number;
   readonly toolCalls: number;
+  readonly costUsd?: number;
 }
 
 export type BudgetState = 'within' | 'over_budget' | 'aborted';
@@ -54,6 +63,14 @@ export function classifyUsage(budget: TrialBudget, usage: BudgetUsage): BudgetVe
 
   check('wall clock seconds', usage.wallClockSeconds, budget.wallClockSeconds);
   check('tool calls', usage.toolCalls, budget.maxToolCalls);
+  // Cost is classified after the fact: no API bills by the call in advance, so
+  // the prospective caps are wall clock and turns and this one is the record of
+  // what was actually spent. Judged only when both halves exist -- a declared
+  // budget with no measurement, or a measurement with no budget, is not an
+  // overrun.
+  if (budget.maxCostUsd !== undefined && usage.costUsd !== undefined) {
+    check('cost in USD', usage.costUsd, budget.maxCostUsd);
+  }
 
   return { state, reasons };
 }
