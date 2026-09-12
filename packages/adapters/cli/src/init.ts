@@ -109,17 +109,37 @@ export function bootstrapParagraph(input: FootprintInput): string {
       ? 'available over MCP and over the `ieos` CLI.'
       : 'available over MCP. The `ieos` CLI does not serve them yet.';
 
+  // D18.4 asks this block to state that the tools exist **and what they are for**,
+  // and until Stage 3 it only did the first. It named four tools over "a curated
+  // knowledge base" -- a description of a mechanism -- and then closed with "no tool
+  // call is required to complete work in this repository".
+  //
+  // That closing sentence was written to avoid coaching, which is right: a hint here
+  // leaks evaluation conditions into a target project (TD-07), and Stage 3's trials
+  // would measure the hint instead of the system. But it travelled past neutrality
+  // into discouragement, and fourteen trials found the cost: `resolve` was called in
+  // 0 of 12 gradeable runs, with the tools connected, the knowledge present and
+  // retrieval ranking it first. Adoption, not knowledge, was the binding constraint
+  // (finding S-10, deviation C-14).
+  //
+  // So this states what the record contains and stops. It gives no instruction, names
+  // no asset and no task, and does not say the tools should be used -- `init.test.ts`
+  // asserts each of those mechanically rather than trusting the wording to stay put.
   return [
     BEGIN_MARKER,
     '',
     '## Engineering OS',
     '',
-    'This project is registered with an Engineering OS (EOS) installation. EOS provides',
-    'retrieval over a curated knowledge base through four tools -- `resolve`, `inspect`,',
-    `\`expand\` and \`observe\` -- ${transports}`,
+    'This project is registered with an Engineering OS (EOS) installation. EOS holds a',
+    'curated record of prior engineering work on this codebase: conventions that were',
+    'settled once and are recorded nowhere in the source, defects that were diagnosed',
+    'along with what the fix turned out to be, and approaches that were tried and',
+    'abandoned. Much of it is specific to this project and cannot be derived from',
+    'reading the code.',
     '',
-    'The tools are available if you want them. Nothing here instructs you to call them,',
-    'and no tool call is required to complete work in this repository.',
+    'Retrieval is through four tools -- `resolve` for records relevant to a task or',
+    'symptom, `inspect` to read one in full, `expand` to widen a thin search, and',
+    `\`observe\` to record what happened with one that was used -- ${transports}`,
     '',
     `Installation: \`${input.installationId}\``,
     `Source: \`${input.sourceCheckout}\``,
