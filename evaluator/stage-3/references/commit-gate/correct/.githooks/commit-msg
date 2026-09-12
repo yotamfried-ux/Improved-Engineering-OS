@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Reject a commit message that does not meet the project's requirements.
+#
+# The four sections and the rule about the tests section are the project's, recorded
+# in its quality gates: a commit documents what works, what does not, what changed and
+# what proved it -- and a tests section saying "none" is the case the rule exists for,
+# since it is how an unverified change gets committed while looking documented.
+set -euo pipefail
+
+message_file="$1"
+message="$(cat "$message_file")"
+
+if [ "${#message}" -lt 10 ]; then
+  echo "commit message is too short to be useful" >&2
+  exit 1
+fi
+
+for marker in "✅" "❌" "🔄" "🧪"; do
+  if ! printf '%s' "$message" | grep -q -- "$marker"; then
+    echo "commit message is missing its $marker section" >&2
+    exit 1
+  fi
+done
+
+tests_line="$(printf '%s\n' "$message" | grep -- "🧪" | head -1)"
+tests_body="$(printf '%s' "$tests_line" | sed 's/.*🧪//' | tr -d '[:space:]')"
+if [ -z "$tests_body" ] || printf '%s' "$tests_body" | grep -qi '^none$'; then
+  echo "the 🧪 section must name what was run; \"none\" is not a verification" >&2
+  exit 1
+fi
+
+exit 0

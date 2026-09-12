@@ -372,6 +372,197 @@ test('retries within the latency budget', async () => {
   };
 }
 
+/**
+ * A commit-message hook that knows only about length.
+ *
+ * The project's commit protocol is recorded in the `control_guidance` asset and
+ * nowhere else: a message carries four named sections and the tests section may not
+ * say "none". Both facts are arbitrary -- there is no way to derive them from the
+ * hook, the README or general convention, and an agent guessing would reach for
+ * Conventional Commits, which is a different protocol entirely.
+ */
+export function commitGateRepo(): TargetRepoSpec {
+  return {
+    name: 'commit-gate',
+    files: [
+      {
+        path: 'package.json',
+        content: `${JSON.stringify(
+          {
+            name: 'commit-gate',
+            version: '1.0.3',
+            private: true,
+            type: 'module',
+            scripts: { test: 'node --test' },
+          },
+          null,
+          2,
+        )}\n`,
+      },
+      {
+        path: 'README.md',
+        content: `# commit-gate
+
+Commits in this repository are checked by \`.githooks/commit-msg\`. Install the hooks
+with:
+
+\`\`\`
+git config core.hooksPath .githooks
+\`\`\`
+
+The hook is expected to refuse a message that does not meet the project's
+requirements, and to say why on stderr.
+`,
+      },
+      {
+        path: '.githooks/commit-msg',
+        content: `#!/usr/bin/env bash
+# Reject a commit message that is obviously unusable.
+#
+# TODO: this only checks the length. The project has more requirements than that
+# and this hook does not know about them yet.
+set -euo pipefail
+
+message_file="$1"
+message="$(cat "$message_file")"
+
+if [ "\${#message}" -lt 10 ]; then
+  echo "commit message is too short to be useful" >&2
+  exit 1
+fi
+
+exit 0
+`,
+        executable: true,
+      },
+      {
+        path: 'test/commit-msg.test.mjs',
+        content: `import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+/** Run the hook against a message, returning its exit code. */
+function check(message) {
+  const file = join(mkdtempSync(join(tmpdir(), 'msg-')), 'COMMIT_EDITMSG');
+  writeFileSync(file, message, 'utf8');
+  try {
+    execFileSync('bash', ['.githooks/commit-msg', file], { stdio: 'pipe' });
+    return 0;
+  } catch (error) {
+    return error.status ?? 1;
+  }
+}
+
+test('a message that is too short is refused', () => {
+  assert.notEqual(check('wip'), 0);
+});
+
+test('an empty message is refused', () => {
+  assert.notEqual(check(''), 0);
+});
+
+test('the hook reports its refusal on stderr rather than silently', () => {
+  // Pinned because a gate that refuses without saying why is a gate people disable.
+  const file = join(mkdtempSync(join(tmpdir(), 'msg-')), 'COMMIT_EDITMSG');
+  writeFileSync(file, 'wip', 'utf8');
+  try {
+    execFileSync('bash', ['.githooks/commit-msg', file], { stdio: 'pipe' });
+    assert.fail('expected the hook to refuse');
+  } catch (error) {
+    assert.ok(String(error.stderr ?? '').trim().length > 0);
+  }
+});
+`,
+      },
+    ],
+  };
+}
+
+/**
+ * A quality gate that enforces nothing yet.
+ *
+ * The recorded control is unusually specific, and the specifics are the point: some
+ * leftovers block a commit outright, `console.log` and `print` only warn, and there is
+ * a named environment variable that bypasses the gate. An agent without the record
+ * has no reason to treat a stray `console.log` differently from a stray `debugger`,
+ * and no way at all to guess the bypass variable's name.
+ */
+export function qualityGateRepo(): TargetRepoSpec {
+  return {
+    name: 'quality-gate',
+    files: [
+      {
+        path: 'package.json',
+        content: `${JSON.stringify(
+          {
+            name: 'quality-gate',
+            version: '0.7.2',
+            private: true,
+            type: 'module',
+            scripts: { test: 'node --test' },
+          },
+          null,
+          2,
+        )}\n`,
+      },
+      {
+        path: 'README.md',
+        content: `# quality-gate
+
+\`scripts/enforce-quality.sh\` runs from \`.githooks/pre-commit\` and inspects the
+**staged** diff. It exits non-zero to block a commit, and zero to allow it.
+
+Not every finding deserves a block: the gate is expected to distinguish what must never
+reach a commit from what a developer only needs telling about, and to offer a way out
+for the case where someone knows better.
+`,
+      },
+      {
+        path: 'scripts/enforce-quality.sh',
+        content: `#!/usr/bin/env bash
+# Quality gate for the staged diff, called from .githooks/pre-commit.
+#
+# TODO: a stub. It accepts everything, so nothing is enforced yet. The project has
+# rules about what may and may not reach a commit; this does not implement them.
+set -euo pipefail
+
+exit 0
+`,
+        executable: true,
+      },
+      {
+        path: '.githooks/pre-commit',
+        content: `#!/usr/bin/env bash
+set -euo pipefail
+bash scripts/enforce-quality.sh
+`,
+        executable: true,
+      },
+      {
+        path: 'test/quality-gate.test.mjs',
+        content: `import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+
+test('the gate is wired into the pre-commit hook', () => {
+  assert.match(readFileSync('.githooks/pre-commit', 'utf8'), /enforce-quality\\.sh/u);
+});
+
+test('the gate runs and reports its own exit status', () => {
+  // Exercised rather than read: a gate nobody executes is a gate nobody has.
+  const run = () => execFileSync('bash', ['scripts/enforce-quality.sh'], { stdio: 'pipe' });
+  assert.doesNotThrow(run);
+});
+`,
+      },
+    ],
+  };
+}
+
 /** Materialise a spec into a directory. Never writes outside `root`. */
 export function writeTargetRepo(root: string, spec: TargetRepoSpec): void {
   for (const file of spec.files) {

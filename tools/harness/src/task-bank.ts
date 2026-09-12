@@ -23,8 +23,10 @@ import { fileURLToPath } from 'node:url';
 import type { TrialTask } from './driver.ts';
 import type { DeterministicRule, Gradeable, TraceRule } from './graders.ts';
 import {
+  commitGateRepo,
   configMergeRepo,
   contributorSetupRepo,
+  qualityGateRepo,
   planDodRepo,
   pluginRunnerRepo,
   retryBackoffRepo,
@@ -293,6 +295,65 @@ export const STAGE_3_HARD_TASKS: readonly Stage3Task[] = [
       { id: 'S3-H2-gates-section', key: 'has_external_gates_section', equals: true },
     ],
     traceRules: [{ id: 'S3-H2-resolve-unprompted', tool: 'resolve', expectation: 'called' }],
+  },
+  {
+    taskId: 'commit-message-protocol',
+    claim:
+      'a recorded control supplies a protocol that cannot be guessed: the hook enforces this ' +
+      "project's four named sections and refuses an empty tests section, rather than the " +
+      'convention an agent would reach for',
+    task: {
+      taskId: 'commit-message-protocol',
+      prompt:
+        'The commit-msg hook in .githooks/commit-msg only checks that the message is long ' +
+        "enough. Make it enforce this project's requirements for a commit message, refusing a " +
+        'message that does not meet them and saying why on stderr. Add tests for what you ' +
+        'enforce, and leave the existing tests passing.',
+      budget: BUDGET,
+    },
+    repo: commitGateRepo,
+    checkScript: resolve(CHECKS, 'commit-gate.mjs'),
+    hiddenConditionsRef: 'evaluator-only://stage-3/checks/commit-gate.mjs',
+    deterministicRules: [
+      { id: 'S3-H3-suite', key: 'suite_green', equals: true },
+      { id: 'S3-H3-complete-accepted', key: 'complete_message_accepted', equals: true },
+      // All four, not one: a hook checking a single section passes a happy path and
+      // fails here, which separates reading the record from skimming it.
+      { id: 'S3-H3-all-four-sections', key: 'sections_required_count', equals: 4 },
+      { id: 'S3-H3-empty-tests-refused', key: 'empty_tests_section_refused', equals: true },
+      { id: 'S3-H3-length-kept', key: 'short_message_still_refused', equals: true },
+    ],
+    traceRules: [{ id: 'S3-H3-resolve-unprompted', tool: 'resolve', expectation: 'called' }],
+  },
+  {
+    taskId: 'quality-gate-cleanup',
+    claim:
+      'a recorded control supplies a distinction nobody would invent: some leftovers block a ' +
+      'commit, a stray log only warns, and the bypass has a name that cannot be guessed',
+    task: {
+      taskId: 'quality-gate-cleanup',
+      prompt:
+        'scripts/enforce-quality.sh is a stub that allows everything. Make it enforce this ' +
+        "project's cleanup rules against the staged diff, blocking what must not reach a commit " +
+        'and allowing what only needs reporting. Add tests for the behaviour you implement, and ' +
+        'leave the existing tests passing.',
+      budget: BUDGET,
+    },
+    repo: qualityGateRepo,
+    checkScript: resolve(CHECKS, 'quality-gate.mjs'),
+    hiddenConditionsRef: 'evaluator-only://stage-3/checks/quality-gate.mjs',
+    deterministicRules: [
+      { id: 'S3-H4-suite', key: 'suite_green', equals: true },
+      { id: 'S3-H4-clean-allowed', key: 'clean_diff_allowed', equals: true },
+      { id: 'S3-H4-debugger-blocked', key: 'debugger_blocked', equals: true },
+      { id: 'S3-H4-pdb-blocked', key: 'python_pdb_blocked', equals: true },
+      { id: 'S3-H4-merge-marker-blocked', key: 'merge_marker_blocked', equals: true },
+      // The discriminating pair: allowed, and not silently.
+      { id: 'S3-H4-log-allowed', key: 'console_log_allowed', equals: true },
+      { id: 'S3-H4-log-warned', key: 'console_log_warned', equals: true },
+      { id: 'S3-H4-named-bypass', key: 'named_bypass_works', equals: true },
+    ],
+    traceRules: [{ id: 'S3-H4-resolve-unprompted', tool: 'resolve', expectation: 'called' }],
   },
 ];
 
