@@ -42,6 +42,12 @@ export const CREATE_RUN_STATE_SQL = `create table if not exists run_state (
    telemetry_state text not null,
    qualification_eligible integer not null,
    ingest_reachable_at_start integer not null,
+   -- Whether any flush during the run failed to drain. Folded into
+   -- \`telemetry_state\` already, but kept in its own column because the fold is
+   -- lossy: INCOMPLETE cannot say whether events were left queued or a batch
+   -- failed and was re-sent by another process, and a qualification report that
+   -- has to guess which is doing exactly the inference this column removes.
+   flush_ever_failed integer not null default 0,
    started_at text not null,
    ended_at text
  ) strict`;
@@ -52,6 +58,8 @@ export interface LocalRunState {
   readonly telemetryState: 'COMPLETE' | 'INCOMPLETE';
   readonly qualificationEligible: boolean;
   readonly ingestReachableAtStart: boolean;
+  /** Whether any flush during the run failed to drain. */
+  readonly flushEverFailed: boolean;
   readonly startedAt: string;
   readonly endedAt: string | null;
 }
@@ -62,6 +70,16 @@ export class SqliteRunStateStore {
   constructor(db: WritableDatabase) {
     this.#db = db;
     this.#db.exec(CREATE_RUN_STATE_SQL);
+    // Additive, for databases created before the column existed. `create table
+    // if not exists` leaves an older table untouched, so a developer's existing
+    // outbox would otherwise read as a schema this code cannot query.
+    try {
+      this.#db.exec(
+        'alter table run_state add column flush_ever_failed integer not null default 0',
+      );
+    } catch {
+      // Already present, which is the state we wanted.
+    }
   }
 
   /**
@@ -102,14 +120,21 @@ export class SqliteRunStateStore {
   }
 
   /** Write the terminal state the runtime computed (guide §5.3). */
-  finish(state: RunTelemetryState, endedAt: string): void {
+  finish(state: RunTelemetryState, endedAt: string, flushEverFailed = false): void {
     this.#db
       .prepare(
         `update run_state
-            set telemetry_state = ?, qualification_eligible = ?, ended_at = ?
+            set telemetry_state = ?, qualification_eligible = ?, ended_at = ?,
+                flush_ever_failed = ?
           where run_id = ?`,
       )
-      .run(state.telemetry_state, state.qualification_eligible ? 1 : 0, endedAt, state.run_id);
+      .run(
+        state.telemetry_state,
+        state.qualification_eligible ? 1 : 0,
+        endedAt,
+        flushEverFailed ? 1 : 0,
+        state.run_id,
+      );
   }
 
   get(runId: string): LocalRunState | undefined {
@@ -138,6 +163,7 @@ function toState(row: Record<string, unknown>): LocalRunState {
     qualificationEligible:
       telemetryState === 'COMPLETE' && Number(row['qualification_eligible']) === 1,
     ingestReachableAtStart: Number(row['ingest_reachable_at_start']) === 1,
+    flushEverFailed: Number(row['flush_ever_failed'] ?? 0) === 1,
     startedAt: String(row['started_at']),
     endedAt: row['ended_at'] === null ? null : String(row['ended_at']),
   };

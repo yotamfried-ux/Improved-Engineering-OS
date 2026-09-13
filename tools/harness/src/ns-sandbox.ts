@@ -91,6 +91,12 @@ export function runInNamespace(options: NamespaceRunOptions): NamespaceRunResult
       // Built, not inherited: `env` replaces the environment outright, so the
       // only names present are the ones the policy granted.
       env: { ...options.environment },
+      // No `input`, and no option by which a caller could supply one. This is
+      // what T6 -- "no rescue: no human intervention inside any trial" -- rests
+      // on, and it rests on the absence of a channel rather than on a promise
+      // not to use one. `spawnSync` without `input` closes the child's stdin
+      // immediately, so there is nothing to write to even from inside this
+      // process. A test asserts this option is not accepted.
       encoding: 'utf8',
       timeout: options.timeoutSeconds * 1000,
       maxBuffer: 64 * 1024 * 1024,

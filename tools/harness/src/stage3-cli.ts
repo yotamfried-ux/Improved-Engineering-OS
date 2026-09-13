@@ -32,6 +32,7 @@ import { RunRegistry } from './run-registry.ts';
 import { createTrial } from './sandbox.ts';
 import { MAX_COST_USD_PER_TRIAL, runCheck, taskById } from './task-bank.ts';
 import { writeTargetRepo } from './target-repo.ts';
+import { readTrialTelemetry } from './trial-telemetry.ts';
 import { runTrial } from './trial.ts';
 import { bareToolName } from './drivers/claude-code.ts';
 
@@ -345,6 +346,20 @@ const report = buildTrialReport({
 });
 
 const resolveCalled = toolCalls.some((call) => call.name === 'resolve');
+
+/**
+ * Read, after the agent has stopped, what its telemetry actually did.
+ *
+ * Addressed by the run id the harness registered, so a workspace that somehow
+ * holds a second run cannot lend its completeness to this one (S-7). Read here
+ * rather than derived in the report: T7 was a constant for exactly as long as
+ * the evidence carried nothing to derive it from.
+ */
+const telemetry = await readTrialTelemetry({
+  workspaceRoot: trial.workspaceRoot,
+  runId,
+});
+
 const trialRecord = {
   trial_id: trialId,
   run_id: runId,
@@ -373,6 +388,19 @@ const trialRecord = {
   eos_tools_used: [...new Set(toolCalls.map((call) => call.name))].filter((name) =>
     ['resolve', 'inspect', 'expand', 'observe'].includes(name),
   ),
+  telemetry,
+  /**
+   * T6's evidence: what the trial was told, counted rather than promised.
+   *
+   * `human_interventions` is 0 because the driver sent one prompt and there was
+   * no channel by which anything else could reach the agent -- not because a
+   * manifest says rescue is forbidden. What a manifest forbids is intent.
+   */
+  rescue: {
+    human_interventions: 0,
+    prompts_sent: record?.rescue.promptsSent ?? null,
+    interactive_stdin: record?.rescue.interactiveStdin ?? null,
+  },
   isolation: finalOutcome.isolation,
   namespace_observations: record?.observations ?? null,
   mechanism_unavailable: record?.mechanismUnavailable ?? null,

@@ -75,6 +75,19 @@ export interface ClaudeCodeRunRecord {
   readonly observations: NamespaceObservations | null;
   readonly exitStatus: number | null;
   readonly mechanismUnavailable: string | null;
+  /**
+   * What the trial was told, and by how many channels (T6).
+   *
+   * Reported by the driver because the driver is what builds the invocation.
+   * T6 -- no rescue -- used to be a constant PASS in the report, justified by
+   * what the manifests forbid. What a manifest forbids is a statement of intent;
+   * this is the count of prompts actually sent and whether anything could have
+   * been written to the agent afterwards.
+   */
+  readonly rescue: {
+    readonly promptsSent: number;
+    readonly interactiveStdin: boolean;
+  };
 }
 
 interface StreamEvent {
@@ -199,6 +212,13 @@ export class ClaudeCodeDriver implements AgentDriver {
       observations: run.observations,
       exitStatus: run.status,
       mechanismUnavailable: run.unavailableReason,
+      rescue: {
+        // Counted from the argv this driver just built: one `-p`, and no other
+        // way in. `runInNamespace` accepts no `input`, so the agent's stdin is
+        // closed before it starts and nothing can be written to it mid-run.
+        promptsSent: argv.filter((argument) => argument === '-p').length,
+        interactiveStdin: false,
+      },
     };
 
     return Promise.resolve(result);

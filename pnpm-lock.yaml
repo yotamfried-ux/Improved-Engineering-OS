@@ -396,6 +396,9 @@ importers:
       '@ieos/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@ieos/store-sqlite':
+        specifier: workspace:*
+        version: link:../../packages/store-sqlite
     devDependencies:
       '@types/node':
         specifier: 24.13.3

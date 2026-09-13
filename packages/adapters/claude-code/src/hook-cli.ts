@@ -285,6 +285,7 @@ export async function runHook(raw: string, deps: HookDeps): Promise<HookOutcome>
           everFailed: flusher.everFailed,
         }),
         deps.clock.nowIso(),
+        flusher.everFailed,
       );
     }
 
