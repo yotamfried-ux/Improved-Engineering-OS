@@ -28,7 +28,7 @@ import {
   planHook,
 } from '../src/hooks.ts';
 import { hookSettings, REGISTERED_EVENTS } from '../src/settings.ts';
-import { runHook, type HookDeps } from '../src/hook-cli.ts';
+import { REACHABILITY_ATTESTATION, runHook, type HookDeps } from '../src/hook-cli.ts';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
 const registry: AttributeRegistry = parseAttributeRegistry(
@@ -428,5 +428,85 @@ describe('a pre-registered run id (S-7, D36)', () => {
     // every event, where nothing downstream could tell it from an id.
     const runId = await runIdFor({ CI: '1', IEOS_RUN_ID: 'not a run id; drop table runs' });
     expect(runId).toMatch(/^run_[0-9A-HJKMNP-TV-Z]{26}$/u);
+  });
+});
+
+describe('who declares ingest reachability (D23, and the Stage 3 correction)', () => {
+  async function reachabilityFor(env: Record<string, string>, ingest?: Ingest): Promise<boolean> {
+    const shared = deps(ingest === undefined ? { env } : { env, ingest });
+    await runHook(payload('SessionStart'), shared);
+    const db = await openOutbox(shared.outboxPath);
+    try {
+      return new SqliteRunStateStore(db).forSession('sess_1')?.ingestReachableAtStart === true;
+    } finally {
+      db.close();
+    }
+  }
+
+  it('takes the trusted host at its word when it attests reachable', async () => {
+    // The fix this exists for. The credential lives outside the agent's
+    // namespace on purpose, so a hook inside it cannot probe the plane -- and a
+    // hook insisting on its own probe could never declare `true`, leaving every
+    // trial ineligible however well the machine was configured.
+    expect(
+      await reachabilityFor({ CI: '1', [REACHABILITY_ATTESTATION]: 'true' }, unreachableIngest()),
+    ).toBe(true);
+  });
+
+  it('takes it at its word when it attests unreachable, over a reachable probe', async () => {
+    // The host is the authority in both directions, not only the convenient one.
+    expect(
+      await reachabilityFor({ CI: '1', [REACHABILITY_ATTESTATION]: 'false' }, reachableIngest()),
+    ).toBe(false);
+  });
+
+  it('falls back to its own probe when nothing is attested', async () => {
+    // An absent attestation is not an assertion of success. On an unconfigured
+    // machine the hook's own probe is honestly false.
+    expect(await reachabilityFor({ CI: '1' }, unreachableIngest())).toBe(false);
+    expect(await reachabilityFor({ CI: '1' }, reachableIngest())).toBe(true);
+  });
+
+  it('reads an unparseable attestation as false rather than optimistically', async () => {
+    // Fail closed. `IEOS_INGEST_REACHABLE_AT_START=1` or `=yes` is a
+    // misconfigured launch context, and an attestation that cannot be parsed is
+    // not an attestation.
+    for (const value of ['1', 'yes', 'TRUE', 'true ', '']) {
+      expect(
+        await reachabilityFor({ CI: '1', [REACHABILITY_ATTESTATION]: value }, reachableIngest()),
+      ).toBe(false);
+    }
+  });
+
+  it('says so on stderr when it refuses an attestation, instead of failing quietly', async () => {
+    // A run silently demoted to ineligible is the failure mode this whole
+    // correction is about. It has to be visible where a person will see it.
+    const outcome = await runHook(
+      payload('SessionStart'),
+      deps({ env: { CI: '1', [REACHABILITY_ATTESTATION]: 'probably' } }),
+    );
+    expect(outcome.exitCode).not.toBe(BLOCKING_EXIT_CODE);
+    expect(`${outcome.stdout}${outcome.stderr}`).toContain(REACHABILITY_ATTESTATION);
+  });
+
+  it('cannot grant eligibility on its own: a lossy run stays INCOMPLETE', async () => {
+    // The invariant the attestation must not be able to break. Reachable at the
+    // start plus a flush that never drained is still not qualification evidence.
+    const shared = deps({
+      env: { CI: '1', [REACHABILITY_ATTESTATION]: 'true' },
+      ingest: unreachableIngest(),
+    });
+    await runHook(payload('SessionStart'), shared);
+    await runHook(payload('PostToolUse', { tool_name: 'Bash' }), shared);
+    await runHook(payload('SessionEnd'), shared);
+    const db = await openOutbox(shared.outboxPath);
+    try {
+      const state = new SqliteRunStateStore(db).recent(1)[0];
+      expect(state?.ingestReachableAtStart).toBe(true);
+      expect(state?.telemetryState).toBe('INCOMPLETE');
+      expect(state?.qualificationEligible).toBe(false);
+    } finally {
+      db.close();
+    }
   });
 });

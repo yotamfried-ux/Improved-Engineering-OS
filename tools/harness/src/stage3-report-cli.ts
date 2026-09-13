@@ -352,11 +352,29 @@ INCOMPLETE run from measurement — "a partially measured run is not a cheap
 measurement, it is a wrong one" — so the numbers above are honest measurements of
 cost and behaviour, and are not qualification evidence.
 
-Both have one cause: **this session's egress policy does not reach the Evidence
-Plane host.** It was re-probed rather than assumed, and the environment resolves
-no address for the project host. The remedy is an environment whose network policy
-permits it; nothing in the code needs to change, and the trials re-run unmodified
-once it does.
+The session's egress policy does not reach the Evidence Plane host, and that is
+the proximate cause of both. **It is not the whole cause, and an earlier version of
+this report was wrong to say it was.** That version claimed nothing in the code
+needed to change and the trials would re-run unmodified in a network-capable
+environment. Reading the code that would have to run proves otherwise:
+
+- No \`Ingest\` implementation exists that reaches the plane. The port is declared
+  and the server side is deployed, but the only implementations in the tree are
+  \`UNCONFIGURED_INGEST\` and test doubles, and \`ieos-hook\` is wired to the former
+  unconditionally. On a perfectly connected machine the hook would still send
+  nothing.
+- \`telemetry_state\` is computed from what the run's own flushes did. While the
+  plane's credential lives outside the agent's namespace — which is the correct
+  place for it — a flush from inside that namespace cannot drain, so every run
+  ends INCOMPLETE however reachable the plane is from the host.
+- T7's row in this generator was a constant rather than a reading of the
+  evidence, so no set of trials could have moved it.
+
+So the remedy is an environment whose network policy permits it **and** the code
+that uses it: a host-side ingest path holding the credential outside the trial, a
+launch-context attestation of reachability the hook can honour, telemetry state
+carried in each trial's evidence, and a T7 derived from that evidence. Until those
+exist, a re-run would cost money and change nothing.
 
 What the stage did establish is not small: the isolation mechanism ADR-0005
 deferred to Stage 3 exists and proves all four boundaries on real agent runs, the

@@ -63,6 +63,72 @@ const UNCONFIGURED_INGEST: Ingest = {
   isReachable: () => Promise.resolve(false),
 };
 
+/**
+ * The launch-context variable by which a trusted host attests reachability.
+ *
+ * Exported so the harness sets the same name the hook reads. A second spelling
+ * of this would fail open silently: the hook would fall back to its own probe,
+ * which inside a trial is always false, and the run would look ineligible for a
+ * reason nobody could see.
+ */
+export const REACHABILITY_ATTESTATION = 'IEOS_INGEST_REACHABLE_AT_START';
+
+export interface ReachabilityDecision {
+  readonly reachable: boolean;
+  readonly source: 'host-attestation' | 'own-probe';
+  /** Set when a present attestation could not be read. Printed, never silent. */
+  readonly note: string | null;
+}
+
+/**
+ * Decide `ingest_reachable_at_start` (D23).
+ *
+ * D23 requires eligibility *declared before work starts*; it does not require
+ * that the component writing the declaration be the one that performed the
+ * probe. That distinction is what makes this possible at all. When the plane's
+ * credential deliberately lives outside the agent's namespace, a hook inside
+ * that namespace cannot reach the plane to probe it -- by design -- so a hook
+ * insisting on its own probe could never honestly declare `true`, and every
+ * trial would be ineligible however well the machine was configured.
+ *
+ * So the authority splits: the trusted host that launches the run is the
+ * authority on the fact, and states it in the same breath as it injects
+ * `IEOS_RUN_ID`; the hook remains the sole author of the run's lifecycle. The
+ * field means "at the declared start of this run, the trusted host verified the
+ * configured ingest path was reachable" -- not "the hook checked".
+ *
+ * Fail closed in every direction:
+ *
+ *   absent  -> the hook's own probe, which on an unconfigured machine is
+ *              honestly false. No attestation is not an assertion of success.
+ *   present -> exactly `true` or `false`. Anything else is a misconfigured
+ *              launch context and reads as false, because an attestation that
+ *              cannot be parsed is not an attestation.
+ *
+ * Reachability at the start is never sufficient on its own: eligibility also
+ * requires the run to end COMPLETE, which is decided by what the flushes
+ * actually did. This function can only ever remove eligibility, never grant it.
+ */
+export async function decideReachability(
+  env: Record<string, string | undefined>,
+  ingest: Ingest,
+): Promise<ReachabilityDecision> {
+  const declared = env[REACHABILITY_ATTESTATION];
+  if (declared === undefined) {
+    return { reachable: await ingest.isReachable(), source: 'own-probe', note: null };
+  }
+  if (declared === 'true' || declared === 'false') {
+    return { reachable: declared === 'true', source: 'host-attestation', note: null };
+  }
+  return {
+    reachable: false,
+    source: 'host-attestation',
+    note:
+      `${REACHABILITY_ATTESTATION} was set to something other than true or false, so this run ` +
+      'is not qualification eligible',
+  };
+}
+
 export interface HookDeps {
   readonly outboxPath: string;
   readonly registry: AttributeRegistry;
@@ -105,6 +171,9 @@ export async function runHook(raw: string, deps: HookDeps): Promise<HookOutcome>
     const outbox = new SqliteOutbox(db);
     const runs = new SqliteRunStateStore(db);
     const sessionKey = input.session_id as string;
+    // Declared before the run block, because opening a run can itself produce a
+    // note worth printing (a launch context that attested nonsense).
+    const notes: string[] = [];
 
     let state = runs.forSession(sessionKey);
     if (state === undefined) {
@@ -138,8 +207,9 @@ export async function runHook(raw: string, deps: HookDeps): Promise<HookOutcome>
           ? injectedRunId
           : mintId('run', deps.clock, deps.random);
       // Reachability is declared before any work, not inferred afterwards (D23).
-      const reachable = await deps.ingest.isReachable();
-      runs.begin(runId, reachable, deps.clock.nowIso(), sessionKey);
+      const decision = await decideReachability(deps.env, deps.ingest);
+      if (decision.note !== null) notes.push(`ieos telemetry: ${decision.note}`);
+      runs.begin(runId, decision.reachable, deps.clock.nowIso(), sessionKey);
       state = runs.forSession(sessionKey);
     }
     if (state === undefined) return failed('the run could not be recorded');
@@ -169,7 +239,6 @@ export async function runHook(raw: string, deps: HookDeps): Promise<HookOutcome>
       // R-11 added `emitter_id` for.
     });
 
-    const notes: string[] = [];
     if (plan.emit !== null) {
       const { event, dropped } = emitter.emit({
         eventType: plan.emit.eventType,

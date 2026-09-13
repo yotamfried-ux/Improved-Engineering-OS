@@ -20,12 +20,15 @@ export {
   type HookSettingsInput,
 } from './settings.ts';
 export {
+  decideReachability,
   loadRegistry,
   readInstallation,
   readStdin,
+  REACHABILITY_ATTESTATION,
   runHook,
   systemClock,
   systemRandom,
   UNCONFIGURED_INGEST,
   type HookDeps,
+  type ReachabilityDecision,
 } from './hook-cli.ts';
