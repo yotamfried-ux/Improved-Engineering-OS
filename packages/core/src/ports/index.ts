@@ -142,6 +142,33 @@ export interface Ingest {
   isReachable(): Promise<boolean>;
 }
 
+/**
+ * The local encoding of `Ingest`, for when the implementation is out of process.
+ *
+ * Declared here rather than in an agent's adapter because it is agent-neutral:
+ * any adapter running inside an isolated trial needs it, and the reason it exists
+ * belongs to the port, not to one agent. A trial may not hold the plane's
+ * credential (ADR-0005) and its network policy does not reach the plane, so the
+ * only way its hooks can deliver in band -- and therefore the only way a run can
+ * honestly end COMPLETE -- is to ask a privileged process on the other side of a
+ * socket and relay the plane's own answer.
+ *
+ * A closed operation list, deliberately. Nothing here can name a credential, an
+ * endpoint or a run class, so widening it is the only way to lose the property
+ * that makes the arrangement safe.
+ */
+export type ProxyRequest =
+  | { readonly op: 'sendEvents'; readonly events: readonly TelemetryEvent[] }
+  | { readonly op: 'sendObservations'; readonly observations: readonly Observation[] }
+  | { readonly op: 'readMinimal'; readonly kind: string }
+  | { readonly op: 'isReachable' };
+
+export type ProxyResponse =
+  | { readonly ok: true; readonly outcome: IngestOutcome }
+  | { readonly ok: true; readonly value: unknown }
+  | { readonly ok: true; readonly reachable: boolean }
+  | { readonly ok: false; readonly reason: string };
+
 // ---------------------------------------------------------------------------
 // Evidence Plane (server-side only)
 // ---------------------------------------------------------------------------

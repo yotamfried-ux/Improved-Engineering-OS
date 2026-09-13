@@ -19,6 +19,7 @@ export {
   type HookSettings,
   type HookSettingsInput,
 } from './settings.ts';
+export { INGEST_SOCKET, socketIngest } from './socket-ingest.ts';
 export {
   decideReachability,
   loadRegistry,

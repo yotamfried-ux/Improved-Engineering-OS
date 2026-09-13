@@ -18,6 +18,25 @@ import {
   systemRandom,
   UNCONFIGURED_INGEST,
 } from './hook-cli.ts';
+import { INGEST_SOCKET, socketIngest } from './socket-ingest.ts';
+
+/**
+ * Which `Ingest` this invocation gets.
+ *
+ * A socket, when the trusted launch context offers one -- inside a trial that is
+ * the harness, and the process on the other side holds the credential this one
+ * must not. Otherwise the honest unconfigured implementation, which reports
+ * itself unreachable and so leaves every run INCOMPLETE.
+ *
+ * Deliberately no third case. There is no environment variable here that names
+ * an endpoint or carries a token: a hook that could be pointed at a plane by its
+ * own environment would be a hook a trial could point anywhere, and the
+ * credential boundary would be back inside the namespace.
+ */
+const chooseIngest = (socketPath: string | undefined) =>
+  socketPath !== undefined && socketPath !== ''
+    ? socketIngest({ socketPath })
+    : UNCONFIGURED_INGEST;
 
 const args = process.argv.slice(2);
 const flag = (name: string): string | undefined => {
@@ -35,7 +54,7 @@ const exitCode = await (async (): Promise<number> => {
     const outcome = await runHook(raw, {
       outboxPath: flag('--outbox') ?? join(projectRoot, '.ieos', 'outbox.sqlite'),
       registry: loadRegistry(eosRoot),
-      ingest: UNCONFIGURED_INGEST,
+      ingest: chooseIngest(process.env[INGEST_SOCKET]),
       clock: systemClock,
       random: systemRandom,
       repoSha: flag('--repo-sha') ?? 'unknown',

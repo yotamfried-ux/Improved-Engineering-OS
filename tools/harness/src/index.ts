@@ -27,3 +27,4 @@ export {
   type RegisterRunTransport,
   type RegistrationResult,
 } from './plane-registrar.ts';
+export { httpIngest, servePlaneProxy, type PlaneProxy } from './plane-ingest.ts';
