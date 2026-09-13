@@ -9,11 +9,13 @@ coverage/
 # The report cites them inline; a stale local copy would only invite confusion.
 qualification/evidence/platforms/
 
-# The Stage 0 report is committed only when CI generated it from BOTH platform
-# records. A locally generated one is made from one platform, so it can only
-# ever say NOT PASSED for a reason that is about this laptop rather than about
-# the stage -- exactly the confusion the report exists to remove.
-qualification/reports/stage-00-report.md
+# A stage report is committed only when CI generated it from BOTH platform
+# records, under its dated name. The undated file is what `pnpm report:stage<N>`
+# writes by default: it is made from one platform, so it can only ever say NOT
+# PASSED for a reason that is about the machine that ran it rather than about
+# the stage -- exactly the confusion the report exists to remove. This holds for
+# every stage, not only Stage 0.
+qualification/reports/stage-0?-report.md
 
 # Per-platform SQLite evidence is produced by CI into its own file, never
 # committed: the committed record is the two-candidate one, and the durable
