@@ -383,15 +383,25 @@ describe('a hostile or broken environment', () => {
   });
 
   it('survives an ingest that throws rather than answering', async () => {
+    // Driven through to a flush on purpose. SessionStart no longer touches the
+    // ingest at all -- reachability is the host's declaration now -- so opening
+    // the run against a throwing ingest proves nothing. The delivery path is
+    // where a throw has to be survivable.
     const throwing: Ingest = {
       sendEvents: () => Promise.reject(new Error('socket hang up')),
       sendObservations: () => Promise.reject(new Error('socket hang up')),
       readMinimal: () => Promise.resolve(null),
       isReachable: () => Promise.reject(new Error('socket hang up')),
     };
-    const outcome = await runHook(payload('SessionStart'), deps({ ingest: throwing }));
-    expect(outcome.exitCode).toBe(1);
-    expect(outcome.exitCode).not.toBe(BLOCKING_EXIT_CODE);
+    const shared = deps({ ingest: throwing });
+    const started = await runHook(payload('SessionStart'), shared);
+    await runHook(payload('PostToolUse', { tool_name: 'Bash' }), shared);
+    const ended = await runHook(payload('SessionEnd'), shared);
+    for (const outcome of [started, ended]) {
+      expect(outcome.exitCode).not.toBe(BLOCKING_EXIT_CODE);
+    }
+    // Reported, because the events did not land.
+    expect(ended.exitCode).toBe(1);
   });
 });
 
@@ -460,11 +470,23 @@ describe('who declares ingest reachability (D23, and the Stage 3 correction)', (
     ).toBe(false);
   });
 
-  it('falls back to its own probe when nothing is attested', async () => {
-    // An absent attestation is not an assertion of success. On an unconfigured
-    // machine the hook's own probe is honestly false.
+  it('does not probe at all when nothing is attested: absent is false', async () => {
+    // The correction. An earlier version fell back to the hook's own probe,
+    // which was safe only while the only `Ingest` was the unconfigured one. Once
+    // a hook inside a trial could reach a host proxy, that fallback let a host
+    // which simply forgot to attest collect `true` from the proxy -- turning a
+    // declaration D23 requires up front into one arrived at afterwards by the
+    // run's own machinery. A reachable ingest must not rescue a missing
+    // attestation.
+    expect(await reachabilityFor({ CI: '1' }, reachableIngest())).toBe(false);
     expect(await reachabilityFor({ CI: '1' }, unreachableIngest())).toBe(false);
-    expect(await reachabilityFor({ CI: '1' }, reachableIngest())).toBe(true);
+  });
+
+  it('says why a run without an attestation is ineligible', async () => {
+    // Silence here is how a whole qualification run gets thrown away: 22 trials
+    // that ran, cost money and are all ineligible for a reason nobody printed.
+    const outcome = await runHook(payload('SessionStart'), deps({ env: { CI: '1' } }));
+    expect(`${outcome.stdout}${outcome.stderr}`).toContain(REACHABILITY_ATTESTATION);
   });
 
   it('reads an unparseable attestation as false rather than optimistically', async () => {

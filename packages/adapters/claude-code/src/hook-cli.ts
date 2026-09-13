@@ -75,8 +75,8 @@ export const REACHABILITY_ATTESTATION = 'IEOS_INGEST_REACHABLE_AT_START';
 
 export interface ReachabilityDecision {
   readonly reachable: boolean;
-  readonly source: 'host-attestation' | 'own-probe';
-  /** Set when a present attestation could not be read. Printed, never silent. */
+  readonly source: 'host-attestation' | 'absent' | 'unreadable';
+  /** Set whenever the answer was not a clean attestation. Printed, never silent. */
   readonly note: string | null;
 }
 
@@ -97,32 +97,43 @@ export interface ReachabilityDecision {
  * field means "at the declared start of this run, the trusted host verified the
  * configured ingest path was reachable" -- not "the hook checked".
  *
- * Fail closed in every direction:
+ * There is no fall back to the hook's own probe, and that is a correction rather
+ * than a simplification. An earlier version of this function probed when no
+ * attestation was present, which was safe only for as long as the hook's only
+ * `Ingest` was the unconfigured one that always answered false. Once a hook
+ * inside a trial could reach a host proxy, the same fallback would have let a
+ * host that simply forgot to attest get `true` from the proxy -- a declaration
+ * D23 requires up front, arrived at afterwards by the run's own machinery. So:
  *
- *   absent  -> the hook's own probe, which on an unconfigured machine is
- *              honestly false. No attestation is not an assertion of success.
- *   present -> exactly `true` or `false`. Anything else is a misconfigured
- *              launch context and reads as false, because an attestation that
- *              cannot be parsed is not an attestation.
+ *   "true"   -> true
+ *   "false"  -> false
+ *   anything else, including absent -> false, with a note
  *
- * Reachability at the start is never sufficient on its own: eligibility also
- * requires the run to end COMPLETE, which is decided by what the flushes
- * actually did. This function can only ever remove eligibility, never grant it.
+ * Nothing is lost: without a proxy the only implementation is the unconfigured
+ * one, and with a proxy an explicit declaration is exactly what we want to
+ * require. The gain is that a future `Ingest` cannot quietly change what D23
+ * means here.
+ *
+ * This function can only ever remove eligibility. Granting it also requires the
+ * run to end COMPLETE, which is decided by what the flushes actually did.
  */
-export async function decideReachability(
-  env: Record<string, string | undefined>,
-  ingest: Ingest,
-): Promise<ReachabilityDecision> {
+export function decideReachability(env: Record<string, string | undefined>): ReachabilityDecision {
   const declared = env[REACHABILITY_ATTESTATION];
-  if (declared === undefined) {
-    return { reachable: await ingest.isReachable(), source: 'own-probe', note: null };
-  }
   if (declared === 'true' || declared === 'false') {
     return { reachable: declared === 'true', source: 'host-attestation', note: null };
   }
+  if (declared === undefined) {
+    return {
+      reachable: false,
+      source: 'absent',
+      note:
+        `no ${REACHABILITY_ATTESTATION} was declared for this run, so it is not qualification ` +
+        'eligible. A qualification run is launched by a host that attests this before any work.',
+    };
+  }
   return {
     reachable: false,
-    source: 'host-attestation',
+    source: 'unreadable',
     note:
       `${REACHABILITY_ATTESTATION} was set to something other than true or false, so this run ` +
       'is not qualification eligible',
@@ -207,7 +218,7 @@ export async function runHook(raw: string, deps: HookDeps): Promise<HookOutcome>
           ? injectedRunId
           : mintId('run', deps.clock, deps.random);
       // Reachability is declared before any work, not inferred afterwards (D23).
-      const decision = await decideReachability(deps.env, deps.ingest);
+      const decision = decideReachability(deps.env);
       if (decision.note !== null) notes.push(`ieos telemetry: ${decision.note}`);
       runs.begin(runId, decision.reachable, deps.clock.nowIso(), sessionKey);
       state = runs.forSession(sessionKey);
