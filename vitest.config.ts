@@ -134,6 +134,10 @@ export default defineConfig({
           root: './supabase',
           include: ['tests/**/*.test.ts'],
           environment: 'node',
+          // Database-backed files reset the same `public` schema. Running two
+          // of them concurrently would make one test destroy the other's
+          // subject and turn a security assertion into a scheduler race.
+          fileParallelism: false,
           ...REAL_IO,
         },
       },
