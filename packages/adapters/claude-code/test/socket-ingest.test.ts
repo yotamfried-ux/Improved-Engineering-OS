@@ -22,6 +22,7 @@ import { socketIngest } from '../src/socket-ingest.ts';
 
 const scratch: string[] = [];
 const servers: Server[] = [];
+let ipcSequence = 0;
 
 afterEach(async () => {
   await Promise.all(
@@ -41,11 +42,28 @@ function scratchDir(): string {
   return dir;
 }
 
+/**
+ * A local IPC endpoint for the platform running the smoke suite.
+ *
+ * Stage 3 production runs only on the Linux namespace mechanism and therefore
+ * use AF_UNIX. The Windows smoke still exercises the same Node IPC client/server
+ * protocol, but Node names that transport with a named pipe rather than a
+ * filesystem socket. Treating `C:\\...\\ingest.sock` as an IPC endpoint makes
+ * Windows wait on an invalid listener until Vitest times out, which proves
+ * nothing about the protocol.
+ */
+function ipcPath(label = 'ingest'): string {
+  ipcSequence += 1;
+  return process.platform === 'win32'
+    ? `\\\\.\\pipe\\ieos-socket-ingest-${process.pid}-${ipcSequence}-${label}`
+    : join(scratchDir(), `${label}.sock`);
+}
+
 /** A server that answers however the test tells it to, one request per connection. */
 async function serve(
   answer: (request: ProxyRequest) => ProxyResponse | string,
 ): Promise<{ socketPath: string; seen: ProxyRequest[] }> {
-  const socketPath = join(scratchDir(), 'ingest.sock');
+  const socketPath = ipcPath();
   const seen: ProxyRequest[] = [];
   const server = createServer((socket) => {
     let buffered = '';
@@ -122,7 +140,7 @@ describe('the Ingest a trial can use (ADR-0005, D22)', () => {
   it('reports unreachable instead of throwing when no proxy is listening', async () => {
     // The rule telemetry may never break: a missing proxy is a recorded refusal,
     // not an exception in someone's coding session.
-    const ingest = socketIngest({ socketPath: join(scratchDir(), 'absent.sock') });
+    const ingest = socketIngest({ socketPath: ipcPath('absent') });
     expect(await ingest.sendEvents([])).toMatchObject({ status: 'unreachable' });
     expect(await ingest.isReachable()).toBe(false);
     expect(await ingest.readMinimal('health')).toBeNull();
