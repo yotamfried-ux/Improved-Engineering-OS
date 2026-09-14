@@ -85,7 +85,21 @@ export async function readTrialTelemetry(options: {
   }
 
   try {
-    const state = new SqliteRunStateStore(db).get(options.runId);
+    let state;
+    try {
+      state = new SqliteRunStateStore(db).get(options.runId);
+    } catch (error) {
+      // Reading is where a schema surprise surfaces -- a `run_state` missing a
+      // column the reader requires, say. Unreadable and therefore ineligible,
+      // which is the honest answer; letting it throw would abort the trial after
+      // the agent run had already been paid for, and reporting a default would be
+      // a confident wrong one.
+      return unreadable(
+        `the run state could not be read: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
     if (state === undefined) {
       // The run the harness registered produced no run state, which is the S-7
       // shape again: the id that was registered is not the id that ran.

@@ -188,3 +188,39 @@ describe('the telemetry state T7 has to read (D23)', () => {
     expect(snapshot.qualification_eligible).toBe(false);
   });
 });
+
+describe('a healed schema cannot manufacture eligibility', () => {
+  it('re-adds a dropped column, and the conjunction stops it counting as clean', async () => {
+    // Worth pinning, because it is the one place the additive migration could
+    // have re-opened what the fail-closed read just shut. Reopening a database
+    // whose `flush_ever_failed` was dropped recreates it with a default of 0, so
+    // every historical row reads as "no flush failed" -- a fact nobody knows.
+    //
+    // It cannot turn into eligibility, and the reason is the conjunction in
+    // `readTrialTelemetry` rather than the column: eligibility also requires
+    // COMPLETE, which was written at the time from the same `everFailed` the
+    // column records. A row whose flushes failed is INCOMPLETE, and stays
+    // ineligible however the resurrected column reads.
+    const workspaceRoot = workspace();
+    await withRun({
+      workspaceRoot,
+      runId: 'run_lossy',
+      reachableAtStart: true,
+      everFailed: true,
+    });
+    const path = outboxPathFor(workspaceRoot);
+    const db = await openOutbox(path);
+    try {
+      db.exec('alter table run_state drop column flush_ever_failed');
+    } finally {
+      db.close();
+    }
+
+    const snapshot = await readTrialTelemetry({ workspaceRoot, runId: 'run_lossy' });
+    // The column is back, and now says something untrue about this run.
+    expect(snapshot.flush_ever_failed).toBe(false);
+    // Which changes nothing, because the run was recorded INCOMPLETE when it ended.
+    expect(snapshot.telemetry_state).toBe('INCOMPLETE');
+    expect(snapshot.qualification_eligible).toBe(false);
+  });
+});

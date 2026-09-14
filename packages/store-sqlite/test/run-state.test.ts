@@ -163,3 +163,115 @@ describe('the recent runs doctor --last-run reads', () => {
     }
   });
 });
+
+describe('the flush_ever_failed migration, and what it refuses to guess', () => {
+  /** A database created before the column existed. */
+  function olderDatabase(): { db: DatabaseSync; path: string } {
+    const dir = mkdtempSync(join(tmpdir(), 'ieos-runstate-old-'));
+    scratch.push(dir);
+    const path = join(dir, 'outbox.sqlite');
+    const db = new DatabaseSync(path, { timeout: 5000 });
+    db.exec(`create table run_state (
+       run_id text primary key,
+       session_key text unique,
+       telemetry_state text not null,
+       qualification_eligible integer not null,
+       ingest_reachable_at_start integer not null,
+       started_at text not null,
+       ended_at text
+     ) strict`);
+    return { db, path };
+  }
+
+  it('adds the column to a table created before it existed', () => {
+    const { db } = olderDatabase();
+    try {
+      const store = new SqliteRunStateStore(db);
+      store.begin('run_old', true, '2026-09-13T00:00:00.000Z', 'sess_old');
+      expect(store.get('run_old')?.flushEverFailed).toBe(false);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('is idempotent: opening the same database twice does not fail', () => {
+    const { db, path } = olderDatabase();
+    try {
+      new SqliteRunStateStore(db);
+    } finally {
+      db.close();
+    }
+    const again = new DatabaseSync(path, { timeout: 5000 });
+    try {
+      expect(() => new SqliteRunStateStore(again)).not.toThrow();
+    } finally {
+      again.close();
+    }
+  });
+
+  it('lets a failing migration fail, instead of assuming the column exists', () => {
+    // The defect this replaced. A bare `catch {}` around the `alter` treated
+    // every error as "already present", so a migration that failed for any other
+    // reason was swallowed, the column stayed absent, and the reader turned that
+    // absence into `false` -- a flush failure nobody could know about becoming a
+    // run that reported none.
+    let attempted = '';
+    const refusing = {
+      exec: (sql: string) => {
+        if (sql.startsWith('alter table')) {
+          attempted = sql;
+          throw new Error('disk I/O error');
+        }
+      },
+      prepare: () => ({
+        run: () => ({ changes: 0 }),
+        // The schema says the column is absent, so the migration must be tried.
+        get: () => ({ n: 0 }),
+        all: () => [],
+      }),
+    };
+    expect(() => new SqliteRunStateStore(refusing)).toThrow('disk I/O error');
+    expect(attempted).toContain('flush_ever_failed');
+  });
+
+  it('does not re-run the migration when the schema already has the column', () => {
+    let altered = false;
+    const already = {
+      exec: (sql: string) => {
+        if (sql.startsWith('alter table')) altered = true;
+      },
+      prepare: () => ({
+        run: () => ({ changes: 0 }),
+        get: () => ({ n: 1 }),
+        all: () => [],
+      }),
+    };
+    new SqliteRunStateStore(already);
+    expect(altered).toBe(false);
+  });
+
+  it('throws rather than reading a missing column as "no flush failed"', () => {
+    // `?? 0` lived here once. Absence is something we do not know, and the one
+    // caller that reads this for qualification turns the throw into "unreadable,
+    // therefore ineligible" -- the honest answer instead of a confident wrong one.
+    const withoutTheColumn = {
+      exec: () => undefined,
+      prepare: () => ({
+        run: () => ({ changes: 0 }),
+        get: () => ({
+          n: 1,
+          run_id: 'run_a',
+          session_key: 'sess_a',
+          telemetry_state: 'COMPLETE',
+          qualification_eligible: 1,
+          ingest_reachable_at_start: 1,
+          started_at: '2026-09-13T00:00:00.000Z',
+          ended_at: '2026-09-13T00:05:00.000Z',
+        }),
+        all: () => [],
+      }),
+    };
+    const store = new SqliteRunStateStore(withoutTheColumn);
+    expect(() => store.get('run_a')).toThrow('flush_ever_failed is missing');
+  });
+});

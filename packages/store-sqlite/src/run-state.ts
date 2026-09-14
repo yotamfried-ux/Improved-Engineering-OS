@@ -70,16 +70,32 @@ export class SqliteRunStateStore {
   constructor(db: WritableDatabase) {
     this.#db = db;
     this.#db.exec(CREATE_RUN_STATE_SQL);
-    // Additive, for databases created before the column existed. `create table
-    // if not exists` leaves an older table untouched, so a developer's existing
-    // outbox would otherwise read as a schema this code cannot query.
-    try {
-      this.#db.exec(
-        'alter table run_state add column flush_ever_failed integer not null default 0',
-      );
-    } catch {
-      // Already present, which is the state we wanted.
-    }
+    this.#migrateFlushEverFailed();
+  }
+
+  /**
+   * Add `flush_ever_failed` to a table created before it existed.
+   *
+   * `create table if not exists` leaves an older table untouched, so a
+   * developer's existing outbox needs this or it is a schema this code cannot
+   * query.
+   *
+   * The shape here is the point. An earlier version wrapped the `alter` in a bare
+   * `catch {}` on the assumption that any error meant "already present" -- so a
+   * migration that failed for any other reason was swallowed, the column stayed
+   * absent, and the reader turned the absence into `false`: a flush failure we
+   * could not know about becoming a run that reported none. That is the inversion
+   * every other part of this change exists to remove.
+   *
+   * So: ask the schema, act on the answer, and let a real failure be a real
+   * failure. Nothing is caught here at all.
+   */
+  #migrateFlushEverFailed(): void {
+    const existing = this.#db
+      .prepare(`select count(*) as n from pragma_table_info('run_state') where name = ?`)
+      .get('flush_ever_failed');
+    if (Number(existing?.['n'] ?? 0) > 0) return;
+    this.#db.exec('alter table run_state add column flush_ever_failed integer not null default 0');
   }
 
   /**
@@ -152,6 +168,23 @@ export class SqliteRunStateStore {
   }
 }
 
+/**
+ * A flag that must be present, so an absent one is an error rather than a false.
+ *
+ * Thrown, not defaulted. The one caller that reads these for qualification turns
+ * a throw into "unreadable, therefore ineligible", which is the honest answer;
+ * a default would have produced a confident wrong one.
+ */
+function readRequiredFlag(row: Record<string, unknown>, column: string): boolean {
+  const value = row[column];
+  if (value === undefined || value === null) {
+    throw new Error(
+      `run_state.${column} is missing from this database, so the run's telemetry cannot be read`,
+    );
+  }
+  return Number(value) === 1;
+}
+
 function toState(row: Record<string, unknown>): LocalRunState {
   const telemetryState = String(row['telemetry_state']);
   return {
@@ -163,7 +196,12 @@ function toState(row: Record<string, unknown>): LocalRunState {
     qualificationEligible:
       telemetryState === 'COMPLETE' && Number(row['qualification_eligible']) === 1,
     ingestReachableAtStart: Number(row['ingest_reachable_at_start']) === 1,
-    flushEverFailed: Number(row['flush_ever_failed'] ?? 0) === 1,
+    // Not `?? 0`. A missing column is something we do not know, and defaulting
+    // it to `false` would report "no flush failed" about a run whose flushes we
+    // cannot see. The constructor guarantees the column or throws, so reaching
+    // here without it means the schema changed underneath us -- which a caller
+    // must handle as unreadable, not read as clean.
+    flushEverFailed: readRequiredFlag(row, 'flush_ever_failed'),
     startedAt: String(row['started_at']),
     endedAt: row['ended_at'] === null ? null : String(row['ended_at']),
   };
