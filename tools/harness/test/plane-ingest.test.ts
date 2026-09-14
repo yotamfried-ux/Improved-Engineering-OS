@@ -107,10 +107,7 @@ describe('the plane client the repository did not have (D22, D22.2)', () => {
   it('acknowledges only the ids the plane says are durable', async () => {
     const { ingest } = client(() => accepted('evt_1'));
     expect(
-      await ingest.sendEvents([
-        { event_id: 'evt_1' } as never,
-        { event_id: 'evt_2' } as never,
-      ]),
+      await ingest.sendEvents([{ event_id: 'evt_1' } as never, { event_id: 'evt_2' } as never]),
     ).toEqual({ status: 'accepted', acceptedEventIds: ['evt_1'] });
   });
 

@@ -26,7 +26,10 @@ function tempDir(): string {
   return dir;
 }
 
-function fetchReply(status: number, body: unknown = { data: { ok: true } }): typeof globalThis.fetch {
+function fetchReply(
+  status: number,
+  body: unknown = { data: { ok: true } },
+): typeof globalThis.fetch {
   return (() =>
     Promise.resolve(
       new Response(JSON.stringify(body), {
