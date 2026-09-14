@@ -86,9 +86,14 @@ const client = (
   };
 };
 
+const accepted = (...ids: string[]) => ({
+  status: 200,
+  body: { data: { accepted: ids, count: ids.length } },
+});
+
 describe('the plane client the repository did not have (D22, D22.2)', () => {
   it('sends events to ingest_events with the installation token in the D22.2 header', async () => {
-    const { ingest, calls } = client(() => ({ status: 200 }));
+    const { ingest, calls } = client(() => accepted('evt_1'));
     const outcome = await ingest.sendEvents([{ event_id: 'evt_1' } as never]);
 
     expect(outcome).toEqual({ status: 'accepted', acceptedEventIds: ['evt_1'] });
@@ -99,10 +104,36 @@ describe('the plane client the repository did not have (D22, D22.2)', () => {
     expect(headers['Authorization']).toBeUndefined();
   });
 
+  it('acknowledges only the ids the plane says are durable', async () => {
+    const { ingest } = client(() => accepted('evt_1'));
+    expect(
+      await ingest.sendEvents([
+        { event_id: 'evt_1' } as never,
+        { event_id: 'evt_2' } as never,
+      ]),
+    ).toEqual({ status: 'accepted', acceptedEventIds: ['evt_1'] });
+  });
+
+  it('refuses a bare or malformed 200 instead of deleting unconfirmed evidence', async () => {
+    for (const body of [undefined, {}, { data: {} }, { data: { accepted: 'evt_1' } }]) {
+      const { ingest } = client(() => ({ status: 200, ...(body === undefined ? {} : { body }) }));
+      expect(await ingest.sendEvents([{ event_id: 'evt_1' } as never])).toMatchObject({
+        status: 'unreachable',
+      });
+    }
+  });
+
+  it('refuses an acknowledgement for an event the request never sent', async () => {
+    const { ingest } = client(() => accepted('evt_other'));
+    expect(await ingest.sendEvents([{ event_id: 'evt_1' } as never])).toMatchObject({
+      status: 'unreachable',
+    });
+  });
+
   it('cannot express a run class, however it is called (D36)', async () => {
     // The port has no `origin_class`, so a compromised installation cannot pose
     // as qualification evidence. Asserted on the wire, not just in the types.
-    const { ingest, calls } = client(() => ({ status: 200 }));
+    const { ingest, calls } = client(() => accepted('evt_1'));
     await ingest.sendEvents([{ event_id: 'evt_1' } as never]);
     expect(String(calls[0]?.init.body)).not.toContain('origin_class');
   });
@@ -134,6 +165,11 @@ describe('the plane client the repository did not have (D22, D22.2)', () => {
     expect(await ingest.sendEvents([])).toEqual({ status: 'unreachable', reason: 'ENOTFOUND' });
     expect(await ingest.isReachable()).toBe(false);
     expect(await ingest.readMinimal('health')).toBeNull();
+  });
+
+  it('unwraps the plane response for minimal reads', async () => {
+    const { ingest } = client(() => ({ status: 200, body: { data: { ok: true } } }));
+    expect(await ingest.readMinimal('health')).toEqual({ ok: true });
   });
 
   it('calls reachability a question the plane answered, not a socket that opened', async () => {
