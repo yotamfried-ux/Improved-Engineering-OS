@@ -10,9 +10,7 @@ import {
 
 const socketPath = '/tmp/ieos-stage3-ingest.sock';
 
-function observations(
-  overrides: Partial<NamespaceObservations> = {},
-): NamespaceObservations {
+function observations(overrides: Partial<NamespaceObservations> = {}): NamespaceObservations {
   return {
     denied_roots: '/repo/evaluator',
     denied_entries_visible: 0,
