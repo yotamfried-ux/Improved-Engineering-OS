@@ -41,7 +41,9 @@ function socketPath(): string {
 /** Speak the protocol by hand, as the trial's client would. */
 async function ask(path: string, raw: string): Promise<string> {
   return new Promise<string>((resolve, reject) => {
-    const socket = connect(path, () => socket.end(raw));
+    // Newline is the frame boundary. Keep the connection open for the reply;
+    // using EOF as the boundary works on AF_UNIX but tears down a Windows pipe.
+    const socket = connect(path, () => socket.write(raw));
     let buffered = '';
     socket.on('data', (chunk: Buffer) => {
       buffered += chunk.toString('utf8');

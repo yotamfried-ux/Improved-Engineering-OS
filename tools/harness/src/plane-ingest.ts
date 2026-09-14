@@ -195,30 +195,25 @@ export function servePlaneProxy(options: {
     }
   };
 
-  // `allowHalfOpen` is the whole reason this works. Without it Node closes our
-  // side the moment the trial's FIN arrives, so an answer computed after an
-  // `await` -- which every answer here is, because it waits on the plane -- is
-  // written to a socket that has already gone. The symptom is an empty reply the
-  // client can only read as "unreachable", which would have made every trial
-  // INCOMPLETE for a reason invisible from either end.
-  const server: Server = createServer({ allowHalfOpen: true }, (socket) => {
+  // The wire contract is newline-framed, not EOF-framed. That distinction is
+  // required for Windows named pipes: a client half-close there can remove the
+  // reply path entirely, while AF_UNIX happens to preserve it. Reading a full
+  // frame as soon as `\n` arrives makes the same protocol work on both transports
+  // and leaves connection close for what it should mean: the exchange is over.
+  const server: Server = createServer((socket) => {
     let buffered = '';
+    let handled = false;
     const reply = (response: ProxyResponse, op: string): void => {
       options.onRequest?.(op, response);
       socket.end(`${JSON.stringify(response)}\n`);
     };
-    socket.on('error', () => {
-      // A trial that hangs up mid-request is not the proxy's problem to report.
-      socket.destroy();
-    });
-    socket.on('data', (chunk: Buffer) => {
-      buffered += chunk.toString('utf8');
-    });
-    socket.on('end', () => {
+    const handleFrame = (frame: string): void => {
+      if (handled) return;
+      handled = true;
       void (async () => {
         let request: ProxyRequest;
         try {
-          request = JSON.parse(buffered.trim()) as ProxyRequest;
+          request = JSON.parse(frame.trim()) as ProxyRequest;
         } catch {
           reply({ ok: false, reason: 'the request was not readable JSON' }, 'unparseable');
           return;
@@ -240,6 +235,31 @@ export function servePlaneProxy(options: {
           );
         }
       })();
+    };
+
+    socket.on('error', () => {
+      // A trial that hangs up mid-request is not the proxy's problem to report.
+      handled = true;
+      socket.destroy();
+    });
+    socket.on('data', (chunk: Buffer) => {
+      if (handled) return;
+      buffered += chunk.toString('utf8');
+      const newline = buffered.indexOf('\n');
+      if (newline >= 0) handleFrame(buffered.slice(0, newline));
+    });
+    socket.on('end', () => {
+      if (handled) return;
+      handled = true;
+      // A peer that closes before the newline sent only a partial frame. Do not
+      // reinterpret EOF as framing; that is the cross-platform bug this path
+      // exists to prevent.
+      if (!socket.destroyed) {
+        reply(
+          { ok: false, reason: 'the request ended before a complete newline-delimited frame' },
+          'incomplete',
+        );
+      }
     });
   });
 

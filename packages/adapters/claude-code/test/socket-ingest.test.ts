@@ -65,16 +65,19 @@ async function serve(
 ): Promise<{ socketPath: string; seen: ProxyRequest[] }> {
   const socketPath = ipcPath();
   const seen: ProxyRequest[] = [];
-  // The client half-closes after its one framed request. Keep the server's
-  // writable half alive until it sends the reply; Windows named pipes otherwise
-  // close it on peer FIN and turn a valid request/response into EPIPE.
-  const server = createServer({ allowHalfOpen: true }, (socket) => {
+  // Deliberately use the default half-close behaviour. The protocol is framed
+  // by newline, not EOF, so it must work on Windows named pipes without relying
+  // on an AF_UNIX-style writable half surviving the peer's request.
+  const server = createServer((socket) => {
     let buffered = '';
+    let answered = false;
     socket.on('data', (chunk: Buffer) => {
+      if (answered) return;
       buffered += chunk.toString('utf8');
-    });
-    socket.on('end', () => {
-      const request = JSON.parse(buffered.trim()) as ProxyRequest;
+      const newline = buffered.indexOf('\n');
+      if (newline < 0) return;
+      answered = true;
+      const request = JSON.parse(buffered.slice(0, newline).trim()) as ProxyRequest;
       seen.push(request);
       const reply = answer(request);
       socket.end(typeof reply === 'string' ? reply : `${JSON.stringify(reply)}\n`);

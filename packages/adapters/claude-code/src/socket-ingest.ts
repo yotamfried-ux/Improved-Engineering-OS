@@ -70,14 +70,9 @@ async function ask(
       finish({ ok: false, reason: `the ingest proxy is not answering: ${error.message}` });
     });
 
-    let buffered = '';
-    socket.on('data', (chunk: Buffer) => {
-      buffered += chunk.toString('utf8');
-    });
-    socket.on('end', () => {
-      const line = buffered.trim();
-      if (line === '') {
-        finish({ ok: false, reason: 'the ingest proxy closed without answering' });
+    const readReply = (line: string): void => {
+      if (line.trim() === '') {
+        finish({ ok: false, reason: 'the ingest proxy answered with an empty frame' });
         return;
       }
       try {
@@ -92,10 +87,31 @@ async function ask(
       } catch {
         finish({ ok: false, reason: 'the ingest proxy answered with invalid JSON' });
       }
+    };
+
+    let buffered = '';
+    socket.on('data', (chunk: Buffer) => {
+      if (settled) return;
+      buffered += chunk.toString('utf8');
+      const newline = buffered.indexOf('\n');
+      if (newline >= 0) readReply(buffered.slice(0, newline));
+    });
+    socket.on('end', () => {
+      if (settled) return;
+      finish({
+        ok: false,
+        reason:
+          buffered.trim() === ''
+            ? 'the ingest proxy closed without answering'
+            : 'the ingest proxy closed before terminating its reply frame',
+      });
     });
 
     socket.on('connect', () => {
-      socket.end(`${JSON.stringify(request)}\n`);
+      // A newline terminates the request. Do not half-close here: Windows named
+      // pipes do not preserve a writable peer half the way AF_UNIX does, so EOF
+      // as framing can destroy the reply path before the proxy answers.
+      socket.write(`${JSON.stringify(request)}\n`);
     });
   });
 }
