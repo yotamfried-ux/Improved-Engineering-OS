@@ -65,7 +65,10 @@ async function serve(
 ): Promise<{ socketPath: string; seen: ProxyRequest[] }> {
   const socketPath = ipcPath();
   const seen: ProxyRequest[] = [];
-  const server = createServer((socket) => {
+  // The client half-closes after its one framed request. Keep the server's
+  // writable half alive until it sends the reply; Windows named pipes otherwise
+  // close it on peer FIN and turn a valid request/response into EPIPE.
+  const server = createServer({ allowHalfOpen: true }, (socket) => {
     let buffered = '';
     socket.on('data', (chunk: Buffer) => {
       buffered += chunk.toString('utf8');
