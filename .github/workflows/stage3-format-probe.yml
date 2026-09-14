@@ -1,0 +1,39 @@
+name: stage3-format-probe
+
+on:
+  push:
+    branches:
+      - tmp/stage3-format-probe
+
+permissions:
+  contents: read
+
+jobs:
+  prettier-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.20.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Print exact Prettier diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec prettier --write \
+            supabase/tests/harness.ts \
+            tools/harness/src/qualification-plane.ts \
+            tools/harness/src/stage3-campaign-report-cli.ts \
+            tools/harness/test/plane-ingest.test.ts \
+            tools/harness/test/qualification-plane.test.ts
+          git diff -- \
+            supabase/tests/harness.ts \
+            tools/harness/src/qualification-plane.ts \
+            tools/harness/src/stage3-campaign-report-cli.ts \
+            tools/harness/test/plane-ingest.test.ts \
+            tools/harness/test/qualification-plane.test.ts
