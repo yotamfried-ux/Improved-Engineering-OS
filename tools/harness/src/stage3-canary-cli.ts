@@ -20,7 +20,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { buildIsolationReport } from './isolation.ts';
 import { namespaceFindings, runInNamespace } from './ns-sandbox.ts';
 import { httpRegisterRun, registerWithPlane } from './plane-registrar.ts';
@@ -48,10 +48,10 @@ if (process.platform !== 'linux') {
 const eosRoot = resolve(import.meta.dirname, '..', '..', '..');
 const runId = `run_s3_canary_${String(Date.now())}`;
 const sessionId = `sess_s3_canary_${String(Date.now())}`;
-const workspaceRoot = mkdtempSync(join(tmpdir(), 'ieos-stage3-canary-workspace-'));
 const outPath = resolve(
   flag('--out') ?? join(eosRoot, 'qualification', 'evidence', 'stage-3-canary', `${runId}.json`),
 );
+const credentialsPath = flag('--credentials');
 
 function run(command: string, commandArgs: readonly string[], cwd: string): void {
   const result = spawnSync(command, [...commandArgs], { cwd, encoding: 'utf8' });
@@ -64,9 +64,10 @@ function run(command: string, commandArgs: readonly string[], cwd: string): void
 
 const planeConfig = loadQualificationPlaneConfig({
   eosRoot,
-  ...(flag('--credentials') === undefined ? {} : { credentialsPath: flag('--credentials') }),
+  ...(credentialsPath === undefined ? {} : { credentialsPath }),
 });
 const proxy = await openQualificationProxy({ config: planeConfig, runId });
+const workspaceRoot = mkdtempSync(join(tmpdir(), 'ieos-stage3-canary-workspace-'));
 
 let evidence: Record<string, unknown> = {
   run_id: runId,
@@ -225,7 +226,7 @@ try {
     verdict: passed ? 'PASSED' : 'NOT PASSED',
   };
 
-  mkdirSync(resolve(outPath, '..'), { recursive: true });
+  mkdirSync(dirname(outPath), { recursive: true });
   writeFileSync(outPath, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
 
   process.stdout.write(
@@ -247,7 +248,7 @@ try {
     failed_at: new Date().toISOString(),
     error: error instanceof Error ? error.message : String(error),
   };
-  mkdirSync(resolve(outPath, '..'), { recursive: true });
+  mkdirSync(dirname(outPath), { recursive: true });
   writeFileSync(outPath, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
   process.stderr.write(
     `Stage 3 canary: NOT PASSED -- ${error instanceof Error ? error.message : String(error)}\n` +
