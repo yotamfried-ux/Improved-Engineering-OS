@@ -105,10 +105,18 @@ if (unknownTasks.length > 0) {
  * campaign report normalises the three primary task ids to that historical
  * representation before deriving T1/T2/T8. This changes no measured fact; it
  * makes the matrix role explicit instead of encoding it as a missing field.
+ *
+ * With `exactOptionalPropertyTypes`, "absent" and `undefined` are deliberately
+ * different. Remove the campaign-only fields structurally rather than assigning
+ * `arm: undefined`, so this adapter cannot manufacture a value the legacy shape
+ * never had.
  */
-const normalized: TrialRecord[] = records.map((record) =>
-  primaryIds.has(record.task_id) ? { ...record, arm: undefined } : record,
-);
+const normalized: TrialRecord[] = records.map((record): TrialRecord => {
+  const { campaign: _campaign, ...withoutCampaign } = record;
+  if (!primaryIds.has(record.task_id)) return withoutCampaign;
+  const { arm: _arm, ...primary } = withoutCampaign;
+  return primary;
+});
 const rows = deriveRows(normalized);
 const rowsPass = rows.length === 9 && rows.every((row) => row.status === 'PASS');
 const matrixPass = matrixReasons.length === 0;
