@@ -16,16 +16,18 @@ const flag = (name: string): string | undefined => {
   return index >= 0 ? args[index + 1] : undefined;
 };
 
-const eosRoot = resolve(flag('--eos-root') ?? '');
-const projectRoot = resolve(flag('--project') ?? '');
+const eosRootArg = flag('--eos-root');
+const projectRootArg = flag('--project');
 const repoSha = flag('--repo-sha');
 const sessionId = flag('--session') ?? 'sess_stage3_canary';
-if (repoSha === undefined || eosRoot === resolve('') || projectRoot === resolve('')) {
+if (eosRootArg === undefined || projectRootArg === undefined || repoSha === undefined) {
   process.stderr.write(
     'usage: stage3-canary-child.ts --eos-root DIR --project DIR --repo-sha SHA [--session ID]\n',
   );
   process.exit(64);
 }
+const eosRoot = resolve(eosRootArg);
+const projectRoot = resolve(projectRootArg);
 
 const hook = join(eosRoot, 'packages', 'adapters', 'claude-code', 'src', 'hook.ts');
 const base = {
