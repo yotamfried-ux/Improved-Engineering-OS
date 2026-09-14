@@ -93,7 +93,9 @@ export function loadQualificationPlaneConfig(options: {
   try {
     credential = JSON.parse(readFileSync(credentialsPath, 'utf8')) as CredentialFile;
   } catch {
-    throw new QualificationPlaneError(`the installation credential at ${credentialsPath} is not valid JSON`);
+    throw new QualificationPlaneError(
+      `the installation credential at ${credentialsPath} is not valid JSON`,
+    );
   }
   if (
     credential.schema_version !== '1' ||

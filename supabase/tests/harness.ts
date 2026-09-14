@@ -62,26 +62,18 @@ export class SqlError extends Error {
 
 /** Run SQL, failing loudly. `ON_ERROR_STOP` so a mid-script error is not a pass. */
 export function exec(sql: string): string {
-  const result = spawnSync(
-    'psql',
-    [DATABASE_URL, '-v', 'ON_ERROR_STOP=1', '-tAq', '-c', sql],
-    {
-      encoding: 'utf8',
-    },
-  );
+  const result = spawnSync('psql', [DATABASE_URL, '-v', 'ON_ERROR_STOP=1', '-tAq', '-c', sql], {
+    encoding: 'utf8',
+  });
   if (result.status !== 0) throw new SqlError(result.stderr.trim() || 'psql failed');
   return result.stdout.trim();
 }
 
 /** Run SQL expected to fail, and return the error text. */
 export function expectError(sql: string): string {
-  const result = spawnSync(
-    'psql',
-    [DATABASE_URL, '-v', 'ON_ERROR_STOP=1', '-tAq', '-c', sql],
-    {
-      encoding: 'utf8',
-    },
-  );
+  const result = spawnSync('psql', [DATABASE_URL, '-v', 'ON_ERROR_STOP=1', '-tAq', '-c', sql], {
+    encoding: 'utf8',
+  });
   if (result.status === 0) {
     throw new SqlError(`expected an error, but the statement succeeded: ${sql}`);
   }

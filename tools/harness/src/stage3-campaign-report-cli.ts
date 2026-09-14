@@ -28,7 +28,9 @@ const flag = (name: string): string | undefined => {
 
 const campaign = flag('--campaign');
 if (campaign === undefined || !/^[A-Za-z0-9_]{1,12}$/u.test(campaign)) {
-  process.stderr.write('--campaign is required and must be 1-12 ASCII letters, digits or underscores\n');
+  process.stderr.write(
+    '--campaign is required and must be 1-12 ASCII letters, digits or underscores\n',
+  );
   process.exit(64);
 }
 
@@ -55,7 +57,8 @@ const primaryIds = new Set(STAGE_3_TASKS.map((task) => task.taskId));
 const hardIds = new Set(STAGE_3_HARD_TASKS.map((task) => task.taskId));
 
 const matrixReasons: string[] = [];
-if (records.length !== 22) matrixReasons.push(`expected 22 records, found ${String(records.length)}`);
+if (records.length !== 22)
+  matrixReasons.push(`expected 22 records, found ${String(records.length)}`);
 if (records.some((record) => record.campaign !== campaign)) {
   matrixReasons.push('one or more records do not declare this campaign');
 }
