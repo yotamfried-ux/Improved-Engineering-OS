@@ -56,15 +56,19 @@ export function httpIngest(options: {
   /**
    * Translate one HTTP answer into an outcome.
    *
-   * The distinction that matters: a refusal is `rejected` and a failure to ask is
-   * `unreachable`. Collapsing them would let a plane that is rejecting every
-   * batch look like an outage, and an outage look like a contract violation --
-   * and `everFailed` treats both as fatal to eligibility, so the run's verdict
-   * would be right for the wrong reason and undiagnosable.
+   * For events, HTTP 200 is not the acknowledgement. The database returns the
+   * ids it can prove durable, and only those ids may leave the outbox. Treating
+   * a bare 200 as "all accepted" is a telemetry-loss bug: a partial or malformed
+   * response would delete evidence the plane never stored and could let T7 read
+   * COMPLETE falsely.
+   *
+   * The second distinction that matters: a refusal is `rejected` and a failure
+   * to ask is `unreachable`. `everFailed` treats both as fatal to eligibility,
+   * but keeping the diagnosis preserves the reason.
    */
   const outcomeFor = async (
     send: () => Promise<Response>,
-    acceptedIds: readonly string[],
+    expectedEventIds?: readonly string[],
   ): Promise<IngestOutcome> => {
     let response: Response;
     try {
@@ -75,7 +79,38 @@ export function httpIngest(options: {
         reason: error instanceof Error ? error.message : String(error),
       };
     }
-    if (response.ok) return { status: 'accepted', acceptedEventIds: acceptedIds };
+
+    if (response.ok) {
+      if (expectedEventIds === undefined) {
+        return { status: 'accepted', acceptedEventIds: [] };
+      }
+      try {
+        const body = (await response.json()) as {
+          data?: { accepted?: unknown };
+        };
+        const accepted = body.data?.accepted;
+        if (!Array.isArray(accepted) || !accepted.every((id) => typeof id === 'string')) {
+          return {
+            status: 'unreachable',
+            reason: 'the Evidence Plane returned 200 without a readable accepted-id list',
+          };
+        }
+        const expected = new Set(expectedEventIds);
+        if (accepted.some((id) => !expected.has(id))) {
+          return {
+            status: 'unreachable',
+            reason: 'the Evidence Plane acknowledged an event id that was not in the request',
+          };
+        }
+        return { status: 'accepted', acceptedEventIds: accepted };
+      } catch {
+        return {
+          status: 'unreachable',
+          reason: 'the Evidence Plane returned 200 with an unreadable acknowledgement body',
+        };
+      }
+    }
+
     let code = String(response.status);
     try {
       const body = (await response.json()) as { code?: unknown };
@@ -96,12 +131,13 @@ export function httpIngest(options: {
         events.map((event) => event.event_id),
       ),
     sendObservations: (observations) =>
-      outcomeFor(() => post('ingest_observations', { observations }), []),
+      outcomeFor(() => post('ingest_observations', { observations })),
     readMinimal: async (kind) => {
       try {
         const response = await post('read_minimal', { kind });
         if (!response.ok) return null;
-        return (await response.json()) as unknown;
+        const body = (await response.json()) as { data?: unknown };
+        return body.data ?? null;
       } catch {
         return null;
       }
