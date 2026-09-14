@@ -37,6 +37,15 @@ export interface FilesystemPolicy {
    * reaching an agent workspace invalidate every trial that used them.
    */
   readonly deniedRoots: readonly string[];
+  /**
+   * Unix sockets deliberately exposed to the trial as IPC capabilities.
+   *
+   * A socket is not a network route, but it is still a new filesystem-visible
+   * capability. Stage 3's Evidence Plane proxy therefore has to be named here
+   * before it can appear in the namespace. A mount that exists without a matching
+   * declaration is a filesystem violation, not an undocumented convenience.
+   */
+  readonly declaredUnixSockets?: readonly string[];
 }
 
 export interface EnvironmentPolicy {
@@ -248,6 +257,10 @@ export function buildIsolationReport(
  * `process` lists the executables the trial legitimately needs. The PID
  * namespace is what makes the boundary provable; the list is what makes a
  * surprise in the process tree legible as a surprise.
+ *
+ * A host-side ingest proxy, when present, is named as a declared unix socket.
+ * That is an IPC grant under the filesystem boundary, not an extra network
+ * destination: the network allowlist remains unchanged and is proved separately.
  */
 export function namespaceTrialPolicy(options: {
   readonly workspaceRoot: string;
@@ -255,11 +268,13 @@ export function namespaceTrialPolicy(options: {
   readonly allowedHosts: readonly string[];
   readonly allowedExecutables?: readonly string[];
   readonly allowedEnvironment?: readonly string[];
+  readonly declaredUnixSockets?: readonly string[];
 }): IsolationPolicy {
   return {
     filesystem: {
       allowedRoots: [options.workspaceRoot],
       deniedRoots: [options.evaluatorRoot],
+      declaredUnixSockets: options.declaredUnixSockets ?? [],
     },
     environment: {
       // HOME is granted deliberately: the agent's credential store lives there
@@ -282,6 +297,7 @@ export function defaultTrialPolicy(options: {
     filesystem: {
       allowedRoots: [options.workspaceRoot],
       deniedRoots: [options.evaluatorRoot],
+      declaredUnixSockets: [],
     },
     environment: { allowedNames: ['PATH', 'HOME', 'TMPDIR'] },
     process: { allowedExecutables: [] },

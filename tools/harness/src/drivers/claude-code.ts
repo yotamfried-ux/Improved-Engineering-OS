@@ -34,7 +34,12 @@ import type {
 } from '../driver.ts';
 import type { Trial } from '../sandbox.ts';
 import { ABORT_MULTIPLIER } from '../budget.ts';
-import { namespaceFindings, runInNamespace, type NamespaceObservations } from '../ns-sandbox.ts';
+import {
+  namespaceFindings,
+  runInNamespace,
+  type NamespaceObservations,
+  type UnixSocketMount,
+} from '../ns-sandbox.ts';
 import type { BoundaryFinding } from '../isolation.ts';
 
 /** Where the agent's own transcript events live, outside every trial workspace. */
@@ -47,6 +52,8 @@ export interface ClaudeCodeDriverOptions {
   readonly allowedHosts: readonly string[];
   /** Absolute paths that must not exist inside the trial. */
   readonly deniedRoots: readonly string[];
+  /** Host-side IPC capabilities deliberately bind-mounted into the trial. */
+  readonly unixSocketMounts?: readonly UnixSocketMount[];
   readonly executable?: string;
   readonly model?: string;
   /** C-12. Overridable so the literal `[]` reading stays runnable as a control. */
@@ -159,6 +166,8 @@ export class ClaudeCodeDriver implements AgentDriver {
       environment: { ...trial.environment, ...options.extraEnvironment },
       allowedHosts: options.allowedHosts,
       deniedRoots: options.deniedRoots,
+      declaredUnixSockets: trial.policy.filesystem.declaredUnixSockets ?? [],
+      unixSocketMounts: options.unixSocketMounts ?? [],
       timeoutSeconds: task.budget.wallClockSeconds * ABORT_MULTIPLIER,
     });
     const wallClockSeconds = (Date.now() - startedAt) / 1000;
