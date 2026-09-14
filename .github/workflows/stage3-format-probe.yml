@@ -6,10 +6,10 @@ on:
       - tmp/stage3-format-probe
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  prettier-diff:
+  prettier-write:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -21,7 +21,7 @@ jobs:
           node-version: 24.20.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Print exact Prettier diff
+      - name: Persist exact Prettier output
         shell: bash
         run: |
           set -euo pipefail
@@ -31,9 +31,22 @@ jobs:
             tools/harness/src/stage3-campaign-report-cli.ts \
             tools/harness/test/plane-ingest.test.ts \
             tools/harness/test/qualification-plane.test.ts
-          git diff -- \
+          if git diff --quiet -- \
+            supabase/tests/harness.ts \
+            tools/harness/src/qualification-plane.ts \
+            tools/harness/src/stage3-campaign-report-cli.ts \
+            tools/harness/test/plane-ingest.test.ts \
+            tools/harness/test/qualification-plane.test.ts; then
+            echo "already formatted"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
             supabase/tests/harness.ts \
             tools/harness/src/qualification-plane.ts \
             tools/harness/src/stage3-campaign-report-cli.ts \
             tools/harness/test/plane-ingest.test.ts \
             tools/harness/test/qualification-plane.test.ts
+          git commit -m "style: apply exact Stage 3 Prettier output"
+          git push origin HEAD:tmp/stage3-format-probe
