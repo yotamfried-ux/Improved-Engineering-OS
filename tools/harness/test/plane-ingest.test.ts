@@ -16,13 +16,23 @@ import { httpIngest, servePlaneProxy, type PlaneProxy } from '../src/plane-inges
 
 const scratch: string[] = [];
 const proxies: PlaneProxy[] = [];
+let ipcSequence = 0;
 
 afterEach(async () => {
   await Promise.all(proxies.splice(0).map((proxy) => proxy.close()));
   for (const dir of scratch.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
+/**
+ * A local IPC endpoint. Production Stage 3 is Linux/AF_UNIX; the Windows smoke
+ * uses a named pipe so it exercises the same Node protocol instead of trying to
+ * listen on an ordinary `C:\\...\\ingest.sock` path.
+ */
 function socketPath(): string {
+  ipcSequence += 1;
+  if (process.platform === 'win32') {
+    return `\\\\.\\pipe\\ieos-plane-proxy-${process.pid}-${ipcSequence}`;
+  }
   const dir = mkdtempSync(join(tmpdir(), 'ieos-plane-proxy-'));
   scratch.push(dir);
   return join(dir, 'ingest.sock');
@@ -213,12 +223,12 @@ describe('the proxy that lends the credential without handing it over (ADR-0005)
     expect(seen).toEqual(['isReachable', 'sendEvents']);
   });
 
-  it('leaves no socket file behind when it closes', async () => {
-    // A stale socket file is how the next trial gets a proxy that is not there.
+  it('leaves no IPC endpoint behind when it closes', async () => {
+    // A stale endpoint is how the next trial gets a proxy that is not there.
     const path = socketPath();
     const proxy = await servePlaneProxy({ socketPath: path, ingest: accepting });
     await proxy.close();
     const answer = await ask(path, '{"op":"isReachable"}\n').catch((error: Error) => error.message);
-    expect(String(answer)).toContain('ENOENT');
+    expect(String(answer)).toMatch(/ENOENT|ECONNREFUSED/u);
   });
 });
