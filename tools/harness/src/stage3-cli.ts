@@ -47,6 +47,11 @@ const flag = (name: string): string | undefined => {
   return index >= 0 ? args[index + 1] : undefined;
 };
 
+if (process.platform !== 'linux') {
+  process.stderr.write('Stage 3 qualification requires the Linux namespace mechanism\n');
+  process.exit(69);
+}
+
 const taskId = flag('--task');
 const rawCampaign = flag('--campaign');
 if (taskId === undefined || rawCampaign === undefined) {
@@ -55,10 +60,8 @@ if (taskId === undefined || rawCampaign === undefined) {
   );
   process.exit(64);
 }
-if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/u.test(rawCampaign)) {
-  process.stderr.write(
-    '--campaign must be 1-32 characters: ASCII letters, digits, underscore or hyphen\n',
-  );
+if (!/^[A-Za-z0-9_]{1,12}$/u.test(rawCampaign)) {
+  process.stderr.write('--campaign must be 1-12 ASCII letters, digits or underscores\n');
   process.exit(64);
 }
 
@@ -74,6 +77,7 @@ const outDir = resolve(
   flag('--out') ?? join(eosRoot, 'qualification', 'evidence', 'stage-3', campaign),
 );
 const settingSources = flag('--setting-sources');
+const credentialsPath = flag('--credentials');
 
 /**
  * Which arm of the pair this trial is.
@@ -92,7 +96,10 @@ if (arm !== 'eos' && arm !== 'native') {
 
 const trialId = `${taskId}-${arm}-t${String(trialNumber)}`;
 // Campaign is part of the plane identity, so historical failed runs can never be
-// re-used and accidentally inherit their old registration/event state.
+// re-used and accidentally inherit their old registration/event state. The
+// campaign contract is intentionally narrower than a filename: the hook accepts
+// only `run_[A-Za-z0-9_]{1,64}`, so allowing hyphens here would make it reject
+// this injected id and silently mint a different run (the S-7 failure again).
 const runId = `run_s3_${campaign}_${taskId.replace(/-/gu, '_')}_${arm}_t${String(trialNumber)}`;
 
 mkdirSync(outDir, { recursive: true });
@@ -104,7 +111,7 @@ const transcriptDir = join(outDir, 'transcripts');
 // ---------------------------------------------------------------------------
 const planeConfig = loadQualificationPlaneConfig({
   eosRoot,
-  ...(flag('--credentials') === undefined ? {} : { credentialsPath: flag('--credentials') }),
+  ...(credentialsPath === undefined ? {} : { credentialsPath }),
 });
 const proxy = await openQualificationProxy({ config: planeConfig, runId });
 
