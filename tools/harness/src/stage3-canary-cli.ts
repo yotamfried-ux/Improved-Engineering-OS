@@ -14,7 +14,8 @@
  * Claude is never launched, so a failed canary costs no model trial.
  *
  * Usage:
- *   node tools/harness/src/stage3-canary-cli.ts [--credentials FILE] [--out FILE]
+ *   node tools/harness/src/stage3-canary-cli.ts \
+ *     [--credentials FILE] [--service-credentials FILE] [--out FILE]
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -52,6 +53,7 @@ const outPath = resolve(
   flag('--out') ?? join(eosRoot, 'qualification', 'evidence', 'stage-3-canary', `${runId}.json`),
 );
 const credentialsPath = flag('--credentials');
+const serviceCredentialsPath = flag('--service-credentials');
 
 function run(command: string, commandArgs: readonly string[], cwd: string): void {
   const result = spawnSync(command, [...commandArgs], { cwd, encoding: 'utf8' });
@@ -65,6 +67,7 @@ function run(command: string, commandArgs: readonly string[], cwd: string): void
 const planeConfig = loadQualificationPlaneConfig({
   eosRoot,
   ...(credentialsPath === undefined ? {} : { credentialsPath }),
+  ...(serviceCredentialsPath === undefined ? {} : { serviceCredentialsPath }),
 });
 const proxy = await openQualificationProxy({ config: planeConfig, runId });
 const workspaceRoot = mkdtempSync(join(tmpdir(), 'ieos-stage3-canary-workspace-'));
@@ -221,6 +224,10 @@ try {
     credential_boundary: {
       service_token_in_trial_environment: false,
       installation_token_in_trial_environment: false,
+      service_credential_source:
+        planeConfig.serviceCredentialSource === 'environment' ? 'environment' : 'local-file',
+      installation_credential_source:
+        planeConfig.credentialSource === 'environment' ? 'environment' : 'local-file',
       declared_socket_target: proxy.targetPath,
     },
     verdict: passed ? 'PASSED' : 'NOT PASSED',

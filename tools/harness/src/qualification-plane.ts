@@ -25,12 +25,21 @@ export interface QualificationPlaneConfig {
   readonly endpoint: string;
   readonly serviceToken: string;
   readonly installationToken: string;
+  readonly serviceCredentialSource: 'environment' | string;
   readonly credentialSource: 'environment' | string;
 }
 
-interface CredentialFile {
+interface InstallationCredentialFile {
   readonly schema_version?: unknown;
   readonly installation_id?: unknown;
+  readonly token?: unknown;
+  readonly expires_at?: unknown;
+}
+
+interface ServiceCredentialFile {
+  readonly schema_version?: unknown;
+  readonly service_id?: unknown;
+  readonly scopes?: unknown;
   readonly token?: unknown;
   readonly expires_at?: unknown;
 }
@@ -42,18 +51,80 @@ export class QualificationPlaneError extends Error {
   }
 }
 
+function expiryProblem(value: unknown): 'missing' | 'invalid' | 'expired' | null {
+  if (typeof value !== 'string' || value === '') return 'missing';
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return 'invalid';
+  return parsed <= Date.now() ? 'expired' : null;
+}
+
+function loadServiceCredential(options: {
+  readonly eosRoot: string;
+  readonly env: Readonly<Record<string, string | undefined>>;
+  readonly serviceCredentialsPath?: string;
+}): { readonly token: string; readonly source: 'environment' | string } {
+  const environmentToken = options.env['IEOS_SERVICE_TOKEN'];
+  if (environmentToken !== undefined && environmentToken !== '') {
+    return { token: environmentToken, source: 'environment' };
+  }
+
+  const path = resolve(
+    options.serviceCredentialsPath ?? join(options.eosRoot, '.ieos', 'harness-service.json'),
+  );
+  if (!existsSync(path)) {
+    throw new QualificationPlaneError(
+      `Stage 3 qualification needs a harness service credential at ${path} or IEOS_SERVICE_TOKEN on the trusted host`,
+    );
+  }
+
+  let credential: ServiceCredentialFile;
+  try {
+    credential = JSON.parse(readFileSync(path, 'utf8')) as ServiceCredentialFile;
+  } catch {
+    throw new QualificationPlaneError(`the harness service credential at ${path} is not valid JSON`);
+  }
+
+  const scopes = credential.scopes;
+  const exactScope =
+    Array.isArray(scopes) && scopes.length === 1 && scopes[0] === 'run.register';
+  if (
+    credential.schema_version !== '1' ||
+    typeof credential.service_id !== 'string' ||
+    !credential.service_id.startsWith('svc_') ||
+    typeof credential.token !== 'string' ||
+    credential.token === '' ||
+    !exactScope
+  ) {
+    throw new QualificationPlaneError(
+      `the harness service credential at ${path} does not match the D36 credential contract (svc_ identity with run.register only)`,
+    );
+  }
+
+  const expiry = expiryProblem(credential.expires_at);
+  if (expiry !== null) {
+    throw new QualificationPlaneError(
+      `the harness service credential at ${path} has ${expiry} expiry; rotate it before qualification`,
+    );
+  }
+
+  return { token: credential.token, source: path };
+}
+
 /**
  * Read the two host-only identities required by a qualification run.
  *
  * `IEOS_INGEST_URL` is the product-facing D22 name. The older
  * `IEOS_INGEST_ENDPOINT` spelling is accepted for the existing Stage 3 runner
- * while the configuration is migrated, so this fix does not turn a naming
- * cleanup into a credential outage.
+ * while the configuration is migrated. Both credentials may be supplied as
+ * trusted-host environment secrets; by default they are read from separate
+ * local credential files, so the raw tokens never need to be copied into a
+ * shell command or trial environment.
  */
 export function loadQualificationPlaneConfig(options: {
   readonly eosRoot: string;
   readonly env?: Readonly<Record<string, string | undefined>>;
   readonly credentialsPath?: string;
+  readonly serviceCredentialsPath?: string;
 }): QualificationPlaneConfig {
   const env = options.env ?? process.env;
   const endpoint = env['IEOS_INGEST_URL'] ?? env['IEOS_INGEST_ENDPOINT'];
@@ -63,19 +134,21 @@ export function loadQualificationPlaneConfig(options: {
     );
   }
 
-  const serviceToken = env['IEOS_SERVICE_TOKEN'];
-  if (serviceToken === undefined || serviceToken === '') {
-    throw new QualificationPlaneError(
-      'Stage 3 qualification requires IEOS_SERVICE_TOKEN on the trusted host before any trial starts',
-    );
-  }
+  const service = loadServiceCredential({
+    eosRoot: options.eosRoot,
+    env,
+    ...(options.serviceCredentialsPath === undefined
+      ? {}
+      : { serviceCredentialsPath: options.serviceCredentialsPath }),
+  });
 
   const environmentToken = env['IEOS_INSTALLATION_TOKEN'];
   if (environmentToken !== undefined && environmentToken !== '') {
     return {
       endpoint,
-      serviceToken,
+      serviceToken: service.token,
       installationToken: environmentToken,
+      serviceCredentialSource: service.source,
       credentialSource: 'environment',
     };
   }
@@ -89,9 +162,9 @@ export function loadQualificationPlaneConfig(options: {
     );
   }
 
-  let credential: CredentialFile;
+  let credential: InstallationCredentialFile;
   try {
-    credential = JSON.parse(readFileSync(credentialsPath, 'utf8')) as CredentialFile;
+    credential = JSON.parse(readFileSync(credentialsPath, 'utf8')) as InstallationCredentialFile;
   } catch {
     throw new QualificationPlaneError(
       `the installation credential at ${credentialsPath} is not valid JSON`,
@@ -108,20 +181,18 @@ export function loadQualificationPlaneConfig(options: {
       `the installation credential at ${credentialsPath} does not match the D22 credential contract`,
     );
   }
-  if (
-    typeof credential.expires_at === 'string' &&
-    Number.isFinite(Date.parse(credential.expires_at)) &&
-    Date.parse(credential.expires_at) <= Date.now()
-  ) {
+  const expiry = expiryProblem(credential.expires_at);
+  if (expiry !== null) {
     throw new QualificationPlaneError(
-      `the installation credential at ${credentialsPath} is expired; rotate it before qualification`,
+      `the installation credential at ${credentialsPath} has ${expiry} expiry; rotate it before qualification`,
     );
   }
 
   return {
     endpoint,
-    serviceToken,
+    serviceToken: service.token,
     installationToken: credential.token,
+    serviceCredentialSource: service.source,
     credentialSource: credentialsPath,
   };
 }
@@ -162,9 +233,6 @@ export async function openQualificationProxy(options: {
   const sourceDir = mkdtempSync(join(tmpdir(), 'ieos-stage3-proxy-'));
   const sourcePath = join(sourceDir, 'ingest.sock');
   const safeRunId = options.runId.replace(/[^A-Za-z0-9_-]/gu, '_').slice(0, 40);
-  // Distinct from sourcePath: ns-trial creates/removes the target inode on the
-  // host as part of the bind mount setup. Reusing the source would delete the
-  // listener before the namespace could mount it.
   const targetPath = `/tmp/ieos-${safeRunId}-${String(process.pid)}.sock`;
 
   let proxy: PlaneProxy;

@@ -26,6 +26,36 @@ function tempDir(): string {
   return dir;
 }
 
+function writeServiceCredential(path: string, overrides: Record<string, unknown> = {}): void {
+  writeFileSync(
+    path,
+    JSON.stringify({
+      schema_version: '1',
+      service_id: 'svc_test',
+      scopes: ['run.register'],
+      token: 'file-service-secret',
+      created_at: '2026-09-15T00:00:00Z',
+      expires_at: '2099-12-15T00:00:00Z',
+      ...overrides,
+    }),
+    'utf8',
+  );
+}
+
+function writeInstallationCredential(path: string): void {
+  writeFileSync(
+    path,
+    JSON.stringify({
+      schema_version: '1',
+      installation_id: 'inst_test',
+      token: 'file-installation-secret',
+      created_at: '2026-09-15T00:00:00Z',
+      expires_at: '2099-12-15T00:00:00Z',
+    }),
+    'utf8',
+  );
+}
+
 function fetchReply(
   status: number,
   body: unknown = { data: { ok: true } },
@@ -53,34 +83,62 @@ describe('Stage 3 qualification plane configuration', () => {
       endpoint: 'https://plane.invalid/ingest',
       serviceToken: 'service-secret',
       installationToken: 'installation-secret',
+      serviceCredentialSource: 'environment',
       credentialSource: 'environment',
     });
   });
 
-  it('reads the existing D22 credential file instead of inventing another credential format', () => {
+  it('reads both trusted-host credential files without requiring raw tokens in env', () => {
     const dir = tempDir();
     const credentialsPath = join(dir, 'credentials.json');
-    writeFileSync(
-      credentialsPath,
-      JSON.stringify({
-        schema_version: '1',
-        installation_id: 'inst_test',
-        token: 'file-installation-secret',
-        created_at: '2026-09-15T00:00:00Z',
-        expires_at: '2026-12-15T00:00:00Z',
-      }),
-      'utf8',
-    );
+    const serviceCredentialsPath = join(dir, 'harness-service.json');
+    writeInstallationCredential(credentialsPath);
+    writeServiceCredential(serviceCredentialsPath);
+
     const config = loadQualificationPlaneConfig({
       eosRoot: dir,
       credentialsPath,
-      env: {
-        IEOS_INGEST_ENDPOINT: 'https://plane.invalid/ingest',
-        IEOS_SERVICE_TOKEN: 'service-secret',
-      },
+      serviceCredentialsPath,
+      env: { IEOS_INGEST_ENDPOINT: 'https://plane.invalid/ingest' },
     });
     expect(config.installationToken).toBe('file-installation-secret');
+    expect(config.serviceToken).toBe('file-service-secret');
     expect(config.credentialSource).toBe(credentialsPath);
+    expect(config.serviceCredentialSource).toBe(serviceCredentialsPath);
+  });
+
+  it('rejects a harness service credential with broader or different authority', () => {
+    const dir = tempDir();
+    const serviceCredentialsPath = join(dir, 'harness-service.json');
+    writeServiceCredential(serviceCredentialsPath, {
+      scopes: ['run.register', 'proposal.read'],
+    });
+    expect(() =>
+      loadQualificationPlaneConfig({
+        eosRoot: dir,
+        serviceCredentialsPath,
+        env: {
+          IEOS_INGEST_URL: 'https://plane.invalid/ingest',
+          IEOS_INSTALLATION_TOKEN: 'installation-secret',
+        },
+      }),
+    ).toThrow(/run\.register only/u);
+  });
+
+  it('rejects an expired service credential before any trial starts', () => {
+    const dir = tempDir();
+    const serviceCredentialsPath = join(dir, 'harness-service.json');
+    writeServiceCredential(serviceCredentialsPath, { expires_at: '2000-01-01T00:00:00Z' });
+    expect(() =>
+      loadQualificationPlaneConfig({
+        eosRoot: dir,
+        serviceCredentialsPath,
+        env: {
+          IEOS_INGEST_URL: 'https://plane.invalid/ingest',
+          IEOS_INSTALLATION_TOKEN: 'installation-secret',
+        },
+      }),
+    ).toThrow(/expired expiry/u);
   });
 
   it('fails closed before a trial when either host identity is absent', () => {
@@ -90,13 +148,15 @@ describe('Stage 3 qualification plane configuration', () => {
         env: { IEOS_INGEST_URL: 'https://plane.invalid/ingest' },
       }),
     ).toThrow(QualificationPlaneError);
+
+    const dir = tempDir();
+    const serviceCredentialsPath = join(dir, 'harness-service.json');
+    writeServiceCredential(serviceCredentialsPath);
     expect(() =>
       loadQualificationPlaneConfig({
         eosRoot: '/definitely/missing',
-        env: {
-          IEOS_INGEST_URL: 'https://plane.invalid/ingest',
-          IEOS_SERVICE_TOKEN: 'service-secret',
-        },
+        serviceCredentialsPath,
+        env: { IEOS_INGEST_URL: 'https://plane.invalid/ingest' },
       }),
     ).toThrow(/installation credential/u);
   });
@@ -107,6 +167,7 @@ describe.skipIf(process.platform !== 'linux')('Stage 3 qualification proxy prefl
     endpoint: 'https://plane.invalid/ingest',
     serviceToken: 'service-secret',
     installationToken: 'installation-secret',
+    serviceCredentialSource: 'environment' as const,
     credentialSource: 'environment' as const,
   };
 

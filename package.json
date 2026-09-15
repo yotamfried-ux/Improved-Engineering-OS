@@ -33,12 +33,14 @@
     "report:collect": "node tools/qualification-report/src/cli.ts --collect",
     "report:stage0": "node tools/qualification-report/src/cli.ts --report",
     "report:stage1": "node tools/qualification-report/src/cli.ts --report --stage 1",
+    "report:stage2": "node tools/qualification-report/src/cli.ts --report --stage 2",
     "seed:import": "node tools/seed-import/src/cli.ts",
     "snapshot:emit": "node tools/snapshot-emit/src/cli.ts",
     "sqlite:qualify": "node tools/sqlite-qualification/src/cli.ts",
+    "stage3:canary": "node tools/harness/src/stage3-canary-cli.ts",
+    "stage3:service-auth": "node tools/harness/src/stage3-service-auth-cli.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
-    "report:stage2": "node tools/qualification-report/src/cli.ts --report --stage 2"
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "24.13.3",
