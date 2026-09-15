@@ -50,7 +50,7 @@ reproduced the very corpus lesson it was not testing.
 
 > A real agent, in a fresh session, on a realistic disposable repo, performs an
 > ordinary bounded task and uses EOS naturally: `agent → resolve → inspect →
-> work → tests → telemetry → (minimal) evidence → investigation`.
+work → tests → telemetry → (minimal) evidence → investigation`.
 
 **Hidden condition.** The target repo carries the generated bootstrap block
 (D18.4), stating that EOS tools exist and what they are for. No task-specific
