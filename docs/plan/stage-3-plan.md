@@ -6,12 +6,15 @@ and this document is one of the things that report is meant to be able to contra
 An earlier report, `stage-03-2026-09-11.md`, is kept and marked superseded rather than
 replaced.
 
-**Both failing rows are environmental and neither is about the agent or the tasks.**
-This session's egress policy does not reach the Evidence Plane, so no run could be
-confirmed as `qualification` (T4) and every trial ended `telemetry_state: INCOMPLETE`
-(T7), which this repository's own rule excludes from measurement. The remedy is an
-environment whose network policy permits that host; the trials re-run unmodified, and no
-code change is implied.
+**The first diagnosis of the two failing rows as environment-only was incomplete.**
+Subsequent wiring review found production defects on the path those rows measure: the
+Claude hook composition root had no configured Evidence Plane ingest path, T7 was not
+derived from trial telemetry, and the host/trial IPC protocol depended on EOF semantics
+that fail on Windows named pipes. Those defects are fixed in code. A fresh qualification
+bank is still blocked until an owner-run, no-model canary proves active installation and
+Harness service credentials, pre-registration, isolated IPC delivery, durable ACK/drain,
+and a final `COMPLETE` + qualification-eligible run. The paid trials do not start before
+that canary passes.
 
 ## What the stage actually found
 
@@ -146,6 +149,28 @@ Two system packages (`slirp4netns`, `iproute2`) are required on the machine that
 runs trials. They are not build dependencies and nothing in `pnpm run check`
 needs them; a machine without them gets `network: unproven` and ineligible
 trials, which is the truthful outcome rather than a silent pass.
+
+## Qualification preflight and credentials
+
+A qualification host owns two separate credentials, and neither enters the agent
+namespace. The installation credential has only the D22 ingest scopes. The Harness
+credential is a service principal with exactly `run.register`, so it can classify a Run
+before the first event but cannot insert telemetry as an installation. Both raw tokens
+stay in owner-only local credential files; the enrolment commands print only hash-bearing
+SQL for the owner to apply to the Evidence Plane.
+
+```bash
+pnpm ieos auth enroll --owner <supabase-auth-user-uuid>
+pnpm stage3:service-auth enroll --owner <supabase-auth-user-uuid>
+# Apply both printed hash-only SQL statements as the owner.
+IEOS_INGEST_URL=<ingest-edge-function-url> pnpm stage3:canary
+```
+
+The default files are `.ieos/credentials.json` and `.ieos/harness-service.json`. The
+canary is no-model and fail-closed: it must prove authenticated reachability,
+pre-registration, the declared AF_UNIX IPC grant, durable ingest acknowledgement, an empty
+outbox, `telemetry_state: COMPLETE`, qualification eligibility, and all four isolation
+boundaries before any paid trial bank starts.
 
 ## Trial protocol
 
