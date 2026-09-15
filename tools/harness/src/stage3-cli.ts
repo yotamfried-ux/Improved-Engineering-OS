@@ -1,39 +1,24 @@
-/**
- * `stage3` -- run one Stage 3 trial and record what it produced.
- *
- * Qualification is deliberately stricter than ordinary product operation. The
- * trusted host proves the Evidence Plane ingest path is authenticated and
- * reachable, pre-registers the run, and only then launches the agent. The agent
- * receives neither plane credential: its hooks reach a host proxy over one
- * policy-declared AF_UNIX socket bind-mounted into the namespace.
- *
- * Nothing here decides a task verdict. It collects observations and hands them
- * to the graders, and `buildTrialReport` is conjunctive and pessimistic: a trial
- * with passing graders that was not qualification-eligible is `unproven`, not
- * `proven`.
- *
- * Usage:
- *   node tools/harness/src/stage3-cli.ts --task <id> --trial <n> --campaign <id>
- *                                        [--arm eos|native] [--out DIR]
- *                                        [--credentials FILE]
- *                                        [--setting-sources project|'']
- */
+/** Run one Stage 3 qualification trial and record what it produced. */
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { buildTrialReport, formatTrialReport } from './collect.ts';
-import { ClaudeCodeDriver } from './drivers/claude-code.ts';
-import { bareToolName } from './drivers/claude-code.ts';
+import { ClaudeCodeDriver, bareToolName } from './drivers/claude-code.ts';
 import { gradeDeterministic, gradeTrace } from './graders.ts';
-import { namespaceTrialPolicy } from './isolation.ts';
 import { httpRegisterRun, registerWithPlane } from './plane-registrar.ts';
 import {
   INGEST_SOCKET_ENV,
   REACHABILITY_ATTESTATION_ENV,
   loadQualificationPlaneConfig,
-  openQualificationProxy,
 } from './qualification-plane.ts';
+import {
+  openPlatformQualificationProxy,
+  qualificationEnvironmentNames,
+  qualificationEnvironmentSource,
+  qualificationProfileFor,
+  qualificationTrialPolicy,
+} from './qualification-profile.ts';
 import { RunRegistry } from './run-registry.ts';
 import { createTrial } from './sandbox.ts';
 import { MAX_COST_USD_PER_TRIAL, runCheck, taskById } from './task-bank.ts';
@@ -47,8 +32,11 @@ const flag = (name: string): string | undefined => {
   return index >= 0 ? args[index + 1] : undefined;
 };
 
-if (process.platform !== 'linux') {
-  process.stderr.write('Stage 3 qualification requires the Linux namespace mechanism\n');
+let profile: ReturnType<typeof qualificationProfileFor>;
+try {
+  profile = qualificationProfileFor();
+} catch (error) {
+  process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
   process.exit(69);
 }
 
@@ -78,16 +66,7 @@ const outDir = resolve(
 );
 const settingSources = flag('--setting-sources');
 const credentialsPath = flag('--credentials');
-
-/**
- * Which arm of the pair this trial is.
- *
- * `eos` offers the agent the four EOS tools; `native` is the same trial with the
- * `ieos` MCP server removed and its tools withheld. Everything else is held
- * constant -- same fixture, same namespace, same budget, same prompt, same model,
- * same telemetry hooks -- because the guide's measurement method is paired trials
- * and anything else measures the harness.
- */
+const serviceCredentialsPath = flag('--service-credentials');
 const arm = flag('--arm') ?? 'eos';
 if (arm !== 'eos' && arm !== 'native') {
   process.stderr.write(`--arm must be "eos" or "native", not "${arm}"\n`);
@@ -95,76 +74,53 @@ if (arm !== 'eos' && arm !== 'native') {
 }
 
 const trialId = `${taskId}-${arm}-t${String(trialNumber)}`;
-// Campaign is part of the plane identity, so historical failed runs can never be
-// re-used and accidentally inherit their old registration/event state. The
-// campaign contract is intentionally narrower than a filename: the hook accepts
-// only `run_[A-Za-z0-9_]{1,64}`, so allowing hyphens here would make it reject
-// this injected id and silently mint a different run (the S-7 failure again).
 const runId = `run_s3_${campaign}_${taskId.replace(/-/gu, '_')}_${arm}_t${String(trialNumber)}`;
-
 mkdirSync(outDir, { recursive: true });
 const transcriptDir = join(outDir, 'transcripts');
 
-// ---------------------------------------------------------------------------
-// Trusted-host preflight. Nothing below can incur agent cost until both the
-// installation ingest path and service registration have been proven live.
-// ---------------------------------------------------------------------------
 const planeConfig = loadQualificationPlaneConfig({
   eosRoot,
   ...(credentialsPath === undefined ? {} : { credentialsPath }),
+  ...(serviceCredentialsPath === undefined ? {} : { serviceCredentialsPath }),
 });
-const proxy = await openQualificationProxy({ config: planeConfig, runId });
+const proxy = await openPlatformQualificationProxy({ config: planeConfig, runId });
 
 try {
   const grantedEnvironment = [
-    'PATH',
-    'HOME',
-    'TMPDIR',
-    'NODE_EXTRA_CA_CERTS',
+    ...qualificationEnvironmentNames(),
     'IEOS_RUN_ID',
     INGEST_SOCKET_ENV,
     REACHABILITY_ATTESTATION_ENV,
-  ] as const;
-
-  const policy = namespaceTrialPolicy({
-    workspaceRoot: '(assigned below)',
-    evaluatorRoot: join(eosRoot, 'evaluator'),
-    allowedHosts: ['api.anthropic.com:443'],
-    allowedExecutables: ['node', 'bash', 'git', 'claude'],
-    allowedEnvironment: grantedEnvironment,
-    declaredUnixSockets: [proxy.targetPath],
-  });
+  ];
+  const policyFor = (workspaceRoot: string) =>
+    qualificationTrialPolicy({
+      workspaceRoot,
+      evaluatorRoot: join(eosRoot, 'evaluator'),
+      allowedHosts: ['api.anthropic.com:443'],
+      allowedExecutables: ['node', 'bash', 'git', 'claude'],
+      allowedEnvironment: grantedEnvironment,
+      ipcTarget: proxy.targetPath,
+    });
 
   const trial = createTrial({
     trialId,
-    policy,
-    // Built from a named list, never inherited. The host's service and
-    // installation credentials are intentionally absent. Only the declared IPC
-    // target and the preflight attestation cross into the namespace.
-    sourceEnvironment: {
-      PATH: process.env['PATH'],
-      HOME: process.env['HOME'],
-      TMPDIR: process.env['TMPDIR'],
-      NODE_EXTRA_CA_CERTS: process.env['NODE_EXTRA_CA_CERTS'],
-      IEOS_RUN_ID: runId,
-      [INGEST_SOCKET_ENV]: proxy.targetPath,
-      [REACHABILITY_ATTESTATION_ENV]: proxy.hostReachableAtStart ? 'true' : 'false',
-    },
+    policy: policyFor('(assigned below)'),
+    sourceEnvironment: qualificationEnvironmentSource({
+      trusted: {
+        IEOS_RUN_ID: runId,
+        [INGEST_SOCKET_ENV]: proxy.targetPath,
+        [REACHABILITY_ATTESTATION_ENV]: proxy.hostReachableAtStart ? 'true' : 'false',
+      },
+    }),
   });
-
-  // The policy's roots have to name the workspace that now exists.
-  const effectivePolicy = namespaceTrialPolicy({
-    workspaceRoot: trial.workspaceRoot,
-    evaluatorRoot: join(eosRoot, 'evaluator'),
-    allowedHosts: ['api.anthropic.com:443'],
-    allowedExecutables: ['node', 'bash', 'git', 'claude'],
-    allowedEnvironment: grantedEnvironment,
-    declaredUnixSockets: [proxy.targetPath],
-  });
-  const preparedTrial = { ...trial, policy: effectivePolicy };
+  const preparedTrial = { ...trial, policy: policyFor(trial.workspaceRoot) };
 
   function run(command: string, commandArgs: readonly string[], cwd: string): void {
-    const result = spawnSync(command, [...commandArgs], { cwd, encoding: 'utf8' });
+    const result = spawnSync(command, [...commandArgs], {
+      cwd,
+      encoding: 'utf8',
+      windowsHide: true,
+    });
     if (result.status !== 0) {
       throw new Error(
         `${command} ${commandArgs.join(' ')} failed (${String(result.status)}): ${result.stderr ?? ''}`,
@@ -172,11 +128,9 @@ try {
     }
   }
 
+  process.stdout.write(`qualification profile: ${profile}\n`);
   process.stdout.write(`preparing ${trialId} in ${trial.workspaceRoot}\n`);
   writeTargetRepo(trial.workspaceRoot, task.repo());
-
-  // A git repository, because the MCP server reads `repo_sha` from git and
-  // refuses to invent one.
   run('git', ['init', '-q', '.'], trial.workspaceRoot);
   run('git', ['add', '-A'], trial.workspaceRoot);
   run(
@@ -193,8 +147,6 @@ try {
     ],
     trial.workspaceRoot,
   );
-
-  // The real footprint, from the real code path.
   run(
     process.execPath,
     [
@@ -207,20 +159,15 @@ try {
     eosRoot,
   );
 
-  // The harness pins the trial's ranking mode on the server `ieos init` wired up.
   const mcpConfigPath = join(trial.workspaceRoot, '.mcp.json');
   const mcpConfig = JSON.parse(readFileSync(mcpConfigPath, 'utf8')) as {
     mcpServers: Record<string, { args?: string[] }>;
   };
   const ieosServer = mcpConfig.mcpServers['ieos'];
   if (ieosServer === undefined) {
-    throw new Error(
-      '`ieos init` did not register an ieos MCP server, so no trial could call resolve',
-    );
+    throw new Error('`ieos init` did not register an ieos MCP server');
   }
   if (arm === 'native') {
-    // Native means absent, not merely connected-and-refused. Remove both the
-    // server and the bootstrap block that advertises it.
     delete mcpConfig.mcpServers['ieos'];
     writeFileSync(mcpConfigPath, `${JSON.stringify(mcpConfig, null, 2)}\n`, 'utf8');
     for (const file of ['CLAUDE.md', 'AGENTS.md']) {
@@ -228,10 +175,7 @@ try {
       const before = readFileSync(path, 'utf8');
       const stripped = before.replace(/<!-- ieos:begin -->[\s\S]*?<!-- ieos:end -->\n?/gu, '');
       if (stripped === before) {
-        throw new Error(
-          `the native arm could not strip the EOS block from ${file}: its markers were absent, ` +
-            'so this trial would have advertised tools it does not have',
-        );
+        throw new Error(`the native arm could not strip the EOS block from ${file}`);
       }
       writeFileSync(path, stripped, 'utf8');
     }
@@ -240,7 +184,6 @@ try {
     writeFileSync(mcpConfigPath, `${JSON.stringify(mcpConfig, null, 2)}\n`, 'utf8');
   }
 
-  // --- registration, before the first event (D36) --------------------------
   const registry = new RunRegistry();
   const registration = await registerWithPlane(
     registry,
@@ -257,38 +200,37 @@ try {
       fetch: globalThis.fetch,
     }),
   );
-
   if (!registration.confirmed) {
     throw new Error(
-      `the Evidence Plane did not confirm pre-registration for ${runId}: ` +
-        `${registration.reason ?? 'no reason given'}. Refusing to launch the agent.`,
+      `the Evidence Plane did not confirm pre-registration for ${runId}: ${registration.reason ?? 'no reason given'}`,
     );
   }
   process.stdout.write('registration: confirmed by the plane\n');
 
-  // --- the trial ------------------------------------------------------------
-  // Recorded ranking is pinned on the MCP server the trial talks to, not asked
-  // for in the request: the subject cannot opt out of comparability.
-  const RANKING_MODE = 'recorded';
-
+  const allowedTools = [
+    'Read',
+    'Write',
+    'Edit',
+    'Bash',
+    'Glob',
+    'Grep',
+    ...(arm === 'native'
+      ? []
+      : ['mcp__ieos__resolve', 'mcp__ieos__inspect', 'mcp__ieos__expand', 'mcp__ieos__observe']),
+  ];
   const driver = new ClaudeCodeDriver({
     transcriptDir,
-    allowedTools: [
-      'Read',
-      'Write',
-      'Edit',
-      'Bash',
-      'Glob',
-      'Grep',
-      ...(arm === 'native'
-        ? []
-        : ['mcp__ieos__resolve', 'mcp__ieos__inspect', 'mcp__ieos__expand', 'mcp__ieos__observe']),
-    ],
+    allowedTools,
     allowedHosts: ['api.anthropic.com:443'],
     deniedRoots: [join(eosRoot, 'evaluator'), join(eosRoot, 'simulations')],
-    unixSocketMounts: [{ sourcePath: proxy.sourcePath, targetPath: proxy.targetPath }],
+    unixSocketMounts:
+      profile === 'linux-namespace-v1'
+        ? [{ sourcePath: proxy.sourcePath, targetPath: proxy.targetPath }]
+        : [],
     executable: 'claude',
     model: 'claude-sonnet-5',
+    qualificationProfile: profile,
+    forbiddenCredentialValues: [planeConfig.serviceToken, planeConfig.installationToken],
     ...(settingSources === undefined
       ? {}
       : { settingSources: settingSources.split(',').filter(Boolean) }),
@@ -301,10 +243,10 @@ try {
     registry,
     runId,
     mechanismFindings: () => driver.lastRecord?.boundaryFindings ?? [],
+    integrityReport: () => driver.lastRecord?.integrity ?? null,
   });
   const record = driver.lastRecord;
 
-  // --- grading -------------------------------------------------------------
   const check = runCheck(task, trial.workspaceRoot);
   const toolCalls = finalOutcome.result.toolCalls.map((call) => ({
     name: bareToolName(call.name),
@@ -315,8 +257,7 @@ try {
     toolCalls,
     transcript: finalOutcome.result.transcriptRef,
   };
-
-  const denials = driver.lastRecord?.permissionDenials ?? [];
+  const denials = record?.permissionDenials ?? [];
   const obstructed = denials.length > 0;
   const ranToCompletion = finalOutcome.result.completed && !obstructed;
   const verdicts = ranToCompletion
@@ -325,12 +266,9 @@ try {
         ...task.traceRules.map((rule) => gradeTrace(rule, subject)),
       ]
     : [];
-
   const usage = finalOutcome.result.usage;
   const report = buildTrialReport({
     outcome: finalOutcome,
-    // Trace verdicts are reported, not gating: the exit gate allows a task solved
-    // correctly without EOS, so a trace rule must not be able to fail a trial.
     verdicts: ranToCompletion
       ? task.deterministicRules.map((rule) => gradeDeterministic(rule, subject))
       : [],
@@ -345,17 +283,8 @@ try {
         ? []
         : [{ name: 'transcript', ref: finalOutcome.result.transcriptRef, bytes: 0 }],
   });
-
   const resolveCalled = toolCalls.some((call) => call.name === 'resolve');
-
-  /**
-   * Read after the agent has stopped, while the proxy is still alive, what this
-   * exact registered run's hooks recorded locally.
-   */
-  const telemetry = await readTrialTelemetry({
-    workspaceRoot: trial.workspaceRoot,
-    runId,
-  });
+  const telemetry = await readTrialTelemetry({ workspaceRoot: trial.workspaceRoot, runId });
 
   const trialRecord = {
     campaign,
@@ -369,8 +298,10 @@ try {
       cwd: eosRoot,
       encoding: 'utf8',
     }).trim(),
+    qualification_profile: profile,
+    ipc_transport: proxy.transport,
     setting_sources: settingSources ?? 'project',
-    ranking_mode: RANKING_MODE,
+    ranking_mode: 'recorded',
     registration: { confirmed: registration.confirmed, reason: registration.reason },
     status: report.status,
     ran_to_completion: ranToCompletion,
@@ -393,6 +324,7 @@ try {
       interactive_stdin: record?.rescue.interactiveStdin ?? null,
     },
     isolation: finalOutcome.isolation,
+    trial_integrity: record?.integrity ?? null,
     namespace_observations: record?.observations ?? null,
     mechanism_unavailable: record?.mechanismUnavailable ?? null,
     check: { failure: check.failure, outcomes: check.outcomes },
@@ -404,18 +336,9 @@ try {
 
   const recordPath = join(outDir, `${trialId}.json`);
   writeFileSync(recordPath, `${JSON.stringify(trialRecord, null, 2)}\n`, 'utf8');
-
   process.stdout.write(`\n${formatTrialReport(report)}`);
-  if (obstructed) {
-    process.stdout.write(
-      `  NOT GRADED -- the agent was refused ${String(denials.length)} tool call(s) ` +
-        `(${[...new Set(denials)].join(', ')}), so the workspace does not reflect what it did\n`,
-    );
-  } else if (!ranToCompletion) {
-    process.stdout.write(
-      `  NOT GRADED -- the run did not complete: ${record?.terminalReason ?? 'no reason recorded'}\n`,
-    );
-  }
+  process.stdout.write(`  qualification profile: ${profile}\n`);
+  process.stdout.write(`  IPC transport: ${proxy.transport}\n`);
   process.stdout.write(`  campaign: ${campaign}\n`);
   process.stdout.write(`  arm: ${arm}\n`);
   process.stdout.write(`  resolve called unprompted: ${String(resolveCalled)}\n`);

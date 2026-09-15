@@ -1,17 +1,4 @@
-/**
- * Stage 3's gate rows, derived from the trial records and nothing else.
- *
- * Extracted from the report generator so the derivation can be tested. It could
- * not be before, and two rows were constants as a direct result: T7 read `FAIL`
- * literally, so no set of trials could ever have moved it, and T6 read `PASS`
- * literally, justified by what the manifests forbid rather than by anything a
- * trial produced. A generator that can print a verdict without reading a record
- * is the defect this repository's vacuity guards exist to catch, in the one file
- * whose whole job is to report what was read.
- *
- * Every row here is a reading. Where the records cannot support one, the row is
- * FAIL or UNPROVEN with the reason -- never a pass by default.
- */
+/** Stage 3 gate rows, derived only from fresh trial records. */
 
 export type Status = 'PASS' | 'FAIL' | 'UNPROVEN';
 
@@ -22,6 +9,7 @@ export interface TrialRecord {
   readonly run_id: string;
   readonly task_id: string;
   readonly eos_revision: string;
+  readonly qualification_profile?: 'windows-personal-v1' | 'linux-namespace-v1';
   readonly setting_sources: string;
   readonly ranking_mode: string;
   readonly status: string;
@@ -42,12 +30,10 @@ export interface TrialRecord {
   readonly resolve_called_unprompted: boolean;
   readonly eos_tools_used: readonly string[];
   readonly isolation: { readonly qualificationEligible: boolean };
-  /**
-   * The run's terminal telemetry state, read from the trial's own outbox.
-   *
-   * Optional because records written before the harness read it do not carry it.
-   * Absent is not "fine": a row that needs this and cannot find it fails.
-   */
+  readonly trial_integrity?: {
+    readonly qualificationEligible: boolean;
+    readonly kernelIsolationRequired: boolean;
+  };
   readonly telemetry?: {
     readonly ingest_reachable_at_start: boolean;
     readonly flush_ever_failed: boolean;
@@ -56,7 +42,6 @@ export interface TrialRecord {
     readonly qualification_eligible: boolean;
     readonly unavailable_reason: string | null;
   };
-  /** What the trial was told, counted. Optional for the same reason. */
   readonly rescue?: {
     readonly human_interventions: number;
     readonly prompts_sent: number | null;
@@ -80,7 +65,6 @@ export interface Row {
 const every = <T>(items: readonly T[], predicate: (item: T) => boolean): boolean =>
   items.length > 0 && items.every(predicate);
 
-/** Deterministic rules only, for the reason given where this is used. */
 export const deterministicOf = (record: TrialRecord) =>
   record.verdicts.filter((verdict) => verdict.kind === 'deterministic');
 
@@ -89,7 +73,6 @@ export const allRulesPassed = (record: TrialRecord): boolean => {
   return rules.length > 0 && rules.every((verdict) => verdict.status === 'proven');
 };
 
-/** Why T6 reads as it does, naming the trials when it cannot be read. */
 function rescueEvidence(records: readonly TrialRecord[]): string {
   const missing = records.filter((record) => record.rescue === undefined);
   if (missing.length > 0) {
@@ -114,20 +97,16 @@ function rescueEvidence(records: readonly TrialRecord[]): string {
   }
   return (
     `${String(records.length)}/${String(records.length)} trial(s) recorded 0 human ` +
-    'interventions, exactly one prompt each, and no interactive channel to the agent. The ' +
-    'sandbox offers no option by which anything could be written to a trial, which a ' +
-    'source-level guard keeps true.'
+    'interventions, exactly one prompt each, and no interactive stdin channel.'
   );
 }
 
-/** Why T7 reads as it does, per trial, from the snapshot rather than from prose. */
 function telemetryEvidence(records: readonly TrialRecord[]): string {
   const missing = records.filter((record) => record.telemetry === undefined);
   if (missing.length > 0) {
     return (
       `${String(missing.length)}/${String(records.length)} trial(s) carry no telemetry state, so ` +
-      "this row cannot be read from them. A trial recorded before the harness read the run's " +
-      'terminal state out of its outbox is not qualification evidence, whatever its other rows say.'
+      'this row cannot be read from them.'
     );
   }
   const failing = records.filter(
@@ -137,8 +116,7 @@ function telemetryEvidence(records: readonly TrialRecord[]): string {
   if (failing.length === 0) {
     return (
       `${String(records.length)}/${String(records.length)} trial(s) ended COMPLETE and ` +
-      'qualification eligible: reachability declared by the host before the run, no flush failed, ' +
-      'and nothing left in the outbox.'
+      'qualification eligible: reachability was declared before work, no flush failed, and the outbox drained.'
     );
   }
   const describe = (record: TrialRecord): string => {
@@ -161,43 +139,39 @@ function telemetryEvidence(records: readonly TrialRecord[]): string {
     .join(' | ')}`;
 }
 
+function t3Evidence(records: readonly TrialRecord[]): string {
+  const missing = records.filter((record) => record.trial_integrity === undefined);
+  if (missing.length > 0) {
+    return `${String(missing.length)}/${String(records.length)} trial(s) predate the platform-profile integrity record and cannot satisfy T3`;
+  }
+  const profiles = [...new Set(records.map((record) => record.qualification_profile ?? 'unknown'))];
+  const kernel = records.filter((record) => record.trial_integrity?.kernelIsolationRequired).length;
+  return (
+    `${String(records.length)}/${String(records.length)} trial(s) prove the required boundaries for ` +
+    `profile(s) ${profiles.join(', ')}; kernel isolation was required by ${String(kernel)} trial(s). ` +
+    'Windows personal-v1 does not claim PID/network kernel confinement.'
+  );
+}
+
 export function deriveRows(records: readonly TrialRecord[]): readonly Row[] {
   const graded = records.filter((record) => record.ran_to_completion !== false);
   const firstBank = graded.filter((record) => record.arm === undefined);
-
   const trialsPerTask = new Map<string, TrialRecord[]>();
   for (const record of firstBank) {
     trialsPerTask.set(record.task_id, [...(trialsPerTask.get(record.task_id) ?? []), record]);
   }
 
-  /**
-   * Deterministic rules only.
-   *
-   * The first version of this counted every verdict, so the trace rule -- which is
-   * reported and deliberately not gating, because the gate allows a task solved
-   * correctly without EOS -- failed the row about whether the task was solved. A
-   * false FAIL from the report generator is no better than a false PASS.
-   */
-  const deterministicOf = (record: TrialRecord) =>
-    record.verdicts.filter((verdict) => verdict.kind === 'deterministic');
-
-  const allRulesPassed = (record: TrialRecord): boolean => {
-    const rules = deterministicOf(record);
-    return rules.length > 0 && rules.every((verdict) => verdict.status === 'proven');
-  };
-
   const rows: Row[] = [
     {
       id: 'T1',
-      requirement: 'at least three independent tasks, primary agent only, each in a fresh sandbox',
+      requirement: 'at least three independent tasks, primary agent only, each in a fresh workspace',
       status:
         trialsPerTask.size >= 3 && every([...trialsPerTask.values()], (list) => list.length >= 2)
           ? 'PASS'
           : 'FAIL',
       evidence:
-        `${String(trialsPerTask.size)} task(s), ${String(graded.length)} graded trial(s), ` +
-        `driver ${[...new Set(records.map(() => 'claude-code'))].join('/')} only; ` +
-        'each trial ran in a workspace created for it and discarded after',
+        `${String(trialsPerTask.size)} task(s), ${String(graded.length)} graded trial(s); ` +
+        'each trial used a fresh disposable workspace',
     },
     {
       id: 'T2',
@@ -212,11 +186,18 @@ export function deriveRows(records: readonly TrialRecord[]): readonly Row[] {
     },
     {
       id: 'T3',
-      requirement: 'the four isolation boundaries are proven, not assumed (ADR-0005)',
-      status: every(graded, (record) => record.isolation.qualificationEligible) ? 'PASS' : 'FAIL',
-      evidence:
-        'namespace mechanism on every trial: denied roots showed 0 entries, the control destination ' +
-        'was refused, the trial was pid 1, the environment was built rather than filtered',
+      requirement:
+        'the active platform profile proves its required trial-integrity boundaries; no stronger OS isolation may be inferred',
+      status: every(
+        graded,
+        (record) =>
+          record.isolation.qualificationEligible &&
+          record.trial_integrity !== undefined &&
+          record.trial_integrity.qualificationEligible,
+      )
+        ? 'PASS'
+        : 'FAIL',
+      evidence: t3Evidence(graded),
     },
     {
       id: 'T4',
@@ -229,25 +210,14 @@ export function deriveRows(records: readonly TrialRecord[]): readonly Row[] {
     },
     {
       id: 'T5',
-      requirement:
-        'ranking_mode recorded, pinned by the harness and not by the subject (D24, Q-06)',
+      requirement: 'ranking_mode recorded, pinned by the harness and not by the subject (D24, Q-06)',
       status: every(records, (record) => record.ranking_mode === 'recorded') ? 'PASS' : 'UNPROVEN',
       evidence:
-        'pinned on the MCP server each trial talked to via --ranking-mode, so a request cannot ' +
-        'opt back into the live overlay',
+        'pinned on the MCP server each trial talked to via --ranking-mode, so a request cannot opt back into the live overlay',
     },
     {
       id: 'T6',
       requirement: 'no rescue: no human intervention inside any trial',
-      /**
-       * Read from each record, not asserted from the manifests.
-       *
-       * This row was a constant `PASS` whose evidence described what the
-       * simulation manifests forbid. A manifest forbidding rescue states an
-       * intention; these fields are the count of prompts the driver actually
-       * sent and whether any channel existed to reach the agent afterwards. A
-       * record without them cannot support the row, so it does not get one.
-       */
       status: every(
         records,
         (record) =>
@@ -262,17 +232,7 @@ export function deriveRows(records: readonly TrialRecord[]): readonly Row[] {
     },
     {
       id: 'T7',
-      requirement:
-        'telemetry complete for every trial, so attribution and investigation can follow',
-      /**
-       * Read from each record's telemetry snapshot. Zero exceptions, and zero
-       * inference: COMPLETE and eligible for every trial, or the row fails.
-       *
-       * This row was the literal string `FAIL`. That was the right answer for
-       * the trials that existed and an untestable way to reach it -- no set of
-       * trials, however clean, could have moved it, so the gate could not have
-       * been passed even in principle.
-       */
+      requirement: 'telemetry complete for every trial, so attribution and investigation can follow',
       status: every(
         records,
         (record) =>
@@ -290,8 +250,7 @@ export function deriveRows(records: readonly TrialRecord[]): readonly Row[] {
       status: every(firstBank, allRulesPassed) ? 'PASS' : 'UNPROVEN',
       evidence:
         `resolve was called unprompted in ${String(firstBank.filter((r) => r.resolve_called_unprompted).length)}/${String(firstBank.length)} trials. ` +
-        "Every task was solved correctly without it, which is the gate's second branch -- and is " +
-        'the finding this stage exists to surface rather than a pass to be pleased about',
+        "Every task was solved correctly without it, which is the gate's second branch.",
     },
     {
       id: 'T9',

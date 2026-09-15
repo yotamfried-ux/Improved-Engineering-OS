@@ -10,9 +10,7 @@ const flag = (name: string): string | undefined => {
 const hostOnly = args.includes('--host-only');
 const explicitRoot = flag('--eos-root');
 const eosRoot =
-  explicitRoot === undefined
-    ? resolve(import.meta.dirname, '..', '..', '..')
-    : resolve(explicitRoot);
+  explicitRoot === undefined ? resolve(import.meta.dirname, '..', '..', '..') : resolve(explicitRoot);
 const credentialsPath = flag('--credentials');
 const serviceCredentialsPath = flag('--service-credentials');
 
@@ -47,7 +45,7 @@ try {
       'Stage 3 credential preflight: FAIL',
       `  ${message}`,
       '',
-      'If the two local identities have not been provisioned yet, run on this trusted Linux host:',
+      'If the two local identities have not been provisioned yet, run on this trusted host:',
       '  pnpm ieos auth enroll --owner <supabase-auth-user-uuid>',
       '  pnpm stage3:service-auth enroll --owner <supabase-auth-user-uuid>',
       'Apply only the hash-bearing SQL those commands print; never copy the raw tokens into chat, Git or SQL.',

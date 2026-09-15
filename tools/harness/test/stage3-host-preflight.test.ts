@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  STAGE3_REQUIRED_TOOLS,
+  LINUX_NAMESPACE_REQUIRED_TOOLS,
+  WINDOWS_REQUIRED_TOOLS,
   formatStage3HostPreflight,
   inspectStage3Host,
   type Stage3HostProbe,
@@ -9,8 +10,7 @@ import {
 function fakeProbe(
   options: {
     readonly platform?: string;
-    readonly cwd?: string;
-    readonly env?: Readonly<Record<string, string | undefined>>;
+    readonly nodeVersion?: string;
     readonly missing?: readonly string[];
     readonly namespaceStatus?: number;
     readonly onRun?: (command: string, args: readonly string[]) => void;
@@ -18,9 +18,8 @@ function fakeProbe(
 ): Stage3HostProbe {
   const missing = new Set(options.missing ?? []);
   return {
-    platform: options.platform ?? 'linux',
-    cwd: options.cwd ?? '/home/owner/Improved-Engineering-OS',
-    env: options.env ?? {},
+    platform: options.platform ?? 'win32',
+    nodeVersion: options.nodeVersion ?? '24.20.0',
     commandAvailable: (command) => !missing.has(command),
     run: (command, args) => {
       options.onRun?.(command, args);
@@ -30,36 +29,42 @@ function fakeProbe(
 }
 
 describe('Stage 3 trusted-host preflight', () => {
-  it('refuses native Windows and points the owner to WSL2', () => {
-    const report = inspectStage3Host(fakeProbe({ platform: 'win32' }));
-    expect(report.ready).toBe(false);
-    expect(report.environment).toBe('windows');
-    expect(formatStage3HostPreflight(report)).toContain('WSL2');
+  it('accepts native Windows without WSL or namespace packages', () => {
+    const report = inspectStage3Host(
+      fakeProbe({
+        platform: 'win32',
+        missing: ['unshare', 'slirp4netns', 'ip', 'iptables', 'mount', 'getent'],
+      }),
+    );
+    expect(report.ready).toBe(true);
+    expect(report.profile).toBe('windows-personal-v1');
+    expect(formatStage3HostPreflight(report)).toContain('WSL is not required');
+    expect(report.checks.find((check) => check.name === 'kernel-isolation')).toMatchObject({
+      status: 'WARN',
+    });
   });
 
-  it('fails closed when one namespace tool is missing', () => {
-    const report = inspectStage3Host(fakeProbe({ missing: ['slirp4netns'] }));
+  it('fails Windows when a product prerequisite is absent', () => {
+    const report = inspectStage3Host(fakeProbe({ platform: 'win32', missing: ['claude'] }));
     expect(report.ready).toBe(false);
     expect(report.checks).toContainEqual({
-      name: 'tool:slirp4netns',
+      name: 'tool:claude',
       status: 'FAIL',
-      detail: 'slirp4netns is missing',
+      detail: 'claude is missing',
     });
-    expect(formatStage3HostPreflight(report)).toContain('sudo apt-get install');
   });
 
-  it('fails closed when rootless isolation cannot be established', () => {
-    const report = inspectStage3Host(fakeProbe({ namespaceStatus: 1 }));
+  it('requires the pinned Node major on Windows', () => {
+    const report = inspectStage3Host(fakeProbe({ platform: 'win32', nodeVersion: '22.18.0' }));
     expect(report.ready).toBe(false);
-    expect(report.checks.find((check) => check.name === 'rootless-isolation')).toMatchObject({
-      status: 'FAIL',
-    });
+    expect(report.checks.find((check) => check.name === 'node')).toMatchObject({ status: 'FAIL' });
   });
 
-  it('probes bind-mount and iptables capability inside the rootless namespace', () => {
+  it('keeps the stronger Linux namespace profile available', () => {
     let shellProgram = '';
     const report = inspectStage3Host(
       fakeProbe({
+        platform: 'linux',
         onRun: (command, args) => {
           expect(command).toBe('unshare');
           shellProgram = args.at(-1) ?? '';
@@ -67,30 +72,27 @@ describe('Stage 3 trusted-host preflight', () => {
       }),
     );
     expect(report.ready).toBe(true);
+    expect(report.profile).toBe('linux-namespace-v1');
     expect(shellProgram).toContain('mount --bind');
     expect(shellProgram).toContain('iptables -P OUTPUT DROP');
   });
 
-  it('accepts a capable WSL host and warns when the repo lives on the Windows mount', () => {
+  it('fails closed when a Linux namespace tool is missing', () => {
     const report = inspectStage3Host(
-      fakeProbe({
-        cwd: '/mnt/c/src/Improved-Engineering-OS',
-        env: { WSL_DISTRO_NAME: 'Ubuntu' },
-      }),
+      fakeProbe({ platform: 'linux', missing: ['slirp4netns'] }),
     );
-    expect(report.ready).toBe(true);
-    expect(report.environment).toBe('wsl');
-    expect(report.checks.find((check) => check.name === 'wsl-filesystem')).toMatchObject({
-      status: 'WARN',
+    expect(report.ready).toBe(false);
+    expect(report.checks.find((check) => check.name === 'tool:slirp4netns')).toMatchObject({
+      status: 'FAIL',
     });
   });
 
-  it('requires every tool the namespace wrapper depends on', () => {
-    const report = inspectStage3Host(fakeProbe());
-    expect(report.ready).toBe(true);
-    const toolNames = report.checks
+  it('uses only the small Windows tool set for personal-v1', () => {
+    const report = inspectStage3Host(fakeProbe({ platform: 'win32' }));
+    const tools = report.checks
       .filter((check) => check.name.startsWith('tool:'))
       .map((check) => check.name.slice('tool:'.length));
-    expect(toolNames).toEqual(STAGE3_REQUIRED_TOOLS);
+    expect(tools).toEqual(WINDOWS_REQUIRED_TOOLS);
+    expect(LINUX_NAMESPACE_REQUIRED_TOOLS.length).toBeGreaterThan(WINDOWS_REQUIRED_TOOLS.length);
   });
 });
