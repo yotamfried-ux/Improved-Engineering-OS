@@ -81,12 +81,13 @@ function loadServiceCredential(options: {
   try {
     credential = JSON.parse(readFileSync(path, 'utf8')) as ServiceCredentialFile;
   } catch {
-    throw new QualificationPlaneError(`the harness service credential at ${path} is not valid JSON`);
+    throw new QualificationPlaneError(
+      `the harness service credential at ${path} is not valid JSON`,
+    );
   }
 
   const scopes = credential.scopes;
-  const exactScope =
-    Array.isArray(scopes) && scopes.length === 1 && scopes[0] === 'run.register';
+  const exactScope = Array.isArray(scopes) && scopes.length === 1 && scopes[0] === 'run.register';
   if (
     credential.schema_version !== '1' ||
     typeof credential.service_id !== 'string' ||

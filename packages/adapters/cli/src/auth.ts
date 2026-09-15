@@ -192,7 +192,9 @@ export function serviceCredentialsFor(options: {
   readonly nowIso: string;
 }): ServiceCredentials {
   if (!options.serviceId.startsWith('svc_')) {
-    throw new AuthError(`service id must start with svc_, received ${JSON.stringify(options.serviceId)}`);
+    throw new AuthError(
+      `service id must start with svc_, received ${JSON.stringify(options.serviceId)}`,
+    );
   }
   return {
     schema_version: '1',

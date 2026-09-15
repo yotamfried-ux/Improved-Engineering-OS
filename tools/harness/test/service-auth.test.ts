@@ -12,7 +12,11 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { CREDENTIALS_MODE, protectionOf, tokenHashLiteral } from '../../../packages/adapters/cli/src/auth.ts';
+import {
+  CREDENTIALS_MODE,
+  protectionOf,
+  tokenHashLiteral,
+} from '../../../packages/adapters/cli/src/auth.ts';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const CLI = join(REPO_ROOT, 'tools/harness/src/stage3-service-auth-cli.ts');
