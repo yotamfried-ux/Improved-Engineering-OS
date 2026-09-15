@@ -1,0 +1,25 @@
+name: stage3-doc-format-probe
+on:
+  push:
+    branches:
+      - tmp/stage3-doc-format-20260915
+permissions:
+  contents: read
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.20.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Print exact Prettier diff
+        shell: bash
+        run: |
+          pnpm exec prettier --write docs/plan/stage-3-plan.md
+          git diff --no-color -- docs/plan/stage-3-plan.md
