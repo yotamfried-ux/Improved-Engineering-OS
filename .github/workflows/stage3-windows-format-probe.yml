@@ -1,0 +1,50 @@
+name: stage3-windows-format-probe
+
+on:
+  push:
+    branches:
+      - tmp/stage3-windows-format-probe-20260915
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.20.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Print exact Prettier diff
+        run: |
+          pnpm exec prettier --write \
+            tools/harness/src/qualification-profile.ts \
+            tools/harness/src/trial-integrity.ts \
+            tools/harness/src/drivers/claude-code.ts \
+            tools/harness/src/trial.ts \
+            tools/harness/src/stage3-host-preflight.ts \
+            tools/harness/src/stage3-preflight-cli.ts \
+            tools/harness/src/stage3-cli.ts \
+            tools/harness/src/stage3-canary-cli.ts \
+            tools/harness/src/stage3-rows.ts \
+            tools/harness/test/stage3-host-preflight.test.ts \
+            tools/harness/test/qualification-profile.test.ts \
+            tools/harness/test/trial-integrity.test.ts \
+            tools/harness/test/stage3-rows.test.ts
+          git diff --no-color -- \
+            tools/harness/src/qualification-profile.ts \
+            tools/harness/src/trial-integrity.ts \
+            tools/harness/src/drivers/claude-code.ts \
+            tools/harness/src/trial.ts \
+            tools/harness/src/stage3-host-preflight.ts \
+            tools/harness/src/stage3-preflight-cli.ts \
+            tools/harness/src/stage3-cli.ts \
+            tools/harness/src/stage3-canary-cli.ts \
+            tools/harness/src/stage3-rows.ts \
+            tools/harness/test/stage3-host-preflight.test.ts \
+            tools/harness/test/qualification-profile.test.ts \
+            tools/harness/test/trial-integrity.test.ts \
+            tools/harness/test/stage3-rows.test.ts
