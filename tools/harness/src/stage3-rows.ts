@@ -164,7 +164,8 @@ export function deriveRows(records: readonly TrialRecord[]): readonly Row[] {
   const rows: Row[] = [
     {
       id: 'T1',
-      requirement: 'at least three independent tasks, primary agent only, each in a fresh workspace',
+      requirement:
+        'at least three independent tasks, primary agent only, each in a fresh workspace',
       status:
         trialsPerTask.size >= 3 && every([...trialsPerTask.values()], (list) => list.length >= 2)
           ? 'PASS'
@@ -210,7 +211,8 @@ export function deriveRows(records: readonly TrialRecord[]): readonly Row[] {
     },
     {
       id: 'T5',
-      requirement: 'ranking_mode recorded, pinned by the harness and not by the subject (D24, Q-06)',
+      requirement:
+        'ranking_mode recorded, pinned by the harness and not by the subject (D24, Q-06)',
       status: every(records, (record) => record.ranking_mode === 'recorded') ? 'PASS' : 'UNPROVEN',
       evidence:
         'pinned on the MCP server each trial talked to via --ranking-mode, so a request cannot opt back into the live overlay',
@@ -232,7 +234,8 @@ export function deriveRows(records: readonly TrialRecord[]): readonly Row[] {
     },
     {
       id: 'T7',
-      requirement: 'telemetry complete for every trial, so attribution and investigation can follow',
+      requirement:
+        'telemetry complete for every trial, so attribution and investigation can follow',
       status: every(
         records,
         (record) =>

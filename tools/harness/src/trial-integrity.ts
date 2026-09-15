@@ -106,7 +106,9 @@ export function buildTrialIntegrityReport(options: {
   add(
     'stdin-closed',
     !options.interactiveStdin,
-    options.interactiveStdin ? 'an interactive stdin channel existed' : 'stdin is closed; no rescue channel exists',
+    options.interactiveStdin
+      ? 'an interactive stdin channel existed'
+      : 'stdin is closed; no rescue channel exists',
   );
   add(
     'host-proxy-ipc',

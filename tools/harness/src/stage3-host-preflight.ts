@@ -75,14 +75,18 @@ export function inspectStage3Host(probe: Stage3HostProbe = systemProbe): Stage3H
   checks.push({
     name: 'node',
     status: major === 24 ? 'PASS' : 'FAIL',
-    detail: major === 24 ? `Node ${probe.nodeVersion} matches the 24.x pin` : `Node ${probe.nodeVersion} does not match the required 24.x pin`,
+    detail:
+      major === 24
+        ? `Node ${probe.nodeVersion} matches the 24.x pin`
+        : `Node ${probe.nodeVersion} does not match the required 24.x pin`,
   });
 
   if (probe.platform === 'win32') {
     checks.unshift({
       name: 'platform',
       status: 'PASS',
-      detail: 'native Windows selected as the personal-v1 qualification platform; WSL is not required',
+      detail:
+        'native Windows selected as the personal-v1 qualification platform; WSL is not required',
     });
     for (const tool of WINDOWS_REQUIRED_TOOLS) {
       const available = probe.commandAvailable(tool);

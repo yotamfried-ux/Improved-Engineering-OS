@@ -34,7 +34,9 @@ const flag = (name: string): string | undefined => {
 const profile = qualificationProfileFor();
 const host = inspectStage3Host();
 if (!host.ready) {
-  process.stderr.write('Stage 3 canary refused: the active qualification host preflight is not ready\n');
+  process.stderr.write(
+    'Stage 3 canary refused: the active qualification host preflight is not ready\n',
+  );
   process.exit(69);
 }
 
@@ -174,8 +176,7 @@ try {
     environment: preparedTrial.environment,
     allowedHosts: [],
     deniedRoots: [join(eosRoot, 'evaluator'), join(eosRoot, 'simulations')],
-    declaredUnixSockets:
-      profile === 'linux-namespace-v1' ? [proxy.targetPath] : [],
+    declaredUnixSockets: profile === 'linux-namespace-v1' ? [proxy.targetPath] : [],
     unixSocketMounts:
       profile === 'linux-namespace-v1'
         ? [{ sourcePath: proxy.sourcePath, targetPath: proxy.targetPath }]

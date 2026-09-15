@@ -78,9 +78,7 @@ describe('Stage 3 trusted-host preflight', () => {
   });
 
   it('fails closed when a Linux namespace tool is missing', () => {
-    const report = inspectStage3Host(
-      fakeProbe({ platform: 'linux', missing: ['slirp4netns'] }),
-    );
+    const report = inspectStage3Host(fakeProbe({ platform: 'linux', missing: ['slirp4netns'] }));
     expect(report.ready).toBe(false);
     expect(report.checks.find((check) => check.name === 'tool:slirp4netns')).toMatchObject({
       status: 'FAIL',

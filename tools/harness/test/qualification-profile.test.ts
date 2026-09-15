@@ -35,12 +35,7 @@ describe('Stage 3 qualification profiles', () => {
       ipcTarget: '/tmp/ieos.sock',
     });
     expect(qualificationProfileFor('linux')).toBe('linux-namespace-v1');
-    expect(policy.requiredBoundaries).toEqual([
-      'filesystem',
-      'environment',
-      'process',
-      'network',
-    ]);
+    expect(policy.requiredBoundaries).toEqual(['filesystem', 'environment', 'process', 'network']);
     expect(policy.filesystem.declaredUnixSockets).toEqual(['/tmp/ieos.sock']);
   });
 
@@ -63,7 +58,11 @@ describe('Stage 3 qualification profiles', () => {
   it('runs the Windows profile directly with only the supplied environment', () => {
     const result = runQualificationProcess({
       platform: 'win32',
-      command: [process.execPath, '-e', 'process.stdout.write(process.env.TEST_VALUE ?? "missing")'],
+      command: [
+        process.execPath,
+        '-e',
+        'process.stdout.write(process.env.TEST_VALUE ?? "missing")',
+      ],
       cwd: process.cwd(),
       environment: { TEST_VALUE: 'present' },
       allowedHosts: [],

@@ -1,11 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import type { IsolationPolicy } from './isolation.ts';
 import { namespaceTrialPolicy } from './isolation.ts';
-import {
-  runInNamespace,
-  type NamespaceRunOptions,
-  type NamespaceRunResult,
-} from './ns-sandbox.ts';
+import { runInNamespace, type NamespaceRunOptions, type NamespaceRunResult } from './ns-sandbox.ts';
 import { httpIngest, servePlaneProxy, type PlaneProxy } from './plane-ingest.ts';
 import {
   QualificationPlaneError,
@@ -110,7 +106,7 @@ export function qualificationEnvironmentSource(options: {
   for (const name of qualificationEnvironmentNames(platform)) {
     source[name] =
       name === 'HOME' && platform === 'win32'
-        ? envValue(env, 'HOME', platform) ?? envValue(env, 'USERPROFILE', platform)
+        ? (envValue(env, 'HOME', platform) ?? envValue(env, 'USERPROFILE', platform))
         : envValue(env, name, platform);
   }
   Object.assign(source, options.trusted);

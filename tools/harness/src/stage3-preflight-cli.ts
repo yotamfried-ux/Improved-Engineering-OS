@@ -10,7 +10,9 @@ const flag = (name: string): string | undefined => {
 const hostOnly = args.includes('--host-only');
 const explicitRoot = flag('--eos-root');
 const eosRoot =
-  explicitRoot === undefined ? resolve(import.meta.dirname, '..', '..', '..') : resolve(explicitRoot);
+  explicitRoot === undefined
+    ? resolve(import.meta.dirname, '..', '..', '..')
+    : resolve(explicitRoot);
 const credentialsPath = flag('--credentials');
 const serviceCredentialsPath = flag('--service-credentials');
 
