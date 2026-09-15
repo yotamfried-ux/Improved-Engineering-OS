@@ -1,12 +1,6 @@
 import { resolve } from 'node:path';
-import {
-  QualificationPlaneError,
-  loadQualificationPlaneConfig,
-} from './qualification-plane.ts';
-import {
-  formatStage3HostPreflight,
-  inspectStage3Host,
-} from './stage3-host-preflight.ts';
+import { QualificationPlaneError, loadQualificationPlaneConfig } from './qualification-plane.ts';
+import { formatStage3HostPreflight, inspectStage3Host } from './stage3-host-preflight.ts';
 
 const args = process.argv.slice(2);
 const flag = (name: string): string | undefined => {
@@ -16,7 +10,9 @@ const flag = (name: string): string | undefined => {
 const hostOnly = args.includes('--host-only');
 const explicitRoot = flag('--eos-root');
 const eosRoot =
-  explicitRoot === undefined ? resolve(import.meta.dirname, '..', '..', '..') : resolve(explicitRoot);
+  explicitRoot === undefined
+    ? resolve(import.meta.dirname, '..', '..', '..')
+    : resolve(explicitRoot);
 const credentialsPath = flag('--credentials');
 const serviceCredentialsPath = flag('--service-credentials');
 

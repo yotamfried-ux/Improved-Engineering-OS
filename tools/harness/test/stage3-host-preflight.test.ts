@@ -6,20 +6,26 @@ import {
   type Stage3HostProbe,
 } from '../src/stage3-host-preflight.ts';
 
-function fakeProbe(options: {
-  readonly platform?: string;
-  readonly cwd?: string;
-  readonly env?: Readonly<Record<string, string | undefined>>;
-  readonly missing?: readonly string[];
-  readonly namespaceStatus?: number;
-} = {}): Stage3HostProbe {
+function fakeProbe(
+  options: {
+    readonly platform?: string;
+    readonly cwd?: string;
+    readonly env?: Readonly<Record<string, string | undefined>>;
+    readonly missing?: readonly string[];
+    readonly namespaceStatus?: number;
+    readonly onRun?: (command: string, args: readonly string[]) => void;
+  } = {},
+): Stage3HostProbe {
   const missing = new Set(options.missing ?? []);
   return {
     platform: options.platform ?? 'linux',
     cwd: options.cwd ?? '/home/owner/Improved-Engineering-OS',
     env: options.env ?? {},
     commandAvailable: (command) => !missing.has(command),
-    run: () => ({ status: options.namespaceStatus ?? 0, stderr: 'namespace denied' }),
+    run: (command, args) => {
+      options.onRun?.(command, args);
+      return { status: options.namespaceStatus ?? 0, stderr: 'isolation denied' };
+    },
   };
 }
 
@@ -42,12 +48,27 @@ describe('Stage 3 trusted-host preflight', () => {
     expect(formatStage3HostPreflight(report)).toContain('sudo apt-get install');
   });
 
-  it('fails closed when rootless user/network namespaces cannot be created', () => {
+  it('fails closed when rootless isolation cannot be established', () => {
     const report = inspectStage3Host(fakeProbe({ namespaceStatus: 1 }));
     expect(report.ready).toBe(false);
-    expect(report.checks.find((check) => check.name === 'rootless-namespaces')).toMatchObject({
+    expect(report.checks.find((check) => check.name === 'rootless-isolation')).toMatchObject({
       status: 'FAIL',
     });
+  });
+
+  it('probes bind-mount and iptables capability inside the rootless namespace', () => {
+    let shellProgram = '';
+    const report = inspectStage3Host(
+      fakeProbe({
+        onRun: (command, args) => {
+          expect(command).toBe('unshare');
+          shellProgram = args.at(-1) ?? '';
+        },
+      }),
+    );
+    expect(report.ready).toBe(true);
+    expect(shellProgram).toContain('mount --bind');
+    expect(shellProgram).toContain('iptables -P OUTPUT DROP');
   });
 
   it('accepts a capable WSL host and warns when the repo lives on the Windows mount', () => {

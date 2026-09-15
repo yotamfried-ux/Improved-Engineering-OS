@@ -118,21 +118,21 @@ export function inspectStage3Host(probe: Stage3HostProbe = systemProbe): Stage3H
       'private',
       '/bin/sh',
       '-c',
-      'true',
+      'set -e; t=$(mktemp -d); mkdir "$t/a" "$t/b"; mount --bind "$t/a" "$t/b"; iptables -P OUTPUT DROP; iptables -A OUTPUT -o lo -j ACCEPT',
     ]);
     checks.push({
-      name: 'rootless-namespaces',
+      name: 'rootless-isolation',
       status: namespace.status === 0 ? 'PASS' : 'FAIL',
       detail:
         namespace.status === 0
-          ? 'rootless user, network and mount namespaces can be created'
-          : `rootless namespace probe failed (${String(namespace.status)}): ${namespace.stderr.trim() || 'no stderr'}`,
+          ? 'rootless user/network/mount namespaces, bind mounts and iptables policy are usable'
+          : `rootless isolation probe failed (${String(namespace.status)}): ${namespace.stderr.trim() || 'no stderr'}`,
     });
   } else {
     checks.push({
-      name: 'rootless-namespaces',
+      name: 'rootless-isolation',
       status: 'FAIL',
-      detail: 'namespace probe was not attempted because required tools are missing',
+      detail: 'isolation probe was not attempted because required tools are missing',
     });
   }
 
@@ -147,9 +147,7 @@ export function formatStage3HostPreflight(report: Stage3HostPreflight): string {
   const lines = [
     `Stage 3 host preflight: ${report.ready ? 'READY' : 'NOT READY'}`,
     `  environment: ${report.environment}`,
-    ...report.checks.map(
-      (check) => `  [${check.status}] ${check.name}: ${check.detail}`,
-    ),
+    ...report.checks.map((check) => `  [${check.status}] ${check.name}: ${check.detail}`),
   ];
 
   if (!report.ready && report.environment === 'windows') {
