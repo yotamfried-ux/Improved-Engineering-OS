@@ -11,6 +11,12 @@ sudo apt-get update
 sudo apt-get install -y slirp4netns iproute2 iptables util-linux git
 ```
 
+The repository pins `engines.node` to `24.x` and CI runs `24.20.0`. A WSL image that ships an older Node makes `pnpm install` refuse the workspace outright, so confirm the toolchain before running the host checks:
+
+```bash
+node --version   # must report v24.x
+```
+
 Validate the host before creating credentials:
 
 ```bash
@@ -29,6 +35,18 @@ pnpm stage3:service-auth enroll --owner <supabase-auth-user-uuid>
 ```
 
 The raw tokens remain in `.ieos/credentials.json` and `.ieos/harness-service.json`. Apply only the hash-bearing SQL printed by those commands to the Evidence Plane. Do not copy raw tokens into chat, Git, SQL, or logs.
+
+## Evidence Plane schema prerequisite
+
+`supabase/migrations/0002_bind_evidence_to_run_owner.sql` is the D36 invariant that stops evidence written by one owner's installation from inheriting classification from another owner's pre-registered Run. It is enforced by composite foreign keys rather than by any single ingest function, so a plane without it accepts cross-owner classification borrowing no matter how correct the client is.
+
+Confirm the constraint exists on the target project before qualifying against it:
+
+```sql
+select conname from pg_constraint where conname = 'runs_run_id_owner_unique';
+```
+
+If that returns no row, apply `0002` before the canary. The migration fails closed on pre-existing inconsistent data rather than grandfathering it in, so apply it on a plane whose evidence is already owner-consistent.
 
 Set the live ingest endpoint and validate the complete local configuration:
 
