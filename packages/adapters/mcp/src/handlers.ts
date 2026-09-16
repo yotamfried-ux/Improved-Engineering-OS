@@ -1,23 +1,9 @@
 /**
- * The Agent Contract at Stage 1 (guide section 5.6, D25).
+ * The Agent Contract over the resolver and local Evidence Plane staging.
  *
- * What this file is careful about, and why it is written the way it is:
- *
- * **It does not rank.** D20.3's retrieval -- capability match, BM25, Project
- * Fit, Champion per Solution Set, Asset Score tie-break -- lives in
- * `packages/resolver`, and fitness rule F2 says adapters own no knowledge
- * semantics. At Stage 1 this file refused any non-empty corpus rather than
- * invent an ordering; at Stage 2 it delegates to the resolver, which is what
- * that refusal was placed here to wait for.
- *
- * **It does not record what it cannot store.** `observe` needs a staging sink
- * with a `UNIQUE(observation_id)` constraint behind it (T-04). Stage 1 has
- * none, so `observe` fails loudly rather than returning `status: "recorded"`
- * for a write that reached nothing.
- *
- * The observe refusal disappears when the Evidence Plane arrives. Until then it
- * is the difference between a runtime that is honest about being early and one
- * that looks finished.
+ * Knowledge semantics remain in `packages/resolver`; this adapter only bridges
+ * transport requests to ports. Runtime writes go to local staging, never to the
+ * canonical knowledge checkout.
  */
 
 import {
@@ -26,6 +12,7 @@ import {
   inspectSnapshotResponseSchema,
   inspectSolutionSetResponseSchema,
   observeResponseSchema,
+  type ContextSnapshotStore,
   type InspectRequest,
   type KnowledgeIndex,
   type ObserveRequest,
@@ -40,22 +27,6 @@ import {
   type RuntimeFacts,
 } from '@ieos/resolver';
 
-/**
- * A refusal the caller is meant to read.
- *
- * `code` is stable so a client can branch on it; `message` says what would make
- * the call succeed. Neither is an internal error: every one of these is a
- * deliberate answer.
- */
-/**
- * True for a deliberate, caller-facing refusal from anywhere in the stack.
- *
- * Structural rather than `instanceof`: the resolver raises its own
- * `ResolverError` from another package, and both are the same thing to a
- * client -- an answer, not a crash. Matching on shape keeps the adapter from
- * having to know every package's error class, and keeps a genuine internal
- * failure (which carries no `code`) from being dressed up as a refusal.
- */
 export function isRefusal(error: unknown): error is { code: string; message: string } {
   return (
     typeof error === 'object' &&
@@ -78,23 +49,15 @@ export class AgentContractError extends Error {
 export interface AgentContractDeps {
   readonly index: KnowledgeIndex;
   readonly facts: RuntimeFacts;
-  /** Absent until the Evidence Plane exists; `observe` refuses rather than pretending to write. */
+  /** Local staging for `observe`; null means refusing is safer than losing a write. */
   readonly staging: Staging | null;
-  /** Passed straight through to the resolver; see `ResolveDeps`. */
+  /** Durable local snapshot store. Optional for Stage 1 fixture adapters. */
+  readonly snapshots?: ContextSnapshotStore | null;
   readonly projectFacts?: Readonly<Record<string, string>>;
   readonly capabilities?: readonly string[];
-  /**
-   * Forwarded to the resolver, which decides what it means (F2).
-   *
-   * The adapter carries no ranking policy of its own: it does not default this,
-   * override with it, or inspect it. A harness running a qualification trial sets
-   * it so the trial's ranking cannot be chosen by the subject (D24, Q-06), and the
-   * rule that enforces it lives in `packages/resolver`.
-   */
   readonly pinnedRankingMode?: 'live_overlay' | 'recorded';
 }
 
-/** The adapter carries no ranking policy of its own -- it forwards one (F2). */
 function resolverDeps(deps: AgentContractDeps): ResolveDeps {
   return {
     index: deps.index,
@@ -105,23 +68,43 @@ function resolverDeps(deps: AgentContractDeps): ResolveDeps {
   };
 }
 
-/**
- * The snapshots this process computed.
- *
- * D25 requires the record to be durable and synced through `ingest`; the local
- * outbox arrives with telemetry at Stage 2. Holding them in memory means
- * `inspect` can explain a snapshot from this session and must say plainly that
- * it cannot explain one from any other. An in-memory map that pretended to be
- * the durable store would be the worse of the two.
- */
+/** In-process cache; durability is supplied separately through `deps.snapshots`. */
 export type SnapshotStore = Map<string, ContextSnapshot>;
+
+async function persistSnapshot(
+  deps: AgentContractDeps,
+  store: SnapshotStore,
+  contextSnapshotId: string,
+  runId: string,
+): Promise<void> {
+  if (deps.snapshots === undefined || deps.snapshots === null) return;
+  const snapshot = store.get(contextSnapshotId);
+  if (snapshot === undefined) {
+    throw new Error(`resolver returned context snapshot ${contextSnapshotId} without storing it`);
+  }
+  await deps.snapshots.recordContextSnapshot({
+    context_snapshot_id: snapshot.id,
+    run_id: runId,
+    repo_sha: snapshot.repo_sha,
+    profile_status_digest: snapshot.profile_status_digest,
+    change_scope: [...snapshot.change_scope],
+    capability_snapshot_hash: snapshot.capability_snapshot_hash,
+    index_digest: snapshot.index_digest,
+    ranking_mode: snapshot.ranking_mode,
+    effective_score_view_id: snapshot.effective_score_view_id,
+    score_source: snapshot.score_source,
+    eos_release: snapshot.eos_release,
+  });
+}
 
 export async function resolve(
   deps: AgentContractDeps,
   store: SnapshotStore,
   request: ResolveRequest,
 ): Promise<unknown> {
-  return resolverResolve(resolverDeps(deps), store, request);
+  const response = await resolverResolve(resolverDeps(deps), store, request);
+  await persistSnapshot(deps, store, response.context_snapshot_id, request.run_id);
+  return response;
 }
 
 export async function expand(
@@ -129,11 +112,11 @@ export async function expand(
   store: SnapshotStore,
   request: ExpandRequest,
 ): Promise<unknown> {
-  // `expand` carries no ranking mode of its own, so there is nothing to pin here.
-  return resolverExpand(resolverDeps(deps), store, request);
+  const response = await resolverExpand(resolverDeps(deps), store, request);
+  await persistSnapshot(deps, store, response.context_snapshot_id, request.run_id);
+  return response;
 }
 
-/** The strongest integrity any provenance entry claims, or null if there is none. */
 function bestIntegrity(entries: readonly { integrity: string }[]): string | null {
   const order = ['unknown', 'partial', 'verified'];
   let best: string | null = null;
@@ -153,13 +136,16 @@ export async function inspect(
   const { kind, id } = request.handle;
 
   if (kind === 'snapshot') {
-    const snapshot = store.get(id);
+    const cached = store.get(id);
+    const durable =
+      cached === undefined && deps.snapshots !== undefined && deps.snapshots !== null
+        ? await deps.snapshots.getContextSnapshot(id)
+        : undefined;
+    const snapshot = cached ?? durable;
     if (snapshot === undefined) {
       throw new AgentContractError(
         'snapshot_not_durable',
-        `context snapshot ${id} is not known to this process. Snapshots become durable when the ` +
-          'local outbox and `ingest` arrive with telemetry at Stage 2 (D25, T-05); until then ' +
-          'only snapshots computed in this session can be explained.',
+        `context snapshot ${id} is not present in the local durable snapshot store.`,
       );
     }
     return inspectSnapshotResponseSchema.parse({
@@ -186,8 +172,6 @@ export async function inspect(
       members.push({
         id: memberId,
         title: asset?.title ?? memberId,
-        // No Evidence Plane exists yet, so "none" is a measurement, not a
-        // default: there is nothing anywhere that could have evidence.
         evidence_state: 'none' as const,
         integrity_best: asset === undefined ? null : bestIntegrity(asset.provenance),
       });
@@ -197,8 +181,6 @@ export async function inspect(
       problem_id: set.problem_id,
       canonical_state: set.canonical_state,
       champion_id: set.champion_id,
-      // C-01: derived at runtime from the score view, never read from Git. The
-      // bootstrap snapshot records no challenge, so no set is challenged.
       challenge_state: 'none',
       members,
       why_unresolved: set.why_unresolved,
@@ -234,9 +216,7 @@ export async function observe(deps: AgentContractDeps, request: ObserveRequest):
   if (deps.staging === null) {
     throw new AgentContractError(
       'staging_unavailable',
-      'observe has no staging sink configured, so this observation would be accepted and lost. ' +
-        'The `UNIQUE(observation_id)` guarantee that makes observe idempotent (T-04) lives in ' +
-        'Supabase staging, which arrives with the installation credential at Stage 2 (D22).',
+      'observe has no staging sink configured, so this observation would be accepted and lost.',
     );
   }
   const result = await deps.staging.recordObservation({
