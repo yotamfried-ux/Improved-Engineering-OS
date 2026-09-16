@@ -103,21 +103,38 @@ export class SqliteRunStateStore {
       .run(runId);
   }
 
-  /** Write the terminal state without ever clearing an earlier flush failure. */
+  /**
+   * Write terminal state without ever clearing or outranking an earlier failure.
+   *
+   * The invariant is enforced in SQL, not only in the hook caller: even a stale
+   * optimistic caller that submits COMPLETE cannot promote a row after a prior
+   * boundary persisted `flush_ever_failed = 1`.
+   */
   finish(state: RunTelemetryState, endedAt: string, flushEverFailed = false): void {
+    const failedNow = flushEverFailed ? 1 : 0;
     this.#db
       .prepare(
         `update run_state
-            set telemetry_state = ?, qualification_eligible = ?, ended_at = ?,
+            set telemetry_state = case
+                  when flush_ever_failed = 1 or ? = 1 then 'INCOMPLETE'
+                  else ?
+                end,
+                qualification_eligible = case
+                  when flush_ever_failed = 1 or ? = 1 then 0
+                  else ?
+                end,
+                ended_at = ?,
                 flush_ever_failed = case
                   when flush_ever_failed = 1 or ? = 1 then 1 else 0 end
           where run_id = ?`,
       )
       .run(
+        failedNow,
         state.telemetry_state,
+        failedNow,
         state.qualification_eligible ? 1 : 0,
         endedAt,
-        flushEverFailed ? 1 : 0,
+        failedNow,
         state.run_id,
       );
   }
@@ -148,14 +165,15 @@ function readRequiredFlag(row: Record<string, unknown>, column: string): boolean
 
 function toState(row: Record<string, unknown>): LocalRunState {
   const telemetryState = String(row['telemetry_state']);
+  const flushEverFailed = readRequiredFlag(row, 'flush_ever_failed');
+  const complete = telemetryState === 'COMPLETE' && !flushEverFailed;
   return {
     runId: String(row['run_id']),
     sessionKey: row['session_key'] === null ? null : String(row['session_key']),
-    telemetryState: telemetryState === 'COMPLETE' ? 'COMPLETE' : 'INCOMPLETE',
-    qualificationEligible:
-      telemetryState === 'COMPLETE' && Number(row['qualification_eligible']) === 1,
+    telemetryState: complete ? 'COMPLETE' : 'INCOMPLETE',
+    qualificationEligible: complete && Number(row['qualification_eligible']) === 1,
     ingestReachableAtStart: Number(row['ingest_reachable_at_start']) === 1,
-    flushEverFailed: readRequiredFlag(row, 'flush_ever_failed'),
+    flushEverFailed,
     startedAt: String(row['started_at']),
     endedAt: row['ended_at'] === null ? null : String(row['ended_at']),
   };
