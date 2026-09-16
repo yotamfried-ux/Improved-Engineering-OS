@@ -42,16 +42,6 @@ function scratchDir(): string {
   return dir;
 }
 
-/**
- * A local IPC endpoint for the platform running the smoke suite.
- *
- * Stage 3 production runs only on the Linux namespace mechanism and therefore
- * use AF_UNIX. The Windows smoke still exercises the same Node IPC client/server
- * protocol, but Node names that transport with a named pipe rather than a
- * filesystem socket. Treating `C:\\...\\ingest.sock` as an IPC endpoint makes
- * Windows wait on an invalid listener until Vitest times out, which proves
- * nothing about the protocol.
- */
 function ipcPath(label = 'ingest'): string {
   ipcSequence += 1;
   return process.platform === 'win32'
@@ -59,15 +49,11 @@ function ipcPath(label = 'ingest'): string {
     : join(scratchDir(), `${label}.sock`);
 }
 
-/** A server that answers however the test tells it to, one request per connection. */
 async function serve(
   answer: (request: ProxyRequest) => ProxyResponse | string,
 ): Promise<{ socketPath: string; seen: ProxyRequest[] }> {
   const socketPath = ipcPath();
   const seen: ProxyRequest[] = [];
-  // Deliberately use the default half-close behaviour. The protocol is framed
-  // by newline, not EOF, so it must work on Windows named pipes without relying
-  // on an AF_UNIX-style writable half surviving the peer's request.
   const server = createServer((socket) => {
     let buffered = '';
     let answered = false;
@@ -101,7 +87,21 @@ const accepting = (request: ProxyRequest): ProxyResponse => {
         },
       };
     case 'sendObservations':
-      return { ok: true, outcome: { status: 'accepted', acceptedEventIds: [] } };
+      return {
+        ok: true,
+        outcome: {
+          status: 'accepted',
+          acceptedEventIds: request.observations.map((observation) => observation.observation_id),
+        },
+      };
+    case 'sendContextSnapshots':
+      return {
+        ok: true,
+        outcome: {
+          status: 'accepted',
+          acceptedEventIds: request.snapshots.map((snapshot) => snapshot.context_snapshot_id),
+        },
+      };
     case 'readMinimal':
       return { ok: true, value: { ok: true } };
     case 'isReachable':
@@ -122,17 +122,20 @@ describe('the Ingest a trial can use (ADR-0005, D22)', () => {
       status: 'accepted',
       acceptedEventIds: [],
     });
+    expect(await ingest.sendContextSnapshots?.([])).toEqual({
+      status: 'accepted',
+      acceptedEventIds: [],
+    });
     expect(seen.map((request) => request.op)).toEqual([
       'isReachable',
       'readMinimal',
       'sendEvents',
       'sendObservations',
+      'sendContextSnapshots',
     ]);
   });
 
   it('relays a rejection as a rejection, not as an outage', async () => {
-    // `everFailed` treats both as fatal, so a collapsed distinction would give
-    // the right verdict for a reason nobody could diagnose.
     const { socketPath } = await serve(() => ({
       ok: true,
       outcome: { status: 'rejected', reason: 'the Evidence Plane refused: unknown_installation' },
@@ -144,8 +147,6 @@ describe('the Ingest a trial can use (ADR-0005, D22)', () => {
   });
 
   it('reports unreachable instead of throwing when no proxy is listening', async () => {
-    // The rule telemetry may never break: a missing proxy is a recorded refusal,
-    // not an exception in someone's coding session.
     const ingest = socketIngest({ socketPath: ipcPath('absent') });
     expect(await ingest.sendEvents([])).toMatchObject({ status: 'unreachable' });
     expect(await ingest.isReachable()).toBe(false);
@@ -162,8 +163,6 @@ describe('the Ingest a trial can use (ADR-0005, D22)', () => {
   });
 
   it('refuses an answer to a different question', async () => {
-    // A proxy trusted to hold a credential is not thereby trusted to be correct.
-    // An `isReachable` shape returned for `sendEvents` must not read as accepted.
     const { socketPath } = await serve(() => ({ ok: true, reachable: true }));
     expect(await socketIngest({ socketPath }).sendEvents([])).toMatchObject({
       status: 'unreachable',
@@ -187,10 +186,6 @@ describe('a run that can actually end COMPLETE (D23, T7)', () => {
     JSON.stringify({ hook_event_name: event, session_id: 'sess_socket', cwd: '/tmp', ...over });
 
   it('drains through the proxy and qualifies, which was impossible before', async () => {
-    // The whole point of the in-band proxy. Before it, a trial's flush had
-    // nowhere to reach, so `everFailed` was always true and every run was
-    // INCOMPLETE -- and no amount of host-side network access could change that,
-    // which is what the earlier Stage 3 report missed.
     const { socketPath, seen } = await serve(accepting);
     const deps: HookDeps = {
       outboxPath: join(scratchDir(), 'outbox.sqlite'),
@@ -224,13 +219,10 @@ describe('a run that can actually end COMPLETE (D23, T7)', () => {
     } finally {
       db.close();
     }
-    // Delivered in band, during the run -- not left for something to drain later.
     expect(seen.some((request) => request.op === 'sendEvents')).toBe(true);
   });
 
   it('stays INCOMPLETE when the proxy refuses, attestation notwithstanding', async () => {
-    // Eligibility still requires the events to have landed. A host that attests
-    // reachability cannot make a lossy run qualify.
     const { socketPath } = await serve(() => ({
       ok: true,
       outcome: { status: 'unreachable', reason: 'the Evidence Plane failed: 503' },
