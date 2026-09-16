@@ -109,7 +109,9 @@ export function httpIngest(options: {
       ),
     sendContextSnapshots: (snapshots) =>
       outcomeFor(
-        () => post('ingest_context_snapshots', { snapshots }),
+        // The ingest function reads `context_snapshots`; any other key arrives
+        // as an empty batch and an empty acknowledgement.
+        () => post('ingest_context_snapshots', { context_snapshots: snapshots }),
         snapshots.map((snapshot) => snapshot.context_snapshot_id),
       ),
     readMinimal: async (kind) => {
