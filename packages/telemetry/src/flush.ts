@@ -138,8 +138,7 @@ export class Flusher {
 
       const snapshotResult = await this.#drain<ContextSnapshotDocument>({
         pending: (limit) => this.#evidence?.pendingContextSnapshots(limit) ?? Promise.resolve([]),
-        acknowledge: (ids) =>
-          this.#evidence?.acknowledgeContextSnapshots(ids) ?? Promise.resolve(),
+        acknowledge: (ids) => this.#evidence?.acknowledgeContextSnapshots(ids) ?? Promise.resolve(),
         id: (snapshot) => snapshot.context_snapshot_id,
         send: (snapshots) =>
           this.#safeSend(() => {

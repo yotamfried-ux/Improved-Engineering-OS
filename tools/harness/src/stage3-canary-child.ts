@@ -76,15 +76,11 @@ class StdioMcpClient {
   #stderr = '';
 
   constructor() {
-    this.#child = spawn(
-      process.execPath,
-      [mcp, '--eos-root', eosRoot, '--project', projectRoot],
-      {
-        cwd: projectRoot,
-        env: process.env,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      },
-    );
+    this.#child = spawn(process.execPath, [mcp, '--eos-root', eosRoot, '--project', projectRoot], {
+      cwd: projectRoot,
+      env: process.env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
     this.#child.stdout.setEncoding('utf8');
     this.#child.stderr.setEncoding('utf8');
     this.#child.stdout.on('data', (chunk: string) => this.#accept(chunk));
@@ -104,7 +100,10 @@ class StdioMcpClient {
     }
   }
 
-  async callTool(name: string, toolArgs: Record<string, unknown>): Promise<Record<string, unknown>> {
+  async callTool(
+    name: string,
+    toolArgs: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
     const reply = await this.request('tools/call', { name, arguments: toolArgs });
     if (reply.error !== undefined) {
       throw new Error(`MCP ${name} protocol error: ${reply.error.code} ${reply.error.message}`);
@@ -223,7 +222,10 @@ async function main(): Promise<void> {
   if (typeof snapshotId !== 'string' || !snapshotId.startsWith('ctx_')) {
     throw new Error('resolve did not return a context_snapshot_id');
   }
-  if (!Array.isArray(items) || !items.some((item) => (item as { id?: unknown }).id === knownAssetId)) {
+  if (
+    !Array.isArray(items) ||
+    !items.some((item) => (item as { id?: unknown }).id === knownAssetId)
+  ) {
     throw new Error(`resolve did not expose the known regression-test asset ${knownAssetId}`);
   }
   invokeHook({

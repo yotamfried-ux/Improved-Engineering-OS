@@ -178,9 +178,7 @@ export interface Ingest {
   sendEvents(events: readonly TelemetryEvent[]): Promise<IngestOutcome>;
   sendObservations(observations: readonly Observation[]): Promise<IngestOutcome>;
   /** Optional for old adapters; a queue with snapshots must fail closed when absent. */
-  sendContextSnapshots?(
-    snapshots: readonly ContextSnapshotDocument[],
-  ): Promise<IngestOutcome>;
+  sendContextSnapshots?(snapshots: readonly ContextSnapshotDocument[]): Promise<IngestOutcome>;
   /** Health, score overlay, own-run status. Never a general query. */
   readMinimal(kind: string): Promise<unknown>;
   /** Checked at SessionStart so run eligibility is declared up front (D23). */

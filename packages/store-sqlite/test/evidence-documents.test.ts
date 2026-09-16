@@ -99,7 +99,9 @@ describe('SqliteEvidenceDocuments', () => {
     try {
       const store = new SqliteEvidenceDocuments(db);
       expect(await store.recordObservation(observation('first'))).toEqual({ status: 'recorded' });
-      expect(await store.recordObservation(observation('changed'))).toEqual({ status: 'duplicate' });
+      expect(await store.recordObservation(observation('changed'))).toEqual({
+        status: 'duplicate',
+      });
       expect(await store.pendingObservations(10)).toEqual([observation('first')]);
     } finally {
       db.close();

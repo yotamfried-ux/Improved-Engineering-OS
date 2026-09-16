@@ -77,12 +77,7 @@ export class SqliteEvidenceDocuments implements EvidenceQueue {
            (observation_id, run_id, queued_at, payload_json, acknowledged)
          values (?, ?, ?, ?, 0)`,
       )
-      .run(
-        parsed.observation_id,
-        parsed.run_id,
-        new Date().toISOString(),
-        JSON.stringify(parsed),
-      );
+      .run(parsed.observation_id, parsed.run_id, new Date().toISOString(), JSON.stringify(parsed));
     return { status: Number(result.changes) > 0 ? 'recorded' : 'duplicate' };
   }
 
@@ -140,7 +135,9 @@ export class SqliteEvidenceDocuments implements EvidenceQueue {
           limit ?`,
       )
       .all(limit)
-      .map((row) => validateSnapshot(JSON.parse(String(row['payload_json'])) as ContextSnapshotDocument));
+      .map((row) =>
+        validateSnapshot(JSON.parse(String(row['payload_json'])) as ContextSnapshotDocument),
+      );
   }
 
   async acknowledgeObservations(observationIds: readonly string[]): Promise<void> {
@@ -148,11 +145,7 @@ export class SqliteEvidenceDocuments implements EvidenceQueue {
   }
 
   async acknowledgeContextSnapshots(contextSnapshotIds: readonly string[]): Promise<void> {
-    this.#acknowledge(
-      'evidence_context_snapshots',
-      'context_snapshot_id',
-      contextSnapshotIds,
-    );
+    this.#acknowledge('evidence_context_snapshots', 'context_snapshot_id', contextSnapshotIds);
   }
 
   async pendingEvidenceCount(): Promise<number> {

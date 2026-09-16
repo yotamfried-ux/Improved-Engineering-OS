@@ -210,14 +210,24 @@ export function attributionEvents(input: HookInput): readonly HookEmission[] {
     const assetId = typedAsset(request['handle']);
     return assetId === undefined
       ? []
-      : [{ eventType: 'inspect.request', attributes: { 'tool.name': input.tool_name ?? tool, 'asset.id': assetId } }];
+      : [
+          {
+            eventType: 'inspect.request',
+            attributes: { 'tool.name': input.tool_name ?? tool, 'asset.id': assetId },
+          },
+        ];
   }
 
   if (tool === 'observe') {
     const assetId = typedAsset(request['subject']);
     return assetId === undefined
       ? []
-      : [{ eventType: 'observe.request', attributes: { 'tool.name': input.tool_name ?? tool, 'asset.id': assetId } }];
+      : [
+          {
+            eventType: 'observe.request',
+            attributes: { 'tool.name': input.tool_name ?? tool, 'asset.id': assetId },
+          },
+        ];
   }
 
   if (tool !== 'resolve') return [];
@@ -227,7 +237,9 @@ export function attributionEvents(input: HookInput): readonly HookEmission[] {
   const items = response['items'];
   if (!Array.isArray(items)) return [];
   const snapshotId =
-    typeof response['context_snapshot_id'] === 'string' ? response['context_snapshot_id'] : undefined;
+    typeof response['context_snapshot_id'] === 'string'
+      ? response['context_snapshot_id']
+      : undefined;
   const emitted: HookEmission[] = [];
   for (const item of items) {
     if (item === null || typeof item !== 'object') continue;
