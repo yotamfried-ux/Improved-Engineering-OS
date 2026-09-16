@@ -1,3 +1,4 @@
+import { createServer, type AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
 import {
   openPlatformQualificationProxy,
@@ -55,8 +56,8 @@ describe('Stage 3 qualification profiles', () => {
     expect(source['IEOS_RUN_ID']).toBe('run_test');
   });
 
-  it('runs the Windows profile directly with only the supplied environment', () => {
-    const result = runQualificationProcess({
+  it('runs the Windows profile directly with only the supplied environment', async () => {
+    const result = await runQualificationProcess({
       platform: 'win32',
       command: [
         process.execPath,
@@ -103,5 +104,125 @@ describe.skipIf(process.platform !== 'win32')('Windows qualification IPC', () =>
     } finally {
       await proxy.close();
     }
+  });
+
+  it('keeps the host proxy answering while the trial runs (live canary regression)', async () => {
+    // The first live Windows canary ran its child with spawnSync. That blocked
+    // the host event loop the named-pipe proxy lives on, so every hook flush
+    // timed out and no event ever reached the Evidence Plane.
+    const fetch = (() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ data: { ok: true } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )) as typeof globalThis.fetch;
+    const proxy = await openPlatformQualificationProxy({
+      platform: 'win32',
+      runId: 'run_windows_pipe_live',
+      config: {
+        endpoint: 'https://plane.invalid/ingest',
+        serviceToken: 'service-secret',
+        installationToken: 'installation-secret',
+        serviceCredentialSource: 'environment',
+        credentialSource: 'environment',
+      },
+      fetch,
+    });
+    try {
+      const result = await runQualificationProcess({
+        platform: 'win32',
+        command: [process.execPath, '-e', ASK_PROXY],
+        cwd: process.cwd(),
+        environment: { ...SOCKET_BASE, IEOS_INGEST_SOCKET: proxy.targetPath },
+        allowedHosts: [],
+        deniedRoots: [],
+        timeoutSeconds: 10,
+      });
+      expect(result.timedOut).toBe(false);
+      expect(result.stdout).toBe('{"ok":true,"reachable":true}');
+      expect(result.status).toBe(0);
+    } finally {
+      await proxy.close();
+    }
+  });
+});
+
+/** Winsock cannot initialise in a child without SystemRoot, so the trial allowlist carries it. */
+const SOCKET_BASE: Record<string, string> =
+  process.env['SystemRoot'] === undefined ? {} : { SystemRoot: process.env['SystemRoot'] };
+
+/** A trial child that asks the host proxy one question and prints the reply. */
+const ASK_PROXY = `
+const socket = require('node:net').connect(process.env.IEOS_INGEST_SOCKET);
+let reply = '';
+socket.setTimeout(3000, () => { process.stdout.write('no reply'); process.exit(3); });
+socket.on('connect', () => socket.write(JSON.stringify({ op: 'isReachable' }) + '\\n'));
+socket.on('data', (chunk) => { reply += chunk; });
+socket.on('end', () => { process.stdout.write(reply.trim()); process.exit(0); });
+`;
+
+describe('the host process stays responsive while a trial runs', () => {
+  it('lets the trial reach a server living in the host process', async () => {
+    const server = createServer((socket) => {
+      // The child exits as soon as it reads the reply, which can reset the socket.
+      socket.on('error', () => undefined);
+      socket.end('pong\n');
+    });
+    await new Promise<void>((listening) => server.listen(0, '127.0.0.1', listening));
+    const { port } = server.address() as AddressInfo;
+    try {
+      const result = await runQualificationProcess({
+        platform: 'win32',
+        command: [
+          process.execPath,
+          '-e',
+          `const s = require('node:net').connect(${String(port)}, '127.0.0.1');
+           s.setTimeout(3000, () => process.exit(3));
+           s.on('data', (d) => { process.stdout.write(String(d).trim()); process.exit(0); });`,
+        ],
+        cwd: process.cwd(),
+        environment: SOCKET_BASE,
+        allowedHosts: [],
+        deniedRoots: [],
+        timeoutSeconds: 10,
+      });
+      expect(result.stdout).toBe('pong');
+      expect(result.status).toBe(0);
+    } finally {
+      await new Promise<void>((closed) => server.close(() => closed()));
+    }
+  });
+
+  it('kills a trial that outlives its budget and says so', async () => {
+    const result = await runQualificationProcess({
+      platform: 'win32',
+      command: [process.execPath, '-e', 'setInterval(() => {}, 1000)'],
+      cwd: process.cwd(),
+      environment: SOCKET_BASE,
+      allowedHosts: [],
+      deniedRoots: [],
+      timeoutSeconds: 1,
+    });
+    expect(result.timedOut).toBe(true);
+    expect(result.status).not.toBe(0);
+  });
+
+  it('gives the trial no stdin to be rescued through (T6)', async () => {
+    const result = await runQualificationProcess({
+      platform: 'win32',
+      command: [
+        process.execPath,
+        '-e',
+        `let n = 0; process.stdin.on('data', (d) => { n += d.length; });
+         process.stdin.on('end', () => process.stdout.write('stdin-closed:' + n));`,
+      ],
+      cwd: process.cwd(),
+      environment: SOCKET_BASE,
+      allowedHosts: [],
+      deniedRoots: [],
+      timeoutSeconds: 10,
+    });
+    expect(result.stdout).toBe('stdin-closed:0');
   });
 });

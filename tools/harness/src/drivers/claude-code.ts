@@ -89,7 +89,7 @@ export class ClaudeCodeDriver implements AgentDriver {
     return this.#lastRecord;
   }
 
-  run(trial: Trial, task: TrialTask): Promise<DriverResult> {
+  async run(trial: Trial, task: TrialTask): Promise<DriverResult> {
     const options = this.#options;
     const profile = options.qualificationProfile ?? qualificationProfileFor();
     const settingSources = options.settingSources ?? ['project'];
@@ -115,7 +115,7 @@ export class ClaudeCodeDriver implements AgentDriver {
     const environment = { ...trial.environment, ...options.extraEnvironment };
 
     const startedAt = Date.now();
-    const run = runQualificationProcess({
+    const run = await runQualificationProcess({
       command: argv,
       cwd: trial.workspaceRoot,
       environment,
@@ -192,7 +192,7 @@ export class ClaudeCodeDriver implements AgentDriver {
       integrity,
       rescue,
     };
-    return Promise.resolve(result);
+    return result;
   }
 }
 

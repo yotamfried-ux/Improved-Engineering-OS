@@ -159,7 +159,7 @@ try {
   }
 
   const before = probe(preparedTrial);
-  const execution = runQualificationProcess({
+  const execution = await runQualificationProcess({
     command: [
       process.execPath,
       join(eosRoot, 'tools', 'harness', 'src', 'stage3-canary-child.ts'),
