@@ -37,6 +37,7 @@ function event(): TelemetryEvent {
     time: {
       occurred_at: '2026-09-16T00:00:00.000Z',
       observed_at: '2026-09-16T00:00:00.000Z',
+      ingested_at: null,
     },
     repo_sha: 'a'.repeat(40),
     eos_release: '0.1.0',
