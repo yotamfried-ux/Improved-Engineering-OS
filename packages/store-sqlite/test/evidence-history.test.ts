@@ -34,13 +34,21 @@ function event(): TelemetryEvent {
     source: { type: 'agent', sequence: 1 },
     session_kind: 'local_persistent',
     event_type: 'session.start',
+    trace: {
+      trace_id: 'trace_a',
+      span_id: 'span_a',
+      parent_span_id: null,
+      links: [],
+    },
     time: {
       occurred_at: '2026-09-16T00:00:00.000Z',
       observed_at: '2026-09-16T00:00:00.000Z',
       ingested_at: null,
     },
-    repo_sha: 'a'.repeat(40),
-    eos_release: '0.1.0',
+    revision: {
+      repo_sha: 'a'.repeat(40),
+      eos_release: '0.1.0',
+    },
     harness: {
       agent: 'claude-code',
       model: 'test',
