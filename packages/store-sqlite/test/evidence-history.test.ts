@@ -85,9 +85,8 @@ describe('local evidence history', () => {
 
       const state = runs.get('run_a');
       expect(state?.flushEverFailed).toBe(true);
-      // `finish` may receive a stale optimistic state, but the persisted failure
-      // remains visible so the hook can fold it back into final eligibility.
-      expect(state?.qualificationEligible).toBe(true);
+      expect(state?.telemetryState).toBe('INCOMPLETE');
+      expect(state?.qualificationEligible).toBe(false);
     } finally {
       db.close();
     }
