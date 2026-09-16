@@ -1,26 +1,9 @@
 /**
  * The `Outbox` port, over a local SQLite file (D23, D26, R-11).
  *
- * The outbox exists so that losing the network never loses a run's history and,
- * more importantly, never makes a lossy run look like a measured one (D23). Its
- * requirements are given literally by D26/R-11 and are not negotiable defaults:
- *
- *   journal_mode = WAL          a reader and the flusher must not block each other
- *   timeout >= 5000 ms          a second writer waits rather than surfacing SQLITE_BUSY
- *   every write in a transaction
- *   UNIQUE(event_id)            the envelope's idempotency key, enforced by the store
- *   no file-level atomic replacement
- *
- * The last one is the subtle one, and it is why this is a table rather than a
- * JSON file rewritten under a temp name. Replacing the whole file is atomic for
- * the file and catastrophic for concurrency: two emitters in one project each
- * write a complete file, and the second silently discards the first one's
- * events. Row-level durability is the property the outbox actually needs.
- *
- * Rows are deleted only on acknowledgement, per the constitution's data
- * lifecycle: an event that was queued and never confirmed must still be here
- * after a crash, because the alternative is a gap nothing can distinguish from
- * a quiet run.
+ * The delivery queue exists so losing the network never loses an undelivered event.
+ * A second immutable table retains the local event copy after acknowledgement so
+ * `ieos investigate` does not become less useful when delivery succeeds.
  */
 
 import { telemetryEnvelopeSchema } from '@ieos/core';
@@ -59,21 +42,21 @@ const CREATE_OUTBOX_SQL: readonly string[] = [
      queued_at text not null,
      envelope_json text not null
    ) strict`,
-  // The ordering key is (installation_id, emitter_id, sequence) -- D26 says so
-  // because wall-clock time is not an ordering under concurrency. The index
-  // exists so draining in that order is not a table scan per flush.
   `create index if not exists outbox_order
      on outbox (installation_id, emitter_id, sequence)`,
+  `create table if not exists event_history (
+     event_id text primary key,
+     installation_id text not null,
+     emitter_id text not null,
+     sequence integer not null,
+     envelope_json text not null,
+     acknowledged integer not null default 0 check (acknowledged in (0, 1))
+   ) strict`,
+  `create index if not exists event_history_order
+     on event_history (installation_id, emitter_id, sequence)`,
 ];
 
-/**
- * Open the outbox database, creating it if it does not exist.
- *
- * `node:sqlite` is loaded through a dynamic import so the two failure modes stay
- * distinguishable: a runtime started with `--no-experimental-sqlite` is a
- * different problem from a corrupt or unwritable file, and `ieos doctor` should
- * not send the reader looking in the wrong place.
- */
+/** Open the shared runtime database, creating its telemetry tables if needed. */
 export async function openOutbox(path: string): Promise<WritableDatabase> {
   let sqlite: { DatabaseSync: new (p: string, o?: Record<string, unknown>) => WritableDatabase };
   try {
@@ -95,6 +78,13 @@ export async function openOutbox(path: string): Promise<WritableDatabase> {
     db.exec('pragma journal_mode=wal');
     db.exec(`pragma busy_timeout=${String(OUTBOX_BUSY_TIMEOUT_MS)}`);
     for (const statement of CREATE_OUTBOX_SQL) db.exec(statement);
+    // Upgrade an existing pre-history database without rewriting its queue. Any
+    // event that is still pending at first open becomes part of local history.
+    db.exec(
+      `insert or ignore into event_history
+         (event_id, installation_id, emitter_id, sequence, envelope_json, acknowledged)
+       select event_id, installation_id, emitter_id, sequence, envelope_json, 0 from outbox`,
+    );
   } catch (cause) {
     db.close();
     throw new OutboxUnavailableError(`cannot initialize the telemetry outbox at ${path}`, cause);
@@ -102,13 +92,7 @@ export async function openOutbox(path: string): Promise<WritableDatabase> {
   return db;
 }
 
-/**
- * The durable local queue.
- *
- * Every method is async because the port is, not because the work is: SQLite is
- * synchronous here, and pretending otherwise would add a scheduling boundary
- * inside a transaction for nothing.
- */
+/** The durable delivery queue plus its immutable local history. */
 export class SqliteOutbox implements Outbox {
   readonly #db: WritableDatabase;
 
@@ -116,33 +100,30 @@ export class SqliteOutbox implements Outbox {
     this.#db = db;
   }
 
-  /**
-   * Queue one event.
-   *
-   * Idempotent on `event_id`, and idempotent in the direction that matters: a
-   * repeat is reported as `appended: false` rather than replacing the row. The
-   * queued envelope is the one that was actually emitted, and a retry that
-   * rewrote it could quietly change history under a key that says it did not.
-   */
-  // `async` deliberately, even though nothing here awaits. The port returns a
-  // Promise, so a caller's error handling is `.catch` or `try`/`await`; a
-  // validation error thrown synchronously would escape it entirely, and a
-  // telemetry failure that bypasses the emitter's handling surfaces as a crash
-  // instead of as an INCOMPLETE run (D23). The same applies to the two methods
-  // below.
   async append(event: TelemetryEvent): Promise<{ readonly appended: boolean }> {
-    // Validated on the way in, so the outbox cannot become the place a
-    // malformed envelope waits until the ingest function rejects the batch it
-    // is in and takes every well-formed event with it.
     const parsed = telemetryEnvelopeSchema.parse(event);
-    const statement = this.#db.prepare(
-      `insert or ignore into outbox
+    const history = this.#db.prepare(
+      `insert or ignore into event_history
+         (event_id, installation_id, emitter_id, sequence, envelope_json, acknowledged)
+       values (?, ?, ?, ?, ?, 0)`,
+    );
+    const queue = this.#db.prepare(
+      `insert into outbox
          (event_id, installation_id, emitter_id, sequence, queued_at, envelope_json)
        values (?, ?, ?, ?, ?, ?)`,
     );
     let appended = false;
     this.#transaction(() => {
-      const result = statement.run(
+      const stored = history.run(
+        parsed.event_id,
+        parsed.installation_id,
+        parsed.emitter_id,
+        parsed.source.sequence,
+        JSON.stringify(parsed),
+      );
+      appended = Number(stored.changes) > 0;
+      if (!appended) return;
+      queue.run(
         parsed.event_id,
         parsed.installation_id,
         parsed.emitter_id,
@@ -150,42 +131,51 @@ export class SqliteOutbox implements Outbox {
         parsed.time.observed_at,
         JSON.stringify(parsed),
       );
-      appended = Number(result.changes) > 0;
     });
     return { appended };
   }
 
-  /** The oldest `limit` events in the D26 ordering key, not in insertion order. */
+  /** The oldest `limit` undelivered events in the D26 ordering key. */
   async pending(limit: number): Promise<readonly TelemetryEvent[]> {
     if (limit <= 0) return [];
-    const rows = this.#db
+    return this.#db
       .prepare(
         `select envelope_json from outbox
            order by installation_id asc, emitter_id asc, sequence asc
            limit ?`,
       )
-      .all(limit);
-    const events = rows.map(
-      (row) => telemetryEnvelopeSchema.parse(JSON.parse(String(row['envelope_json']))),
-      // Parsed on the way out as well as in. The file is on a developer's disk
-      // and a hand-edited row must fail here rather than reach the plane.
-    );
-    return events;
+      .all(limit)
+      .map((row) => telemetryEnvelopeSchema.parse(JSON.parse(String(row['envelope_json']))));
   }
 
   /**
-   * Delete acknowledged events.
+   * Mark and remove exactly the ids proven durable remotely.
    *
-   * Only after durable acknowledgement -- the caller decides what that means,
-   * and the Ingest port's `accepted` outcome names the ids the plane actually
-   * took, so a partially accepted batch removes exactly those.
+   * The history update and queue deletion share one transaction. A crash cannot
+   * produce the contradictory state "gone from the queue but not retained locally".
    */
   async acknowledge(eventIds: readonly string[]): Promise<void> {
     if (eventIds.length === 0) return;
-    const statement = this.#db.prepare('delete from outbox where event_id = ?');
+    const mark = this.#db.prepare('update event_history set acknowledged = 1 where event_id = ?');
+    const remove = this.#db.prepare('delete from outbox where event_id = ?');
     this.#transaction(() => {
-      for (const id of eventIds) statement.run(id);
+      for (const id of eventIds) {
+        mark.run(id);
+        remove.run(id);
+      }
     });
+  }
+
+  /** Every local event for a run, including events already acknowledged. */
+  async historyForRun(runId: string): Promise<readonly TelemetryEvent[]> {
+    const events = this.#db
+      .prepare(
+        `select envelope_json from event_history
+           order by installation_id asc, emitter_id asc, sequence asc`,
+      )
+      .all()
+      .map((row) => telemetryEnvelopeSchema.parse(JSON.parse(String(row['envelope_json']))));
+    return events.filter((event) => event.run_id === runId);
   }
 
   /** How many events are still waiting. Reported by `ieos doctor`. */
@@ -198,13 +188,6 @@ export class SqliteOutbox implements Outbox {
     this.#db.close();
   }
 
-  /**
-   * Run a unit of work inside one transaction (D26).
-   *
-   * Hand-rolled rather than borrowed from a helper because `node:sqlite` has no
-   * `.transaction()` wrapper. Rollback on throw is the whole point: a partial
-   * write here is an event that exists for ordering and not for sending.
-   */
   #transaction(work: () => void): void {
     this.#db.exec('begin immediate');
     try {
