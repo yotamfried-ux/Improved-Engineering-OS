@@ -83,6 +83,7 @@ describe('the telemetry state T7 has to read (D23)', () => {
       ingest_reachable_at_start: true,
       flush_ever_failed: false,
       outbox_events_remaining: 0,
+      evidence_documents_remaining: 0,
       telemetry_state: 'COMPLETE',
       qualification_eligible: true,
       run_id: 'run_ok',
