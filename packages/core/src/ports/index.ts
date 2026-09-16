@@ -13,7 +13,7 @@
 
 import type { EvidenceRecord } from '../contracts/evidence.ts';
 import type { TelemetryEvent } from '../contracts/telemetry.ts';
-import type { Observation } from '../contracts/agent-contract.ts';
+import type { InspectSnapshotResponse, Observation } from '../contracts/agent-contract.ts';
 import type { AssetRecord } from '../contracts/asset.ts';
 import type { SolutionSetRecord } from '../contracts/solution-set.ts';
 import type { ScoreSnapshot } from '../contracts/score-view.ts';
@@ -105,19 +105,56 @@ export interface AssetSearchHit {
 }
 
 // ---------------------------------------------------------------------------
-// Telemetry
+// Telemetry and local evidence
 // ---------------------------------------------------------------------------
 
 /**
  * Durable local queue for telemetry (D23, D26).
  *
- * Events are deleted only after durable acknowledgement, per the constitution's
- * data lifecycle. `append` is idempotent on `event_id`.
+ * Events are deleted from the delivery queue only after durable acknowledgement.
+ * Implementations may retain a separate immutable local history for investigation.
+ * `append` is idempotent on `event_id`.
  */
 export interface Outbox {
   append(event: TelemetryEvent): Promise<{ readonly appended: boolean }>;
   pending(limit: number): Promise<readonly TelemetryEvent[]>;
   acknowledge(eventIds: readonly string[]): Promise<void>;
+}
+
+/**
+ * The content-addressed snapshot document persisted beside telemetry.
+ *
+ * `run_id` records the first run that caused this content document to be staged.
+ * Reuse by later runs is represented by their `resolve.response` telemetry event,
+ * which carries `context_snapshot.id`; the snapshot id itself is a hash of the
+ * decision inputs and therefore intentionally does not change per run.
+ */
+export type ContextSnapshotDocument = InspectSnapshotResponse & {
+  readonly context_snapshot_id: string;
+  readonly run_id: string;
+};
+
+/** Durable read/write access needed by the MCP adapter. */
+export interface ContextSnapshotStore {
+  recordContextSnapshot(
+    snapshot: ContextSnapshotDocument,
+  ): Promise<{ readonly status: 'recorded' | 'duplicate' }>;
+  getContextSnapshot(contextSnapshotId: string): Promise<ContextSnapshotDocument | undefined>;
+}
+
+/**
+ * The local Evidence Plane staging queue.
+ *
+ * Rows survive acknowledgement. Pending methods expose only rows not yet proven
+ * durable remotely, while the read methods retain the local copy for restart-safe
+ * `inspect` and investigation. This is local evidence plumbing, never canonical Git.
+ */
+export interface EvidenceQueue extends Staging, ContextSnapshotStore {
+  pendingObservations(limit: number): Promise<readonly Observation[]>;
+  pendingContextSnapshots(limit: number): Promise<readonly ContextSnapshotDocument[]>;
+  acknowledgeObservations(observationIds: readonly string[]): Promise<void>;
+  acknowledgeContextSnapshots(contextSnapshotIds: readonly string[]): Promise<void>;
+  pendingEvidenceCount(): Promise<number>;
 }
 
 export type IngestOutcome =
@@ -132,10 +169,18 @@ export type IngestOutcome =
  * classification to a service principal, and the server stamps it from the Run
  * record. A client cannot express a classification through this port, so a
  * compromised installation cannot pose as `qualification` or `holdout` evidence.
+ *
+ * `acceptedEventIds` is the historical outcome field name. For observations and
+ * context snapshots it carries the accepted document ids; callers must still
+ * acknowledge only ids the server named explicitly.
  */
 export interface Ingest {
   sendEvents(events: readonly TelemetryEvent[]): Promise<IngestOutcome>;
   sendObservations(observations: readonly Observation[]): Promise<IngestOutcome>;
+  /** Optional for old adapters; a queue with snapshots must fail closed when absent. */
+  sendContextSnapshots?(
+    snapshots: readonly ContextSnapshotDocument[],
+  ): Promise<IngestOutcome>;
   /** Health, score overlay, own-run status. Never a general query. */
   readMinimal(kind: string): Promise<unknown>;
   /** Checked at SessionStart so run eligibility is declared up front (D23). */
@@ -160,6 +205,7 @@ export interface Ingest {
 export type ProxyRequest =
   | { readonly op: 'sendEvents'; readonly events: readonly TelemetryEvent[] }
   | { readonly op: 'sendObservations'; readonly observations: readonly Observation[] }
+  | { readonly op: 'sendContextSnapshots'; readonly snapshots: readonly ContextSnapshotDocument[] }
   | { readonly op: 'readMinimal'; readonly kind: string }
   | { readonly op: 'isReachable' };
 
