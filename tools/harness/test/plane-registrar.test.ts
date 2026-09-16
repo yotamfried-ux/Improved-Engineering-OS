@@ -110,6 +110,25 @@ describe('the transport', () => {
     expect(JSON.parse(seen?.body ?? '{}')).toEqual(request);
   });
 
+  it('refuses a redirect instead of replaying the service token to its target', async () => {
+    // The HTTPS check covers the URL written here, not one the far end names.
+    // A 307/308 replays the body and this custom header -- which undici does
+    // not strip the way it strips `authorization` -- and fetch does not refuse
+    // an https->http hop, so following one would move the run-classifying
+    // credential into cleartext.
+    let seenRedirect: RequestInit['redirect'];
+    const transport = httpRegisterRun({
+      endpoint: 'https://plane.invalid/ingest',
+      serviceToken: 'a'.repeat(43),
+      fetch: ((_url: string, init: RequestInit) => {
+        seenRedirect = init.redirect;
+        return Promise.resolve(new Response('{}', { status: 200 }));
+      }) as unknown as typeof globalThis.fetch,
+    });
+    await transport(request);
+    expect(seenRedirect).toBe('error');
+  });
+
   it('reads the refusal code from the body but does not need one', async () => {
     const withCode = httpRegisterRun({
       endpoint: 'https://plane.invalid/ingest',

@@ -178,6 +178,16 @@ describe('the plane client the repository did not have (D22, D22.2)', () => {
     expect(ingestFunction).toContain("p_snapshots: payload['context_snapshots']");
   });
 
+  it('refuses a redirect instead of replaying the credential to its target', async () => {
+    // Same reason as the registrar's: a 307/308 replays the body and the
+    // custom token header, and fetch will happily hop https->http. Every route
+    // goes through one `post`, so asserting it once covers events,
+    // observations, snapshots and reads alike.
+    const { ingest, calls } = client(() => accepted('evt_1'));
+    await ingest.sendEvents([{ event_id: 'evt_1' } as never]);
+    expect(calls[0]?.init.redirect).toBe('error');
+  });
+
   it('separates a refusal from an outage', async () => {
     // 4xx is the plane saying no; 5xx is the plane failing to answer. Both are
     // fatal to eligibility, so collapsing them would give the right verdict for

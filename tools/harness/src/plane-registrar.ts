@@ -87,6 +87,13 @@ export function httpRegisterRun(options: {
   return async (request) => {
     const response = await options.fetch(`${base}/register_run`, {
       method: 'POST',
+      // `requireHttpsEndpoint` validates the URL this code writes; it cannot
+      // vouch for one the far end names. A 307/308 replays the method, the body
+      // and this custom header -- which undici does not strip the way it strips
+      // `authorization` -- and nothing in fetch refuses an https->http hop. A
+      // redirect is therefore a way to move the service token into cleartext,
+      // so it is an error rather than something to follow.
+      redirect: 'error',
       headers: {
         'content-type': 'application/json',
         // D22.2: the installation token header carries the service token too.

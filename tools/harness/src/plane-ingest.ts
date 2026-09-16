@@ -39,6 +39,12 @@ export function httpIngest(options: {
   const post = async (route: string, body: unknown): Promise<Response> =>
     options.fetch(`${base}/${route}`, {
       method: 'POST',
+      // The HTTPS check above covers the URL this code writes, not one a
+      // redirect names. A 307/308 replays the body and this custom header --
+      // undici strips `authorization` cross-origin, not a custom name -- and
+      // fetch does not refuse an https->http hop. Following one would put the
+      // installation token, and every context snapshot, in cleartext.
+      redirect: 'error',
       headers: { 'content-type': 'application/json', [TOKEN_HEADER]: options.installationToken },
       body: JSON.stringify(body),
     });
