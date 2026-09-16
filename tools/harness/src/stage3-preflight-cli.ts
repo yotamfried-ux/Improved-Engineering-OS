@@ -1,6 +1,7 @@
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { QualificationPlaneError, loadQualificationPlaneConfig } from './qualification-plane.ts';
 import { formatStage3HostPreflight, inspectStage3Host } from './stage3-host-preflight.ts';
+import { inspectKnowledgeIndex } from './stage3-index-preflight.ts';
 
 const args = process.argv.slice(2);
 const flag = (name: string): string | undefined => {
@@ -36,7 +37,6 @@ try {
       'Stage 3 credential preflight: PASS',
       `  service credential: ${config.serviceCredentialSource === 'environment' ? 'trusted-host environment' : 'trusted-host local file'}`,
       `  installation credential: ${config.credentialSource === 'environment' ? 'trusted-host environment' : 'trusted-host local file'}`,
-      'Stage 3 preflight: READY FOR NO-MODEL CANARY',
       '',
     ].join('\n'),
   );
@@ -56,3 +56,20 @@ try {
   );
   process.exit(error instanceof QualificationPlaneError ? 3 : 1);
 }
+
+const indexPath = flag('--index') ?? join(eosRoot, 'knowledge.sqlite');
+const index = await inspectKnowledgeIndex(indexPath);
+if (!index.ok) {
+  process.stderr.write(
+    ['Stage 3 knowledge index preflight: FAIL', `  ${index.reason}`, ''].join('\n'),
+  );
+  process.exit(4);
+}
+process.stdout.write(
+  [
+    'Stage 3 knowledge index preflight: PASS',
+    `  index_digest: ${index.indexDigest}`,
+    'Stage 3 preflight: READY FOR NO-MODEL CANARY',
+    '',
+  ].join('\n'),
+);

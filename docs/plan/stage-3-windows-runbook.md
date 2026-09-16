@@ -66,6 +66,16 @@ select conname from pg_constraint where conname = 'runs_run_id_owner_unique';
 The current production Evidence Plane had this migration applied and verified on
 15 September 2026. Do not reapply it if the constraint already exists.
 
+## Knowledge index
+
+The MCP server a trial starts reads the compiled knowledge index, `knowledge.sqlite`. It
+is a gitignored build artifact, so a fresh checkout has none. Build it at the exact HEAD
+you will qualify, and rebuild it whenever `knowledge/` changes:
+
+```powershell
+pnpm build:index
+```
+
 ## Full preflight
 
 Set the live ingest endpoint in PowerShell and validate the complete configuration:
@@ -75,8 +85,11 @@ $env:IEOS_INGEST_URL = "https://<project-ref>.supabase.co/functions/v1/ingest"
 pnpm stage3:preflight
 ```
 
-The full preflight must pass before the canary. It checks the platform/toolchain and both
-local credentials. The real canary then proves authenticated Evidence Plane reachability.
+The full preflight must pass before the canary. It checks the platform/toolchain, both
+local credentials, an HTTPS ingest endpoint, and that the knowledge index exists and is
+readable. It does not prove the index matches the current `knowledge/` tree; rebuilding
+it before qualification does. The real canary then proves authenticated Evidence Plane
+reachability.
 
 ## No-model gate before the paid bank
 
