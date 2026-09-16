@@ -198,12 +198,12 @@ describe('what each event does', () => {
     expect(JSON.stringify(plan.emit?.attributes)).not.toContain('hunter2');
   });
 
-  it('attributes an EOS inspect call to the asset it named', () => {
+  it('attributes an EOS inspect call from its typed asset handle', () => {
     const plan = planHook(
       parseHookInput(
         payload('PostToolUse', {
           tool_name: 'mcp__ieos__inspect',
-          tool_input: { handle: 'asset_x' },
+          tool_input: { handle: { kind: 'asset', id: 'asset_x' } },
         }),
       ),
     );
