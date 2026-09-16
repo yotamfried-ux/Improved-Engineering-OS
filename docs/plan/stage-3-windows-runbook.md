@@ -66,6 +66,24 @@ select conname from pg_constraint where conname = 'runs_run_id_owner_unique';
 The current production Evidence Plane had this migration applied and verified on
 15 September 2026. Do not reapply it if the constraint already exists.
 
+`supabase/migrations/0003_observation_subject_kind.sql` must also be applied, and as of
+this writing it has not been. 0001 built `observations.subject_type` from
+`(o->'subject')->>'type'`, a key no Agent Contract producer emits: the contract types the
+subject as `{kind, id}`. Every real observation therefore arrived with a NULL
+`subject_type` and was refused by the column's NOT NULL constraint -- which is how the
+first live canary on this machine failed, with the observations rejected and the run
+fail-closed. Check first, read-only:
+
+```sql
+select position('''kind''' in pg_get_functiondef('public.ingest_observations(bytea,jsonb)'::regprocedure)) > 0 as has_0003;
+```
+
+When that returns `true` the migration is already applied: do not reapply it. When it
+returns `false`, apply `supabase/migrations/0003_observation_subject_kind.sql` in the
+Supabase SQL Editor, then re-run the check and confirm it has become `true`. The
+migration is a `create or replace` of one function, so it keeps that function's owner and
+the grants 0001 gave it, and it changes nothing else in the schema.
+
 ## Knowledge index
 
 The MCP server a trial starts reads the compiled knowledge index, `knowledge.sqlite`. It
