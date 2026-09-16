@@ -1,28 +1,21 @@
 /**
  * `ieos-mcp` -- the composition root for the MCP server.
  *
- * This path is what `ieos init` writes into `.mcp.json` and `.codex/config.toml`,
- * so it is named to the repository's `*-cli.ts` convention and a test asserts the
- * footprint points at a file that exists.
- *
- * Everything impure lives here: the filesystem, `git`, the environment, the
- * process's own stdio. `server.ts` and `handlers.ts` above it take their world
- * as arguments, which is what lets the conformance smoke exercise the real
- * protocol against a fixture instead of a checkout.
- *
- * Note what this file does NOT do: invent a value for a fact it cannot observe.
- * `repo_sha` comes from `git` or the call fails; the Project Profile digest and
- * the capability snapshot are declared `unobserved:` with the stage that will
- * supply them. Those declarations are hashed into `context_snapshot_id` and
- * handed back by `inspect`, so a snapshot from this stage can never be mistaken
- * for one taken when those inputs were real.
+ * Canonical knowledge remains read-only. Runtime evidence is written only to the
+ * local SQLite staging database, which the hook flusher syncs through the
+ * credential-isolated ingest proxy at terminal boundaries.
  */
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
-import { join, resolve as resolvePath } from 'node:path';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve as resolvePath } from 'node:path';
 import { sha256Text } from '@ieos/core';
-import { IndexUnavailableError, SqliteKnowledgeIndex } from '@ieos/store-sqlite';
+import {
+  IndexUnavailableError,
+  openOutbox,
+  SqliteEvidenceDocuments,
+  SqliteKnowledgeIndex,
+} from '@ieos/store-sqlite';
 import { serveIeosMcp } from './serve.ts';
 import { unobserved, type RuntimeFacts } from '@ieos/resolver';
 import { SERVER_VERSION } from './server.ts';
@@ -37,6 +30,7 @@ const flag = (name: string): string | undefined => {
 const repoRoot = resolvePath(flag('--eos-root') ?? process.cwd());
 const projectRoot = resolvePath(flag('--project') ?? process.cwd());
 const indexPath = flag('--index') ?? join(repoRoot, 'knowledge.sqlite');
+const runtimeDbPath = flag('--outbox') ?? join(projectRoot, '.ieos', 'outbox.sqlite');
 
 function gitHeadSha(cwd: string): string | null {
   try {
@@ -47,10 +41,6 @@ function gitHeadSha(cwd: string): string | null {
 }
 
 function profileDigest(root: string): string {
-  // `.ieos/profile.yaml` is part of the D18.4 footprint `ieos init` writes. The
-  // Profile's own contract is designed at Stage 6, so what is digested here is
-  // the file as it stands -- honest about what it covers, and stable enough
-  // that a Profile edit changes the snapshot id.
   const path = join(root, '.ieos', 'profile.yaml');
   if (!existsSync(path)) {
     return unobserved('project-profile', 'no .ieos/profile.yaml; run `ieos init` in the project');
@@ -71,15 +61,11 @@ function facts(): RuntimeFacts | { readonly error: string } {
   return {
     repo_sha: sha,
     profile_status_digest: profileDigest(projectRoot),
-    // The change scope is what the agent is about to touch. Nothing computes it
-    // at this stage, and an empty list says exactly that: no scope declared.
     change_scope: [],
     capability_snapshot_hash: unobserved(
       'capability-snapshot',
       'the capability registry is seeded at Stage 2',
     ),
-    // Not a release version: this runtime is running from a source checkout,
-    // and D24 release pinning arrives at Stage 4.
     eos_release: `source:${SERVER_VERSION}`,
   };
 }
@@ -103,26 +89,28 @@ async function main(): Promise<number> {
     return 3;
   }
 
+  mkdirSync(dirname(runtimeDbPath), { recursive: true });
+  const runtimeDb = await openOutbox(runtimeDbPath);
+  const evidence = new SqliteEvidenceDocuments(runtimeDb);
+  process.once('exit', () => runtimeDb.close());
+
   const store = new Map<string, ContextSnapshot>();
-  // `--ranking-mode recorded` is how a Stage 3 trial pins its ranking: the agent
-  // cannot opt back into the live overlay, so two trials of one task stay
-  // comparable however the scores moved between them.
   const pinned = flag('--ranking-mode');
   if (pinned !== undefined && pinned !== 'recorded' && pinned !== 'live_overlay') {
     process.stderr.write(`--ranking-mode must be "recorded" or "live_overlay", not "${pinned}"\n`);
+    runtimeDb.close();
     return 64;
   }
+
   serveIeosMcp(
-    // Staging is null at Stage 1: `observe` refuses rather than accepting a
-    // write that would reach nothing (T-04, D22).
     {
       index,
       facts: observed,
-      staging: null,
+      staging: evidence,
+      snapshots: evidence,
       ...(pinned === undefined ? {} : { pinnedRankingMode: pinned }),
     },
     store,
-    // stderr, never stdout: stdout is the protocol's wire.
     { onerror: (error) => process.stderr.write(`${error.message}\n`) },
   );
   return 0;
