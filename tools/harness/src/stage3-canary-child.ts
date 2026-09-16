@@ -17,17 +17,12 @@ const flag = (name: string): string | undefined => {
   return index >= 0 ? args[index + 1] : undefined;
 };
 
-const eosRootArg = flag('--eos-root');
-const projectRootArg = flag('--project');
-const repoSha = flag('--repo-sha');
+const eosRootArg = flag('--eos-root') ?? '';
+const projectRootArg = flag('--project') ?? '';
+const repoSha = flag('--repo-sha') ?? '';
 const sessionId = flag('--session') ?? 'sess_stage3_canary';
-const runId = process.env['IEOS_RUN_ID'];
-if (
-  eosRootArg === undefined ||
-  projectRootArg === undefined ||
-  repoSha === undefined ||
-  runId === undefined
-) {
+const runId = process.env['IEOS_RUN_ID'] ?? '';
+if (eosRootArg === '' || projectRootArg === '' || repoSha === '' || runId === '') {
   process.stderr.write(
     'usage: stage3-canary-child.ts --eos-root DIR --project DIR --repo-sha SHA [--session ID]\n' +
       'IEOS_RUN_ID must be injected by the trusted canary host.\n',
