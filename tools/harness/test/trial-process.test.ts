@@ -8,8 +8,13 @@
  * the run's evidence window passed.
  */
 
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { runTrialProcess } from '../src/trial-process.ts';
+
+const here = dirname(fileURLToPath(import.meta.url));
 
 /**
  * The smallest environment a child `node -e` needs on either platform.
@@ -66,5 +71,20 @@ describe('a trial cannot outlive its timeout', () => {
     expect(result.stdout).toBe('done');
     expect(result.timedOut).toBe(false);
     expect(result.error).toBeNull();
+  });
+});
+
+describe('a timeout is reported by the one thing that knows about it', () => {
+  it('reads the sandbox\u2019s timeout from the helper rather than inferring one', () => {
+    // A behavioural test would need real Linux namespaces, so this guards the
+    // shape instead -- and says so. The inference this replaced was wrong in
+    // both directions: a timeout before `boundaries.json` exists leaves
+    // `observations` null and read as an ordinary failure, and an unrelated
+    // signal read as a timeout once a report existed.
+    const sandboxSource = readFileSync(join(here, '..', 'src', 'ns-sandbox.ts'), 'utf8');
+    // Vacuity guard: an empty read would satisfy the negative assertion below.
+    expect(sandboxSource.length).toBeGreaterThan(1000);
+    expect(sandboxSource).toContain('timedOut: run.timedOut');
+    expect(sandboxSource).not.toMatch(/timedOut\s*=\s*run\.signal\s*!==\s*null/u);
   });
 });

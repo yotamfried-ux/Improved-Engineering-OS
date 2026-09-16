@@ -135,12 +135,17 @@ export async function runInNamespace(options: NamespaceRunOptions): Promise<Name
       // is reported as such; it is never treated as a clean run.
     }
 
-    const timedOut = run.signal !== null && observations !== null;
     return {
       status: run.status,
       stdout: run.stdout ?? '',
       stderr: run.stderr ?? '',
-      timedOut,
+      // The helper knows whether it killed this trial for running long; it is
+      // the only thing that does. Inferring it from `signal !== null &&
+      // observations !== null` was wrong twice over: a timeout before the
+      // report is written leaves `observations` null and would have been
+      // reported as an ordinary failure, and any other signal -- a crash --
+      // would have been reported as a timeout once a report existed.
+      timedOut: run.timedOut,
       observations,
       unavailableReason:
         run.status === MECHANISM_UNAVAILABLE
