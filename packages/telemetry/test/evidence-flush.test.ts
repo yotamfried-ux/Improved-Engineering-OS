@@ -26,6 +26,10 @@ class MemoryOutbox implements Outbox {
     return this.events.slice(0, limit);
   }
 
+  async pendingCount(): Promise<number> {
+    return this.events.length;
+  }
+
   async acknowledge(ids: readonly string[]): Promise<void> {
     const accepted = new Set(ids);
     for (let index = this.events.length - 1; index >= 0; index -= 1) {
@@ -188,5 +192,43 @@ describe('evidence-aware terminal flushing', () => {
     expect(result.outcome).toBe('unreachable');
     expect(result.remaining).toBe(1);
     expect(flusher.everFailed).toBe(true);
+  });
+
+  it('records a local queue failure as sticky before the exception escapes', async () => {
+    const outbox = new MemoryOutbox(1);
+    outbox.acknowledge = async () => {
+      throw new Error('database is locked');
+    };
+    const flusher = new Flusher({
+      outbox,
+      ingest: acceptingIngest([]),
+      sessionKind: 'ci',
+      policy: { batchSize: 100, maxAttempts: 1, retryDelayMs: 0 },
+    });
+
+    await expect(flusher.flush('session_end')).rejects.toThrow('database is locked');
+    expect(flusher.everFailed).toBe(true);
+  });
+
+  it('counts remaining telemetry without materializing the queue', async () => {
+    const outbox = new MemoryOutbox(3);
+    const limits: number[] = [];
+    const pending = outbox.pending.bind(outbox);
+    outbox.pending = async (limit) => {
+      limits.push(limit);
+      return pending(limit);
+    };
+    const ingest = acceptingIngest([]);
+    ingest.sendEvents = async () => ({ status: 'unreachable', reason: 'offline' });
+    const flusher = new Flusher({
+      outbox,
+      ingest,
+      sessionKind: 'ci',
+      policy: { batchSize: 2, maxAttempts: 1, retryDelayMs: 0 },
+    });
+
+    const result = await flusher.flush('session_end');
+    expect(result).toMatchObject({ outcome: 'unreachable', remaining: 3 });
+    expect(limits).toEqual([2]);
   });
 });

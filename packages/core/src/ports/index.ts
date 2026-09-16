@@ -118,6 +118,8 @@ export interface AssetSearchHit {
 export interface Outbox {
   append(event: TelemetryEvent): Promise<{ readonly appended: boolean }>;
   pending(limit: number): Promise<readonly TelemetryEvent[]>;
+  /** How many events are still undelivered, without materializing them. */
+  pendingCount(): Promise<number>;
   acknowledge(eventIds: readonly string[]): Promise<void>;
 }
 

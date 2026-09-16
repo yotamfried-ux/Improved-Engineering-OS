@@ -18,6 +18,7 @@
  */
 
 import type { RegisterRunRequest } from '@ieos/core';
+import { requireHttpsEndpoint } from './plane-ingest.ts';
 import { RunRegistry } from './run-registry.ts';
 
 /** The one call the harness makes against the Evidence Plane. */
@@ -82,8 +83,9 @@ export function httpRegisterRun(options: {
   readonly serviceToken: string;
   readonly fetch: typeof globalThis.fetch;
 }): RegisterRunTransport {
+  const base = requireHttpsEndpoint(options.endpoint);
   return async (request) => {
-    const response = await options.fetch(`${options.endpoint.replace(/\/$/u, '')}/register_run`, {
+    const response = await options.fetch(`${base}/register_run`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',

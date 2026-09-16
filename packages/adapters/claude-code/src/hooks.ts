@@ -150,10 +150,16 @@ function assetAttribute(input: HookInput): Record<string, unknown> {
   return assetId === undefined ? {} : { 'asset.id': assetId };
 }
 
+/** The MCP server name `ieos init` registers; Claude Code exposes its tools as `mcp__ieos__<tool>`. */
+const IEOS_MCP_PREFIX = 'mcp__ieos__';
+
 function ieosTool(name: string | undefined): 'resolve' | 'inspect' | 'observe' | 'expand' | null {
   if (name === undefined) return null;
+  // Another server's `mcp__other__resolve` is not IEOS use and must not become
+  // IEOS attribution evidence.
+  const bare = name.startsWith(IEOS_MCP_PREFIX) ? name.slice(IEOS_MCP_PREFIX.length) : name;
   for (const tool of ['resolve', 'inspect', 'observe', 'expand'] as const) {
-    if (name === tool || name.endsWith(`__${tool}`)) return tool;
+    if (bare === tool) return tool;
   }
   return null;
 }

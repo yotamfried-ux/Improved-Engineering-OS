@@ -141,6 +141,15 @@ describe('Stage 3 qualification plane configuration', () => {
     ).toThrow(/expired expiry/u);
   });
 
+  it('refuses a cleartext ingest endpoint before reading any credential', () => {
+    expect(() =>
+      loadQualificationPlaneConfig({
+        eosRoot: '/unused',
+        env: { IEOS_INGEST_URL: 'http://plane.invalid/ingest' },
+      }),
+    ).toThrow(/must use https/u);
+  });
+
   it('fails closed before a trial when either host identity is absent', () => {
     expect(() =>
       loadQualificationPlaneConfig({

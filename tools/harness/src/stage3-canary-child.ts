@@ -98,6 +98,10 @@ class StdioMcpClient {
     if (reply.error !== undefined) {
       throw new Error(`MCP initialize failed: ${reply.error.code} ${reply.error.message}`);
     }
+    // MCP lifecycle: the client confirms initialization before any normal request.
+    this.#child.stdin.write(
+      `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`,
+    );
   }
 
   async callTool(

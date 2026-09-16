@@ -148,6 +148,10 @@ export class SqliteOutbox implements Outbox {
       .map((row) => telemetryEnvelopeSchema.parse(JSON.parse(String(row['envelope_json']))));
   }
 
+  async pendingCount(): Promise<number> {
+    return this.depth();
+  }
+
   /**
    * Mark and remove exactly the ids proven durable remotely.
    *

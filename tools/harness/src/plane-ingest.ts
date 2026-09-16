@@ -6,12 +6,35 @@ import type { Ingest, IngestOutcome, ProxyRequest, ProxyResponse } from '@ieos/c
 
 const TOKEN_HEADER = 'X-IEOS-Installation-Token';
 
+/**
+ * Refuse any Evidence Plane endpoint that is not HTTPS, returning its base URL.
+ *
+ * Every request carries a bearer credential and may carry context snapshots, so a
+ * cleartext endpoint would expose both. Trial children never reach this path: they
+ * use the credential-free socket or named pipe served by `servePlaneProxy`.
+ */
+export function requireHttpsEndpoint(endpoint: string): string {
+  let url: URL;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    throw new Error('the Evidence Plane endpoint is not a valid URL');
+  }
+  if (url.protocol !== 'https:') {
+    throw new Error(
+      `the Evidence Plane endpoint must use https, not ${url.protocol.replace(/:$/u, '')}; ` +
+        'refusing to send a credential in cleartext',
+    );
+  }
+  return endpoint.replace(/\/$/u, '');
+}
+
 export function httpIngest(options: {
   readonly endpoint: string;
   readonly installationToken: string;
   readonly fetch: typeof globalThis.fetch;
 }): Ingest {
-  const base = options.endpoint.replace(/\/$/u, '');
+  const base = requireHttpsEndpoint(options.endpoint);
 
   const post = async (route: string, body: unknown): Promise<Response> =>
     options.fetch(`${base}/${route}`, {

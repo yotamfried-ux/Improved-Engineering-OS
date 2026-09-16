@@ -405,6 +405,44 @@ describe('a hostile or broken environment', () => {
   });
 });
 
+describe('a staging failure after the run began (D23)', () => {
+  it('keeps the run INCOMPLETE even when every later boundary succeeds', async () => {
+    let broken = false;
+    const flaky: RandomSource = {
+      bytes: (length) => {
+        if (broken) throw new Error('entropy unavailable');
+        return random.bytes(length);
+      },
+    };
+    const shared = deps({ random: flaky, env: { CI: '1', [REACHABILITY_ATTESTATION]: 'true' } });
+    await runHook(payload('SessionStart'), shared);
+    broken = true;
+    const lost = await runHook(
+      payload('PostToolUse', {
+        tool_name: 'mcp__ieos__inspect',
+        tool_input: { handle: { kind: 'asset', id: 'asset_a' } },
+      }),
+      shared,
+    );
+    broken = false;
+    const ended = await runHook(payload('SessionEnd'), shared);
+
+    expect(lost.exitCode).toBe(1);
+    expect(lost.exitCode).not.toBe(BLOCKING_EXIT_CODE);
+    expect(ended.exitCode).toBe(1);
+    const db = await openOutbox(shared.outboxPath);
+    try {
+      const state = new SqliteRunStateStore(db).forSession('sess_1');
+      expect(state?.flushEverFailed).toBe(true);
+      expect(state?.telemetryState).toBe('INCOMPLETE');
+      expect(state?.qualificationEligible).toBe(false);
+      expect(new SqliteOutbox(db).depth()).toBe(0);
+    } finally {
+      db.close();
+    }
+  });
+});
+
 describe('a pre-registered run id (S-7, D36)', () => {
   async function runIdFor(env: Record<string, string>): Promise<string | undefined> {
     const shared = deps({ env });

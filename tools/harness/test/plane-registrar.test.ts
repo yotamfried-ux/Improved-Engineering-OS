@@ -72,6 +72,18 @@ describe('registering a run', () => {
 });
 
 describe('the transport', () => {
+  it('refuses a cleartext endpoint before the service token can be sent', () => {
+    let calls = 0;
+    const fetch = (() => {
+      calls += 1;
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    }) as unknown as typeof globalThis.fetch;
+    expect(() =>
+      httpRegisterRun({ endpoint: 'http://plane.invalid/ingest', serviceToken: 't', fetch }),
+    ).toThrow(/must use https/u);
+    expect(calls).toBe(0);
+  });
+
   it('sends the service token in the D22.2 header, to the register_run route', async () => {
     interface Seen {
       url: string;

@@ -108,6 +108,17 @@ export class Flusher {
   }
 
   async flush(boundary: FlushBoundary): Promise<FlushResult> {
+    try {
+      return await this.#flush(boundary);
+    } catch (error) {
+      // A local queue that throws mid-boundary is not a drained boundary. Make
+      // the failure sticky before the caller sees the exception.
+      this.#everFailed = true;
+      throw error;
+    }
+  }
+
+  async #flush(boundary: FlushBoundary): Promise<FlushResult> {
     let attempted = 0;
     let acknowledged = 0;
 
@@ -227,7 +238,7 @@ export class Flusher {
   }
 
   async #remaining(): Promise<number> {
-    const events = (await this.#outbox.pending(Number.MAX_SAFE_INTEGER)).length;
+    const events = await this.#outbox.pendingCount();
     const evidence = this.#evidence === undefined ? 0 : await this.#evidence.pendingEvidenceCount();
     return events + evidence;
   }

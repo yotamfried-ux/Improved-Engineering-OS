@@ -2,6 +2,40 @@ import { describe, expect, it } from 'vitest';
 import { attributionEvents, planHook } from '../src/hooks.ts';
 
 describe('real PostToolUse attribution payloads', () => {
+  it('ignores a same-named tool from a non-IEOS MCP server', () => {
+    const response = {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({ context_snapshot_id: 'ctx_a', items: [{ id: 'asset_a' }] }),
+        },
+      ],
+    };
+    for (const tool_name of [
+      'mcp__other__resolve',
+      'mcp__notieos__resolve',
+      'mcp__other__ieos__resolve',
+    ]) {
+      expect(
+        attributionEvents({
+          hook_event_name: 'PostToolUse',
+          session_id: 'session_a',
+          tool_name,
+          tool_input: { task_hint: 'bash command' },
+          tool_response: response,
+        }),
+      ).toEqual([]);
+    }
+    expect(
+      attributionEvents({
+        hook_event_name: 'PostToolUse',
+        session_id: 'session_a',
+        tool_name: 'mcp__other__inspect',
+        tool_input: { handle: { kind: 'asset', id: 'asset_a' } },
+      }),
+    ).toEqual([]);
+  });
+
   it('uses tool_response and typed handles for inspect', () => {
     const input = {
       hook_event_name: 'PostToolUse' as const,

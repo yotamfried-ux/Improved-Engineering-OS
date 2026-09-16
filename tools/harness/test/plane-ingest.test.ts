@@ -94,6 +94,16 @@ const accepted = (...ids: string[]) => ({
 });
 
 describe('the plane client the repository did not have (D22, D22.2)', () => {
+  it('refuses a cleartext endpoint before any credential can be sent', () => {
+    const { fetch, calls } = stubFetch(() => accepted());
+    for (const endpoint of ['http://plane.invalid/ingest', 'ws://plane.invalid', 'not a url']) {
+      expect(() => httpIngest({ endpoint, installationToken: 'inst-token', fetch })).toThrow(
+        /https|valid URL/u,
+      );
+    }
+    expect(calls).toEqual([]);
+  });
+
   it('sends events to ingest_events with the installation token in the D22.2 header', async () => {
     const { ingest, calls } = client(() => accepted('evt_1'));
     const outcome = await ingest.sendEvents([{ event_id: 'evt_1' } as never]);

@@ -110,6 +110,9 @@ export async function runHook(raw: string, deps: HookDeps): Promise<HookOutcome>
     return failed(`the telemetry outbox is unavailable: ${describe(error)}`);
   }
 
+  // Set once a run exists. Any later staging or flush exception must leave the
+  // run permanently INCOMPLETE, or a recovered SessionEnd could call it COMPLETE.
+  let markRunFailed: (() => void) | undefined;
   try {
     const outbox = new SqliteOutbox(db);
     const evidence = new SqliteEvidenceDocuments(db);
@@ -136,6 +139,8 @@ export async function runHook(raw: string, deps: HookDeps): Promise<HookOutcome>
       state = runs.forSession(sessionKey);
     }
     if (state === undefined) return failed('the run could not be recorded');
+    const runId = state.runId;
+    markRunFailed = () => runs.markFlushFailed(runId);
 
     const sessionKind = classifySessionKind(readSessionMarkers(deps.env));
     const emitter = new Emitter({
@@ -212,7 +217,13 @@ export async function runHook(raw: string, deps: HookDeps): Promise<HookOutcome>
     }
     return succeeded(notes.join('\n'));
   } catch (error) {
-    return failed(`unexpected telemetry failure: ${describe(error)}`);
+    let persisted = '';
+    try {
+      markRunFailed?.();
+    } catch (markError) {
+      persisted = `; the failure could not be persisted: ${describe(markError)}`;
+    }
+    return failed(`unexpected telemetry failure: ${describe(error)}${persisted}`);
   } finally {
     db.close();
   }

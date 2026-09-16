@@ -16,7 +16,12 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { httpIngest, servePlaneProxy, type PlaneProxy } from './plane-ingest.ts';
+import {
+  httpIngest,
+  requireHttpsEndpoint,
+  servePlaneProxy,
+  type PlaneProxy,
+} from './plane-ingest.ts';
 
 export const INGEST_SOCKET_ENV = 'IEOS_INGEST_SOCKET';
 export const REACHABILITY_ATTESTATION_ENV = 'IEOS_INGEST_REACHABLE_AT_START';
@@ -133,6 +138,11 @@ export function loadQualificationPlaneConfig(options: {
     throw new QualificationPlaneError(
       'Stage 3 qualification requires IEOS_INGEST_URL (IEOS_INGEST_ENDPOINT is accepted as a legacy alias)',
     );
+  }
+  try {
+    requireHttpsEndpoint(endpoint);
+  } catch (error) {
+    throw new QualificationPlaneError(error instanceof Error ? error.message : String(error));
   }
 
   const service = loadServiceCredential({
