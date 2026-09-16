@@ -13,11 +13,19 @@
 
 import { spawn } from 'node:child_process';
 
+/** Default grace for each step of the termination ladder below. */
+const DEFAULT_KILL_GRACE_MS = 2_000;
+
 export interface TrialProcessOptions {
   readonly cwd: string;
   readonly env: Readonly<Record<string, string>>;
   readonly timeoutMs: number;
   readonly maxBufferBytes: number;
+  /**
+   * How long SIGTERM is given before SIGKILL, and then SIGKILL before the
+   * result is returned regardless. Exposed so tests need not wait the default.
+   */
+  readonly killGraceMs?: number;
 }
 
 export interface TrialProcessResult {
@@ -52,9 +60,31 @@ export function runTrialProcess(
       windowsHide: true,
     });
 
+    const grace = options.killGraceMs ?? DEFAULT_KILL_GRACE_MS;
+    let escalation: NodeJS.Timeout | undefined;
+    let settlement: NodeJS.Timeout | undefined;
+
+    /**
+     * Stop the trial within a bounded time, whatever it does about it.
+     *
+     * SIGTERM is a request, and a trial is free to ignore it; `close` also
+     * waits on every descendant holding the output pipes, which a grandchild
+     * can do after the child itself is gone. Either way the promise would
+     * outlive `timeoutMs` and the bound would not be one. So the ladder is
+     * SIGTERM, then SIGKILL, then returning the result without `close`.
+     */
+    const terminate = (): void => {
+      if (escalation !== undefined) return;
+      child.kill('SIGTERM');
+      escalation = setTimeout(() => {
+        child.kill('SIGKILL');
+        settlement = setTimeout(() => finish(null, 'SIGKILL'), grace);
+      }, grace);
+    };
+
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill('SIGTERM');
+      terminate();
     }, options.timeoutMs);
 
     const collect =
@@ -64,7 +94,7 @@ export function runTrialProcess(
         if (bytes > options.maxBufferBytes) {
           if (error === null)
             error = `the trial exceeded ${String(options.maxBufferBytes)} bytes of output`;
-          child.kill('SIGTERM');
+          terminate();
           return;
         }
         into.push(chunk);
@@ -76,6 +106,8 @@ export function runTrialProcess(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      if (escalation !== undefined) clearTimeout(escalation);
+      if (settlement !== undefined) clearTimeout(settlement);
       resolve({
         status,
         signal,
