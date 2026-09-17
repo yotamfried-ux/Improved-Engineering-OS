@@ -6,6 +6,7 @@ import {
   qualificationProfileFor,
   qualificationTrialPolicy,
   runQualificationProcess,
+  windowsBashDirectory,
 } from '../src/qualification-profile.ts';
 
 describe('Stage 3 qualification profiles', () => {
@@ -224,5 +225,83 @@ describe('the host process stays responsive while a trial runs', () => {
       timeoutSeconds: 10,
     });
     expect(result.stdout).toBe('stdin-closed:0');
+  });
+});
+
+describe('a trial gets the bash that understands its paths (win32)', () => {
+  // On a machine with WSL, `C:\Windows\System32\bash.exe` shadows Git's bash on
+  // PATH. A fixture running `bash script.sh` then hands a `C:\...` path to a
+  // Linux filesystem. GitHub's runners have no WSL, so CI resolved the right
+  // bash and stayed green while four graders failed on the owner's machine.
+  const GIT_CORE = 'C:\\Program Files\\Git\\mingw64\\libexec\\git-core';
+
+  it('resolves Git bash from `git --exec-path`', () => {
+    const directory = windowsBashDirectory({
+      platform: 'win32',
+      gitExecPath: () => GIT_CORE,
+      exists: (candidate) => candidate === 'C:\\Program Files\\Git\\bin\\bash.exe',
+    });
+    expect(directory).toBe('C:\\Program Files\\Git\\bin');
+  });
+
+  it('falls back to usr\\bin, which is where some Git builds put it', () => {
+    const directory = windowsBashDirectory({
+      platform: 'win32',
+      gitExecPath: () => GIT_CORE,
+      exists: (candidate) => candidate === 'C:\\Program Files\\Git\\usr\\bin\\bash.exe',
+    });
+    expect(directory).toBe('C:\\Program Files\\Git\\usr\\bin');
+  });
+
+  it('accepts the forward slashes `git --exec-path` actually prints', () => {
+    const directory = windowsBashDirectory({
+      platform: 'win32',
+      gitExecPath: () => 'C:/Program Files/Git/mingw64/libexec/git-core',
+      exists: (candidate) => candidate === 'C:\\Program Files\\Git\\bin\\bash.exe',
+    });
+    expect(directory).toBe('C:\\Program Files\\Git\\bin');
+  });
+
+  it('reports nothing rather than guessing when git or bash is absent', () => {
+    expect(
+      windowsBashDirectory({ platform: 'win32', gitExecPath: () => undefined, exists: () => true }),
+    ).toBeUndefined();
+    expect(
+      windowsBashDirectory({ platform: 'win32', gitExecPath: () => GIT_CORE, exists: () => false }),
+    ).toBeUndefined();
+    // Not a Windows problem, so not a Windows answer.
+    expect(
+      windowsBashDirectory({ platform: 'linux', gitExecPath: () => GIT_CORE }),
+    ).toBeUndefined();
+  });
+
+  it('puts that directory first in the trial PATH, ahead of System32', () => {
+    const source = qualificationEnvironmentSource({
+      platform: 'win32',
+      env: { PATH: 'C:\\Windows\\System32;C:\\other', PATHEXT: '.COM;.EXE' },
+      trusted: {},
+      bashDirectory: 'C:\\Program Files\\Git\\bin',
+    });
+    expect(source['PATH']).toBe('C:\\Program Files\\Git\\bin;C:\\Windows\\System32;C:\\other');
+  });
+
+  it('does not add the directory twice when it is already there', () => {
+    const source = qualificationEnvironmentSource({
+      platform: 'win32',
+      env: { PATH: 'C:\\Program Files\\Git\\bin;C:\\Windows\\System32' },
+      trusted: {},
+      bashDirectory: 'C:\\Program Files\\Git\\bin',
+    });
+    expect(source['PATH']).toBe('C:\\Program Files\\Git\\bin;C:\\Windows\\System32');
+  });
+
+  it('leaves a Linux trial PATH alone', () => {
+    const source = qualificationEnvironmentSource({
+      platform: 'linux',
+      env: { PATH: '/usr/bin:/bin' },
+      trusted: {},
+      bashDirectory: 'C:\\Program Files\\Git\\bin',
+    });
+    expect(source['PATH']).toBe('/usr/bin:/bin');
   });
 });
