@@ -9,8 +9,8 @@ import {
   qualificationProfileFor,
   qualificationTrialPolicy,
   runQualificationProcess,
-  windowsBashDirectory,
 } from '../src/qualification-profile.ts';
+import { windowsBashDirectory } from '../src/git-bash.ts';
 
 describe('Stage 3 qualification profiles', () => {
   it('makes native Windows the personal-v1 profile without claiming kernel boundaries', () => {
@@ -331,6 +331,19 @@ describe('a trial gets the bash that understands its paths (win32)', () => {
       .join('\n');
     expect(body.length).toBeGreaterThan(200);
     expect(body).not.toContain('windowsBashDirectory(');
+  });
+
+  it('also reaches the evaluator checks, which run on the host and not in a trial', () => {
+    // Where this actually bit. Four graders failed on the owner's machine while
+    // Windows CI stayed green, and fixing the trial's PATH did not help them:
+    // `runCheck` spawns the hidden-condition script on the host, and several of
+    // those scripts shell out to `bash`. The checks are graded content under
+    // `evaluator/`, so the environment they are handed is what gets corrected.
+    const here = dirname(fileURLToPath(import.meta.url));
+    const bankSource = readFileSync(join(here, '..', 'src', 'task-bank.ts'), 'utf8');
+    expect(bankSource.length).toBeGreaterThan(1000);
+    expect(bankSource).toContain('env: checkEnvironment()');
+    expect(bankSource).toContain('windowsBashDirectory()');
   });
 
   it('is supplied by every trial the harness actually starts', () => {

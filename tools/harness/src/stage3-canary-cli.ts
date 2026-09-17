@@ -15,11 +15,11 @@ import {
   openPlatformQualificationProxy,
   qualificationEnvironmentNames,
   qualificationEnvironmentSource,
-  windowsBashDirectory,
   qualificationProfileFor,
   qualificationTrialPolicy,
   runQualificationProcess,
 } from './qualification-profile.ts';
+import { windowsBashDirectory } from './git-bash.ts';
 import { RunRegistry } from './run-registry.ts';
 import { createTrial, probe } from './sandbox.ts';
 import { inspectStage3Host } from './stage3-host-preflight.ts';

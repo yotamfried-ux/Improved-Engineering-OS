@@ -18,6 +18,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
+import { delimiter } from 'node:path';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { TrialTask } from './driver.ts';
@@ -36,6 +37,8 @@ import {
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const EVALUATOR_ROOT = resolve(HERE, '..', '..', '..', 'evaluator');
 const CHECKS = resolve(EVALUATOR_ROOT, 'stage-3', 'checks');
+
+import { windowsBashDirectory } from './git-bash.ts';
 
 export interface Stage3Task {
   readonly taskId: string;
@@ -160,6 +163,30 @@ export interface CheckOutcome {
 }
 
 /**
+ * The environment a hidden-condition check runs in.
+ *
+ * Several checks shell out to `bash` -- a git hook, a quality gate, a plugin
+ * runner. On a machine with WSL installed, `C:\Windows\System32\bash.exe`
+ * comes first on PATH, receives a `C:\...` workspace and hands it to a Linux
+ * filesystem, so four graders fail for a reason that has nothing to do with the
+ * work they grade. The checks live under `evaluator/` and are the conditions a
+ * trial is scored against, so they are not edited to work around it; the
+ * environment they are given is corrected instead.
+ *
+ * GitHub's Windows runners carry no WSL, which is why CI resolved the right
+ * bash and stayed green while the owner's machine did not.
+ */
+function checkEnvironment(): NodeJS.ProcessEnv {
+  const bash = windowsBashDirectory();
+  if (bash === undefined) return process.env;
+  const current = process.env['PATH'] ?? '';
+  const already = current
+    .split(delimiter)
+    .some((entry) => entry.trim().toLowerCase() === bash.toLowerCase());
+  return already ? process.env : { ...process.env, PATH: `${bash}${delimiter}${current}` };
+}
+
+/**
  * Run a task's hidden-condition check against a finished workspace.
  *
  * A check that cannot be parsed yields no outcomes and a stated failure, so every
@@ -171,6 +198,7 @@ export function runCheck(task: Stage3Task, workspaceRoot: string): CheckOutcome 
     encoding: 'utf8',
     timeout: 300_000,
     maxBuffer: 16 * 1024 * 1024,
+    env: checkEnvironment(),
   });
   const raw = run.stdout ?? '';
   try {

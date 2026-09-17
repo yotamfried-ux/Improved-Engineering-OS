@@ -16,10 +16,10 @@ import {
   openPlatformQualificationProxy,
   qualificationEnvironmentNames,
   qualificationEnvironmentSource,
-  windowsBashDirectory,
   qualificationProfileFor,
   qualificationTrialPolicy,
 } from './qualification-profile.ts';
+import { windowsBashDirectory } from './git-bash.ts';
 import { RunRegistry } from './run-registry.ts';
 import { createTrial } from './sandbox.ts';
 import { MAX_COST_USD_PER_TRIAL, runCheck, taskById } from './task-bank.ts';

@@ -1,6 +1,3 @@
-import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { win32 as winPath } from 'node:path';
 import type { IsolationPolicy } from './isolation.ts';
 import { namespaceTrialPolicy } from './isolation.ts';
 import { runInNamespace, type NamespaceRunOptions, type NamespaceRunResult } from './ns-sandbox.ts';
@@ -85,59 +82,6 @@ export function qualificationEnvironmentNames(
     ];
   }
   return ['PATH', 'HOME', 'TMPDIR', 'NODE_EXTRA_CA_CERTS'];
-}
-
-/**
- * The directory holding a `bash` that understands Windows paths.
- *
- * On a machine with WSL installed, `C:\Windows\System32\bash.exe` -- the WSL
- * launcher -- comes before Git's bash on PATH. A task-bank fixture that runs
- * `bash script.sh` then hands a `C:\...` path to a Linux filesystem, which does
- * not understand it. GitHub's Windows runners have no WSL, so CI resolves the
- * right bash and never saw this; the owner's machine has one, and four graders
- * failed there for a reason that had nothing to do with the task.
- *
- * The fixture is graded content, so it is not touched. Git is already a Stage 3
- * preflight requirement, so its bash is present, and putting its directory
- * first in the trial's PATH fixes the resolution for the tests and for the paid
- * bank alike.
- *
- * `git --exec-path` reports `<root>/mingw64/libexec/git-core`; bash lives at
- * `<root>/bin` or `<root>/usr/bin`. Paths are parsed as win32 regardless of the
- * host so this is testable off Windows.
- */
-export function windowsBashDirectory(
-  options: {
-    readonly platform?: NodeJS.Platform;
-    readonly gitExecPath?: () => string | undefined;
-    readonly exists?: (candidate: string) => boolean;
-  } = {},
-): string | undefined {
-  const platform = options.platform ?? process.platform;
-  if (platform !== 'win32') return undefined;
-
-  const execPath = options.gitExecPath ?? defaultGitExecPath;
-  const core = execPath();
-  if (core === undefined || core === '') return undefined;
-
-  let root = core.replace(/\//gu, '\\');
-  for (let level = 0; level < 3; level += 1) root = winPath.dirname(root);
-
-  const exists = options.exists ?? existsSync;
-  for (const relative of ['bin', winPath.join('usr', 'bin')]) {
-    const directory = winPath.join(root, relative);
-    if (exists(winPath.join(directory, 'bash.exe'))) return directory;
-  }
-  return undefined;
-}
-
-function defaultGitExecPath(): string | undefined {
-  try {
-    return execFileSync('git', ['--exec-path'], { encoding: 'utf8' }).trim();
-  } catch {
-    // No git on PATH is a preflight failure, reported there rather than here.
-    return undefined;
-  }
 }
 
 function envValue(
