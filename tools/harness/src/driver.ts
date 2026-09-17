@@ -42,7 +42,32 @@ export interface AgentRunUsage {
   readonly outputTokens: number;
   readonly cacheReadInputTokens: number;
   readonly cacheCreationInputTokens: number;
+  /**
+   * Every input token the turn consumed: uncached, cache reads and cache writes.
+   *
+   * Derived rather than measured, and recorded because reading `inputTokens`
+   * alone invites the mistake it is named after. A real trial here reports 36
+   * uncached input tokens beside 879,130 cache reads, so the bare field looks
+   * like a broken counter and is in fact the small remainder. Kept alongside
+   * the three parts, never instead of them: the parts price differently, so
+   * `costUsd` stays the number a budget is enforced on.
+   */
+  readonly totalInputTokens: number;
   readonly turns: number;
+}
+
+/** What the harness asked for, and what the agent reported actually running. */
+export interface AgentModel {
+  /** The model the harness requested, or `null` when it named none. */
+  readonly requested: string | null;
+  /**
+   * The model the agent says it ran, from its own start-up event.
+   *
+   * `null` when the agent did not report one, which is not the same as it
+   * having matched: a silent substitution and an unreported model look alike
+   * from the configuration alone, which is why this is read from the run.
+   */
+  readonly resolved: string | null;
 }
 
 export interface DriverResult {
@@ -51,6 +76,8 @@ export interface DriverResult {
   readonly transcriptRef: string | null;
   /** `null` when the driver has no way to report consumption. */
   readonly usage: AgentRunUsage | null;
+  /** Absent for a driver that runs no model at all. */
+  readonly model?: AgentModel;
 }
 
 /**
@@ -105,6 +132,7 @@ export class FakeAgentDriver implements AgentDriver {
         outputTokens: 0,
         cacheReadInputTokens: 0,
         cacheCreationInputTokens: 0,
+        totalInputTokens: 0,
         turns: 0,
       },
     });

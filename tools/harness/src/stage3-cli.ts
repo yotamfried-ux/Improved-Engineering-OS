@@ -315,6 +315,9 @@ try {
     origin_class_the_plane_would_stamp: registry.originClassFor(runId),
     budget: report.budget,
     usage,
+    // Recorded per trial rather than taken from the configuration, so a run
+    // that silently used another model cannot be compared as though it had not.
+    model: finalOutcome.result.model ?? { requested: null, resolved: null },
     tool_calls: toolCalls,
     resolve_called_unprompted: resolveCalled,
     eos_tools_used: [...new Set(toolCalls.map((call) => call.name))].filter((name) =>
