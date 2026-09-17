@@ -13,7 +13,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { pathWithGitBashFirst } from '../src/git-bash.ts';
+import { environmentWithGitBashFirst, pathWithGitBashFirst } from '../src/git-bash.ts';
 
 const GIT_BASH = 'C:\\Program Files\\Git\\bin';
 const SYSTEM32 = 'C:\\Windows\\System32';
@@ -62,5 +62,36 @@ describe('a Windows PATH leads with the bash that understands Windows paths', ()
 
   it('yields just the directory when there was no PATH to begin with', () => {
     expect(pathWithGitBashFirst('', GIT_BASH)).toBe(GIT_BASH);
+  });
+});
+
+describe('the corrected PATH reaches the child under the name it already had', () => {
+  it('rewrites Windows\u2019 own `Path` rather than adding a second key', () => {
+    // The failure this guards is silent. `{ ...process.env, PATH: fixed }` on
+    // Windows leaves `Path` untouched beside it, and a spawned process matches
+    // case-sensitively: it can read the original, with the WSL launcher still
+    // in front, while this code believes it handed over the corrected one.
+    const env = environmentWithGitBashFirst({ Path: `${SYSTEM32};C:\\tools` }, GIT_BASH);
+    expect(Object.keys(env).filter((name) => name.toUpperCase() === 'PATH')).toEqual(['Path']);
+    expect(env['Path']).toBe(`${GIT_BASH};${SYSTEM32};C:\\tools`);
+  });
+
+  it('keeps an all-caps PATH as it found it', () => {
+    const env = environmentWithGitBashFirst({ PATH: SYSTEM32 }, GIT_BASH);
+    expect(Object.keys(env)).toEqual(['PATH']);
+    expect(env['PATH']).toBe(`${GIT_BASH};${SYSTEM32}`);
+  });
+
+  it('introduces PATH only when the environment carries no such variable', () => {
+    const env = environmentWithGitBashFirst({ SystemRoot: 'C:\\Windows' }, GIT_BASH);
+    expect(env['PATH']).toBe(GIT_BASH);
+    expect(env['SystemRoot']).toBe('C:\\Windows');
+  });
+
+  it('copies the environment untouched when no Git Bash was found', () => {
+    const base = { Path: '/usr/bin:/bin' };
+    const env = environmentWithGitBashFirst(base, undefined);
+    expect(env).toEqual(base);
+    expect(env).not.toBe(base);
   });
 });

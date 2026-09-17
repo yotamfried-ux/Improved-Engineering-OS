@@ -37,7 +37,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 export const EVALUATOR_ROOT = resolve(HERE, '..', '..', '..', 'evaluator');
 const CHECKS = resolve(EVALUATOR_ROOT, 'stage-3', 'checks');
 
-import { pathWithGitBashFirst, windowsBashDirectory } from './git-bash.ts';
+import { environmentWithGitBashFirst, windowsBashDirectory } from './git-bash.ts';
 
 export interface Stage3Task {
   readonly taskId: string;
@@ -178,7 +178,7 @@ export interface CheckOutcome {
 function checkEnvironment(): NodeJS.ProcessEnv {
   const bash = windowsBashDirectory();
   if (bash === undefined) return process.env;
-  return { ...process.env, PATH: pathWithGitBashFirst(process.env['PATH'] ?? '', bash) };
+  return environmentWithGitBashFirst(process.env, bash);
 }
 
 /**

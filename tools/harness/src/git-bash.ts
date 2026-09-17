@@ -97,3 +97,29 @@ function sameDirectory(left: string, right: string): boolean {
       .toLowerCase();
   return normalize(left) === normalize(right);
 }
+
+/**
+ * `base` with Git Bash leading its PATH, written back under the key it already
+ * uses.
+ *
+ * Windows stores the variable as `Path`, and `process.env` hides that behind a
+ * case-insensitive proxy -- but spreading it into a plain object does not:
+ * `{ ...process.env, PATH: value }` yields *two* keys, the untouched `Path`
+ * beside the corrected `PATH`. Node's own documentation says a child's
+ * environment is matched case-sensitively there and warns that duplicates
+ * behave inconsistently, so which of the two a spawned process reads is not
+ * something this code would be deciding. Half the time it would read the
+ * original -- and the shadowing WSL launcher would still come first, which is
+ * the whole defect this module exists to remove.
+ *
+ * So the existing key is found and rewritten in place; `PATH` is only
+ * introduced when the environment carries no such variable at all.
+ */
+export function environmentWithGitBashFirst(
+  base: NodeJS.ProcessEnv,
+  bash: string | undefined,
+): NodeJS.ProcessEnv {
+  if (bash === undefined || bash === '') return { ...base };
+  const key = Object.keys(base).find((name) => name.toUpperCase() === 'PATH') ?? 'PATH';
+  return { ...base, [key]: pathWithGitBashFirst(base[key] ?? '', bash) };
+}
