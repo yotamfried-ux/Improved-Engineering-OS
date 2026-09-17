@@ -1,4 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { createServer, type AddressInfo } from 'node:net';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   openPlatformQualificationProxy,
@@ -293,6 +296,52 @@ describe('a trial gets the bash that understands its paths (win32)', () => {
       bashDirectory: 'C:\\Program Files\\Git\\bin',
     });
     expect(source['PATH']).toBe('C:\\Program Files\\Git\\bin;C:\\Windows\\System32');
+  });
+
+  it('is not resolved inside the environment builder, which must stay pure', () => {
+    // Resolving it there reached for the host's own git and broke the
+    // neighbouring test that asserts the builder does not inherit host state.
+    // Windows CI caught it; Linux did not, because `bash.exe` is absent there.
+    const source = qualificationEnvironmentSource({
+      platform: 'win32',
+      env: { PATH: 'C:\\tools' },
+      trusted: {},
+    });
+    expect(source['PATH']).toBe('C:\\tools');
+
+    // The assertion above passes on Linux either way, because `bash.exe` is
+    // never found there -- which is exactly how the defect reached Windows CI.
+    // So the structure is asserted too: the builder holds no resolver to call.
+    const here = dirname(fileURLToPath(import.meta.url));
+    const profileSource = readFileSync(join(here, '..', 'src', 'qualification-profile.ts'), 'utf8');
+    // Anchored on statements inside the body: the options type's closing brace
+    // also sits at column 0, so slicing to the first `\n}` covers the type
+    // declaration and nothing that runs.
+    const bodyStart = profileSource.indexOf('const source: Record<string, string | undefined>');
+    const bodyEnd = profileSource.indexOf('return source;', bodyStart);
+    expect(bodyStart).toBeGreaterThan(-1);
+    expect(bodyEnd).toBeGreaterThan(bodyStart);
+    const body = profileSource
+      .slice(bodyStart, bodyEnd)
+      .split('\n')
+      .filter((line) => {
+        const text = line.trimStart();
+        return !text.startsWith('*') && !text.startsWith('//') && !text.startsWith('/*');
+      })
+      .join('\n');
+    expect(body.length).toBeGreaterThan(200);
+    expect(body).not.toContain('windowsBashDirectory(');
+  });
+
+  it('is supplied by every trial the harness actually starts', () => {
+    // A third call site that forgot it would put the WSL launcher back without
+    // failing anything, so the call sites are asserted rather than trusted.
+    const here = dirname(fileURLToPath(import.meta.url));
+    for (const cli of ['stage3-canary-cli.ts', 'stage3-cli.ts']) {
+      const source = readFileSync(join(here, '..', 'src', cli), 'utf8');
+      expect(source.length).toBeGreaterThan(500);
+      expect(source).toContain('bashDirectory: windowsBashDirectory()');
+    }
   });
 
   it('leaves a Linux trial PATH alone', () => {

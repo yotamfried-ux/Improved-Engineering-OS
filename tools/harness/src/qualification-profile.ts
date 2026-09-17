@@ -155,7 +155,15 @@ export function qualificationEnvironmentSource(options: {
   readonly platform?: NodeJS.Platform;
   readonly env?: Readonly<Record<string, string | undefined>>;
   readonly trusted: Readonly<Record<string, string>>;
-  /** Override for the Git Bash directory; tests supply one, production resolves it. */
+  /**
+   * Where a Windows trial's `bash` should come from, from
+   * `windowsBashDirectory()`.
+   *
+   * Passed in rather than resolved here: this function's job is to build an
+   * environment from the one it is given, and a test asserts exactly that it
+   * does not inherit host state. Reaching for the host's `git` from inside it
+   * broke that guarantee -- and the CI job on Windows caught it.
+   */
   readonly bashDirectory?: string | undefined;
 }): Readonly<Record<string, string | undefined>> {
   const platform = options.platform ?? process.platform;
@@ -171,10 +179,7 @@ export function qualificationEnvironmentSource(options: {
   // A trial's `bash` must be Git's, not the WSL launcher that shadows it. Done
   // here rather than in the fixture because the fixture is graded content.
   if (platform === 'win32') {
-    const bash =
-      options.bashDirectory === undefined
-        ? windowsBashDirectory({ platform })
-        : options.bashDirectory;
+    const bash = options.bashDirectory;
     if (bash !== undefined && bash !== '') {
       const current = source['PATH'] ?? '';
       const already = current

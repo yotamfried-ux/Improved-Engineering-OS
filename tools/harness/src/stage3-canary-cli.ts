@@ -15,6 +15,7 @@ import {
   openPlatformQualificationProxy,
   qualificationEnvironmentNames,
   qualificationEnvironmentSource,
+  windowsBashDirectory,
   qualificationProfileFor,
   qualificationTrialPolicy,
   runQualificationProcess,
@@ -87,6 +88,8 @@ const trial = createTrial({
   trialId: 'stage3-canary',
   policy: policyFor('(assigned below)'),
   sourceEnvironment: qualificationEnvironmentSource({
+    // Git's bash, not the WSL launcher that shadows it on PATH.
+    bashDirectory: windowsBashDirectory(),
     trusted: {
       IEOS_RUN_ID: runId,
       [INGEST_SOCKET_ENV]: proxy.targetPath,
