@@ -1,3 +1,4 @@
+import { pathWithGitBashFirst } from './git-bash.ts';
 import type { IsolationPolicy } from './isolation.ts';
 import { namespaceTrialPolicy } from './isolation.ts';
 import { runInNamespace, type NamespaceRunOptions, type NamespaceRunResult } from './ns-sandbox.ts';
@@ -121,16 +122,10 @@ export function qualificationEnvironmentSource(options: {
   }
 
   // A trial's `bash` must be Git's, not the WSL launcher that shadows it. Done
-  // here rather than in the fixture because the fixture is graded content.
-  if (platform === 'win32') {
-    const bash = options.bashDirectory;
-    if (bash !== undefined && bash !== '') {
-      const current = source['PATH'] ?? '';
-      const already = current
-        .split(';')
-        .some((entry) => entry.trim().toLowerCase() === bash.toLowerCase());
-      if (!already) source['PATH'] = current === '' ? bash : `${bash};${current}`;
-    }
+  // here rather than in the fixture because the fixture is graded content, and
+  // through the shared helper so the evaluator path cannot drift from this one.
+  if (platform === 'win32' && options.bashDirectory !== undefined) {
+    source['PATH'] = pathWithGitBashFirst(source['PATH'] ?? '', options.bashDirectory);
   }
 
   Object.assign(source, options.trusted);

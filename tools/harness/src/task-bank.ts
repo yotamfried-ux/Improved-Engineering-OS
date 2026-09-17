@@ -18,7 +18,6 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { delimiter } from 'node:path';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { TrialTask } from './driver.ts';
@@ -38,7 +37,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 export const EVALUATOR_ROOT = resolve(HERE, '..', '..', '..', 'evaluator');
 const CHECKS = resolve(EVALUATOR_ROOT, 'stage-3', 'checks');
 
-import { windowsBashDirectory } from './git-bash.ts';
+import { pathWithGitBashFirst, windowsBashDirectory } from './git-bash.ts';
 
 export interface Stage3Task {
   readonly taskId: string;
@@ -179,11 +178,7 @@ export interface CheckOutcome {
 function checkEnvironment(): NodeJS.ProcessEnv {
   const bash = windowsBashDirectory();
   if (bash === undefined) return process.env;
-  const current = process.env['PATH'] ?? '';
-  const already = current
-    .split(delimiter)
-    .some((entry) => entry.trim().toLowerCase() === bash.toLowerCase());
-  return already ? process.env : { ...process.env, PATH: `${bash}${delimiter}${current}` };
+  return { ...process.env, PATH: pathWithGitBashFirst(process.env['PATH'] ?? '', bash) };
 }
 
 /**

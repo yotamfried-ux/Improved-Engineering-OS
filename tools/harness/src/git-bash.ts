@@ -63,3 +63,37 @@ function defaultGitExecPath(): string | undefined {
     return undefined;
   }
 }
+
+/**
+ * `current` with `bash` first, exactly once.
+ *
+ * Presence is not the property that matters. A machine with Git installed
+ * usually already carries `C:\Program Files\Git\bin` somewhere on PATH, and
+ * on a machine with WSL it sits *after* `C:\Windows\System32` -- so `bash`
+ * still resolves to the WSL launcher. A check that stopped at "it is on PATH
+ * somewhere" therefore left the defect exactly as it found it.
+ *
+ * So every existing occurrence is removed and one is prepended, rather than
+ * appending when absent. Comparison ignores case, surrounding whitespace and a
+ * trailing separator, because Windows treats those as the same directory and a
+ * literal match would leave a duplicate ahead of the entry it meant to move.
+ *
+ * Parsed with the win32 delimiter regardless of host so it is testable off
+ * Windows; callers only supply a directory when the platform is win32.
+ */
+export function pathWithGitBashFirst(current: string, bash: string | undefined): string {
+  if (bash === undefined || bash === '') return current;
+  const kept = current
+    .split(winPath.delimiter)
+    .filter((entry) => entry.trim() !== '' && !sameDirectory(entry, bash));
+  return [bash, ...kept].join(winPath.delimiter);
+}
+
+function sameDirectory(left: string, right: string): boolean {
+  const normalize = (value: string): string =>
+    value
+      .trim()
+      .replace(/[\\/]+$/u, '')
+      .toLowerCase();
+  return normalize(left) === normalize(right);
+}

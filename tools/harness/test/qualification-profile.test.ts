@@ -298,6 +298,19 @@ describe('a trial gets the bash that understands its paths (win32)', () => {
     expect(source['PATH']).toBe('C:\\Program Files\\Git\\bin;C:\\Windows\\System32');
   });
 
+  it('moves it ahead of System32 when the host already had it behind', () => {
+    // The trial path had the same defect as the evaluator path: "present
+    // anywhere" was treated as done, so on a machine where Git put its bin
+    // after System32 the WSL launcher kept winning and the fix was a no-op.
+    const source = qualificationEnvironmentSource({
+      platform: 'win32',
+      env: { PATH: 'C:\\Windows\\System32;C:\\Program Files\\Git\\bin;C:\\tools' },
+      trusted: {},
+      bashDirectory: 'C:\\Program Files\\Git\\bin',
+    });
+    expect(source['PATH']).toBe('C:\\Program Files\\Git\\bin;C:\\Windows\\System32;C:\\tools');
+  });
+
   it('is not resolved inside the environment builder, which must stay pure', () => {
     // Resolving it there reached for the host's own git and broke the
     // neighbouring test that asserts the builder does not inherit host state.
