@@ -6,12 +6,13 @@ not an owner prerequisite.
 
 ## One-time Windows preparation
 
-Use the repository from a normal local Windows path. The workspace pins Node 24.x; CI
-currently runs Node 24.20.0. Confirm the toolchain and install the workspace:
+Use the repository from a normal local Windows path. The workspace pins Node 24.x and
+pnpm 11.25.0; CI currently runs Node 24.20.0. The owner qualification should use those
+same versions:
 
 ```powershell
-node --version
-pnpm --version
+node --version   # v24.20.0
+pnpm --version   # 11.25.0
 pnpm install --frozen-lockfile
 ```
 
@@ -23,9 +24,17 @@ Validate the host before creating credentials:
 pnpm stage3:preflight --host-only
 ```
 
-A ready Windows host reports profile `windows-personal-v1`. A warning that Windows does
-not provide the optional Linux PID/network namespace confinement is informational, not a
-failure. Stage 3 does not claim those unmeasured properties on Windows.
+A ready Windows host reports profile `windows-personal-v1`. The host preflight also
+fails closed unless the exact pnpm pin is active, Git Bash can be resolved from the Git
+for Windows installation, and the current process can create a directory symlink. The
+machine may still show `C:\\Windows\\System32\\bash.exe` first in `where.exe bash`;
+the harness resolves Git Bash from `git --exec-path` and supplies it to trial children
+without rewriting the system PATH.
+
+If the symlink probe fails with `EPERM`, enable Windows Developer Mode, restart
+PowerShell, and rerun the host preflight. A warning that Windows does not provide the
+optional Linux PID/network namespace confinement is informational, not a failure. Stage
+3 does not claim those unmeasured properties on Windows.
 
 Before any exact-head canary, run the harness suite on the owner machine itself:
 
@@ -116,18 +125,27 @@ pnpm stage3:preflight
 ```
 
 The full preflight must pass before the canary. It checks the platform/toolchain, both
-local credentials, an HTTPS ingest endpoint, and that the knowledge index exists and is
-readable. It does not prove the index matches the current `knowledge/` tree; rebuilding
-it before qualification does. The real canary then proves authenticated Evidence Plane
-reachability.
+local credentials, an HTTPS ingest endpoint, that the knowledge index exists and is
+readable, and performs an authenticated installation `read_minimal health` request
+against the live Evidence Plane. This catches network/TLS/installation-token failures
+before the one-shot canary. It does not prove the index matches the current
+`knowledge/` tree; rebuilding it before qualification does. The canary then proves the
+service-token registration path plus durable hook/flush behaviour.
 
 ## No-model gate before the paid bank
 
-Run exactly one no-model canary:
+Run exactly one no-model canary. Keep its evidence outside the repository so the
+qualification worktree does not become dirty merely because the canary ran:
 
 ```powershell
-pnpm stage3:canary
+$canaryDir = Join-Path $env:USERPROFILE "Documents\Codex\stage3-final-canary"
+New-Item -ItemType Directory -Force -Path $canaryDir | Out-Null
+$canaryPath = Join-Path $canaryDir "canary.json"
+pnpm run stage3:canary -- --out $canaryPath
 ```
+
+Do not automatically retry a failed canary. Preserve its evidence and investigate the
+failure first.
 
 On Windows, the host exposes Evidence Plane ingest through a Windows named pipe. The
 agent/canary child receives the pipe address but not the installation token, Harness
@@ -167,8 +185,13 @@ The matrix is fixed before the first paid run:
   trials each = **16 trials**.
 
 Run every trial at the same exact HEAD. The CLI writes records under
-`qualification/evidence/stage-3/<campaign>/`. If HEAD changes after the campaign starts,
-do not combine the old and new revisions under one campaign.
+`qualification/evidence/stage-3/<campaign>/`. It refuses to overwrite an existing
+trial record/transcript, refuses to mix campaign revisions, checks the owner-host
+preflight and knowledge index again before each paid run, records the knowledge-index
+digest, Node runtime and Claude Code version, disables Claude Code auto-update inside the
+trial, and refuses to write the result if repository HEAD changed while the trial was
+running. If HEAD changes after the campaign starts, do not combine the old and new
+revisions under one campaign.
 
 Each trial is launched explicitly:
 
@@ -177,8 +200,11 @@ node tools/harness/src/stage3-cli.ts --task <task-id> --trial <1-or-2> --campaig
 ```
 
 For the three primary tasks, use only `--arm eos`. For each hard-bank task, run trials
-1 and 2 in both `eos` and `native` arms. No rescue prompt, task-specific EOS coaching,
-grader change, or fixture repair is allowed inside a campaign.
+1 and 2 in both `eos` and `native` arms. Pre-register the execution order before the
+first paid run and balance arm order across repetitions (for example, native→eos for
+trial 1 and eos→native for trial 2) so a fixed arm-first ordering does not become a time
+or warm-cache confound. No rescue prompt, task-specific EOS coaching, grader change, or
+fixture repair is allowed inside a campaign.
 
 After all 22 records exist, generate the campaign-scoped report:
 
@@ -187,8 +213,11 @@ node tools/harness/src/stage3-campaign-report-cli.ts --campaign <campaign>
 ```
 
 The report refuses to mix historical root-level evidence, requires exactly 22 records,
-requires one EOS revision, requires unique run/trial ids, and derives the formal T1-T9
-gate from the campaign.
+requires one current EOS revision, one qualification profile, one IPC transport, one
+knowledge-index digest, one Node 24.x runtime, one Claude Code version, one requested
+model and one resolved model, requires unique run/trial ids, and derives the formal
+T1-T9 gate from the campaign. It also emits per-trial measurements and paired
+cost/wall-clock/tool-call/token vectors without inventing an aggregate score.
 
 Interpret the paired hard bank as a **vector of task-level results**, not one aggregate
 score. The three knowledge-discriminating tasks are
