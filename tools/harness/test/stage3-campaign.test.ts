@@ -94,7 +94,7 @@ function fullCampaign(): Stage3CampaignRecord[] {
 }
 
 describe('Stage 3 fresh campaign integrity', () => {
-  it('accepts exactly one current revision, profile, runtime, agent version and resolved model', () => {
+  it(\n    'accepts exactly one current revision, profile, runtime, agent version and resolved model',\n    () => {
     expect(
       validateStage3Campaign(fullCampaign(), {
         campaign: 'fresh26',
@@ -105,7 +105,8 @@ describe('Stage 3 fresh campaign integrity', () => {
         hardTaskIds: HARD,
       }),
     ).toEqual([]);
-  });
+    },
+  );
 
   it.each([
     [
