@@ -59,7 +59,9 @@ export class SqliteRunStateStore {
   #migrateFlushEverFailed(): void {
     if (this.#hasFlushEverFailed()) return;
     try {
-      this.#db.exec('alter table run_state add column flush_ever_failed integer not null default 0');
+      this.#db.exec(
+        'alter table run_state add column flush_ever_failed integer not null default 0',
+      );
     } catch (error) {
       if (!this.#hasFlushEverFailed()) throw error;
     }
