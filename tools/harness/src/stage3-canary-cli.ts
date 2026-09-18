@@ -36,7 +36,7 @@ const profile = qualificationProfileFor();
 const host = inspectStage3Host();
 if (!host.ready) {
   process.stderr.write(formatStage3HostPreflight(host));
-  process.stderr.write('Stage 3 canary refused: the active qualification host preflight is not ready\n');
+  process.stderr.write(\n    'Stage 3 canary refused: the active qualification host preflight is not ready\\n',\n  );
   process.exit(69);
 }
 
