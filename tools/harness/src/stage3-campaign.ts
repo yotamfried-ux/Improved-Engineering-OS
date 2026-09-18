@@ -52,9 +52,7 @@ export function validateStage3Campaign(
     );
   }
 
-  const profiles = unique(
-    records.map((record) => record.qualification_profile ?? '(missing)'),
-  );
+  const profiles = unique(records.map((record) => record.qualification_profile ?? '(missing)'));
   if (profiles.length !== 1 || profiles[0] !== options.expectedProfile) {
     reasons.push(
       `qualification profile must be exactly ${options.expectedProfile}; observed ${profiles.join(', ')}`,
@@ -62,57 +60,40 @@ export function validateStage3Campaign(
   }
 
   const expectedTransport =
-    options.expectedProfile === 'windows-personal-v1'
-      ? 'windows-named-pipe'
-      : 'unix-socket';
-  const transports = unique(
-    records.map((record) => record.ipc_transport ?? '(missing)'),
-  );
+    options.expectedProfile === 'windows-personal-v1' ? 'windows-named-pipe' : 'unix-socket';
+  const transports = unique(records.map((record) => record.ipc_transport ?? '(missing)'));
   if (transports.length !== 1 || transports[0] !== expectedTransport) {
     reasons.push(
       `IPC transport must be exactly ${expectedTransport}; observed ${transports.join(', ')}`,
     );
   }
 
-  const requestedModels = unique(
-    records.map((record) => record.model?.requested ?? '(missing)'),
-  );
-  if (
-    requestedModels.length !== 1 ||
-    requestedModels[0] !== options.expectedRequestedModel
-  ) {
+  const requestedModels = unique(records.map((record) => record.model?.requested ?? '(missing)'));
+  if (requestedModels.length !== 1 || requestedModels[0] !== options.expectedRequestedModel) {
     reasons.push(
       `requested model must be exactly ${options.expectedRequestedModel}; observed ${requestedModels.join(', ')}`,
     );
   }
 
-  const resolvedModels = unique(
-    records.map((record) => record.model?.resolved ?? '(missing)'),
-  );
+  const resolvedModels = unique(records.map((record) => record.model?.resolved ?? '(missing)'));
   if (resolvedModels.length !== 1 || resolvedModels[0] === '(missing)') {
     reasons.push(
       `resolved model must be reported and identical across the campaign; observed ${resolvedModels.join(', ')}`,
     );
   }
 
-  const drivers = unique(
-    records.map((record) => record.agent?.driver ?? '(missing)'),
-  );
+  const drivers = unique(records.map((record) => record.agent?.driver ?? '(missing)'));
   if (drivers.length !== 1 || drivers[0] !== 'claude-code') {
     reasons.push(`agent driver must be claude-code; observed ${drivers.join(', ')}`);
   }
-  const cliVersions = unique(
-    records.map((record) => record.agent?.cli_version ?? '(missing)'),
-  );
+  const cliVersions = unique(records.map((record) => record.agent?.cli_version ?? '(missing)'));
   if (cliVersions.length !== 1 || cliVersions[0] === '(missing)') {
     reasons.push(
       `Claude Code version must be reported and identical across the campaign; observed ${cliVersions.join(', ')}`,
     );
   }
 
-  const nodeVersions = unique(
-    records.map((record) => record.runtime?.node ?? '(missing)'),
-  );
+  const nodeVersions = unique(records.map((record) => record.runtime?.node ?? '(missing)'));
   if (
     nodeVersions.length !== 1 ||
     nodeVersions[0] === '(missing)' ||
@@ -122,28 +103,19 @@ export function validateStage3Campaign(
       `Node runtime must be one 24.x version across the campaign; observed ${nodeVersions.join(', ')}`,
     );
   }
-  const expectedPlatform =
-    options.expectedProfile === 'windows-personal-v1' ? 'win32' : 'linux';
-  const platforms = unique(
-    records.map((record) => record.runtime?.platform ?? '(missing)'),
-  );
+  const expectedPlatform = options.expectedProfile === 'windows-personal-v1' ? 'win32' : 'linux';
+  const platforms = unique(records.map((record) => record.runtime?.platform ?? '(missing)'));
   if (platforms.length !== 1 || platforms[0] !== expectedPlatform) {
-    reasons.push(
-      `runtime platform must be ${expectedPlatform}; observed ${platforms.join(', ')}`,
-    );
+    reasons.push(`runtime platform must be ${expectedPlatform}; observed ${platforms.join(', ')}`);
   }
 
   for (const taskId of options.primaryTaskIds) {
     const found = records.filter((record) => record.task_id === taskId);
     if (found.length !== 2) {
-      reasons.push(
-        `${taskId}: expected 2 primary trials, found ${String(found.length)}`,
-      );
+      reasons.push(`${taskId}: expected 2 primary trials, found ${String(found.length)}`);
     }
     if (found.some((record) => record.arm !== 'eos')) {
-      reasons.push(
-        `${taskId}: primary trials must run with the EOS installation present`,
-      );
+      reasons.push(`${taskId}: primary trials must run with the EOS installation present`);
     }
   }
 
@@ -204,13 +176,9 @@ function armSummary(records: readonly Stage3CampaignRecord[]): CampaignArmSummar
     passed: records.filter(allRulesPassed).length,
     resolveCalls: records.filter((record) => record.resolve_called_unprompted).length,
     meanCostUsd: mean(records.map((record) => record.usage?.costUsd ?? 0)),
-    meanWallClockSeconds: mean(
-      records.map((record) => record.usage?.wallClockSeconds ?? 0),
-    ),
+    meanWallClockSeconds: mean(records.map((record) => record.usage?.wallClockSeconds ?? 0)),
     meanToolCalls: mean(records.map((record) => record.tool_calls.length)),
-    meanTotalInputTokens: mean(
-      records.map((record) => record.usage?.totalInputTokens ?? 0),
-    ),
+    meanTotalInputTokens: mean(records.map((record) => record.usage?.totalInputTokens ?? 0)),
   };
 }
 
@@ -232,10 +200,7 @@ export function summarizeStage3Campaign(
       native,
       delta: {
         costPercent: percentDelta(eos.meanCostUsd, native.meanCostUsd),
-        wallClockPercent: percentDelta(
-          eos.meanWallClockSeconds,
-          native.meanWallClockSeconds,
-        ),
+        wallClockPercent: percentDelta(eos.meanWallClockSeconds, native.meanWallClockSeconds),
         toolCalls: eos.meanToolCalls - native.meanToolCalls,
         totalInputTokensPercent: percentDelta(
           eos.meanTotalInputTokens,
