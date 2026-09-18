@@ -234,4 +234,17 @@ describe('Stage 3 trial evidence immutability', () => {
       /record already exists/u,
     );
   });
+
+  it('refuses a transcript-only collision left by an interrupted trial', () => {
+    const root = mkdtempSync(join(tmpdir(), 'ieos-stage3-artifacts-'));
+    const transcriptDir = join(root, 'transcripts');
+    mkdirSync(transcriptDir, { recursive: true });
+    const recordPath = join(root, 'task-eos-t1.json');
+    const transcriptPath = join(transcriptDir, 'task-eos-t1-task.ndjson');
+    writeFileSync(transcriptPath, '{}\n', 'utf8');
+
+    expect(() => assertFreshTrialArtifacts({ recordPath, transcriptPath })).toThrow(
+      /transcript already exists/u,
+    );
+  });
 });
