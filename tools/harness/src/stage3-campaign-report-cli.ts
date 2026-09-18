@@ -55,8 +55,7 @@ try {
 }
 
 const records = names.map(
-  (name) =>
-    JSON.parse(readFileSync(join(evidenceDir, name), 'utf8')) as Stage3CampaignRecord,
+  (name) => JSON.parse(readFileSync(join(evidenceDir, name), 'utf8')) as Stage3CampaignRecord,
 );
 const primaryIds = STAGE_3_TASKS.map((task) => task.taskId);
 const hardIds = STAGE_3_HARD_TASKS.map((task) => task.taskId);
@@ -83,16 +82,14 @@ const normalized: TrialRecord[] = records.map((record): TrialRecord => {
   return primary;
 });
 const rows = deriveRows(normalized);
-const rowsPass =
-  rows.length === 9 && rows.every((row) => row.status === 'PASS');
+const rowsPass = rows.length === 9 && rows.every((row) => row.status === 'PASS');
 const matrixPass = matrixReasons.length === 0;
 const verdict = matrixPass && rowsPass ? 'PASSED' : 'NOT PASSED';
 
 const summaries = summarizeStage3Campaign(records, hardIds);
 const pct = (value: number | null): string =>
   value === null ? 'n/a' : `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
-const signed = (value: number): string =>
-  `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
+const signed = (value: number): string => `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
 
 const hardSummary = summaries
   .map((summary) => {
@@ -124,9 +121,7 @@ const hardSummary = summaries
 const trialMeasurements = records
   .map((record) => {
     const deterministic = deterministicOf(record);
-    const proven = deterministic.filter(
-      (item) => item.status === 'proven',
-    ).length;
+    const proven = deterministic.filter((item) => item.status === 'proven').length;
     return (
       `| ${record.task_id} | ${record.arm ?? '?'} | ${record.trial_id.slice(-2)} | ` +
       `${String(proven)}/${String(deterministic.length)} | ` +
