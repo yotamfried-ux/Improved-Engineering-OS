@@ -3,6 +3,7 @@
 export type Status = 'PASS' | 'FAIL' | 'UNPROVEN';
 
 export interface TrialRecord {
+  readonly campaign?: string;
   readonly trial_id: string;
   readonly arm?: string;
   readonly obstructed?: boolean;
@@ -10,6 +11,8 @@ export interface TrialRecord {
   readonly task_id: string;
   readonly eos_revision: string;
   readonly qualification_profile?: 'windows-personal-v1' | 'linux-namespace-v1';
+  readonly ipc_transport?: 'windows-named-pipe' | 'unix-socket' | string;
+  readonly knowledge_index_digest?: string;
   readonly setting_sources: string;
   readonly ranking_mode: string;
   readonly status: string;
@@ -28,6 +31,15 @@ export interface TrialRecord {
     readonly totalInputTokens?: number;
     readonly turns: number;
   } | null;
+  readonly model?: { readonly requested: string | null; readonly resolved: string | null };
+  readonly agent?: {
+    readonly driver: string;
+    readonly cli_version: string | null;
+  };
+  readonly runtime?: {
+    readonly node: string;
+    readonly platform: string;
+  };
   readonly tool_calls: readonly { readonly name: string }[];
   readonly resolve_called_unprompted: boolean;
   readonly eos_tools_used: readonly string[];

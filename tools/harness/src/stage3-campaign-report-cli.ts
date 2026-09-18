@@ -2,23 +2,22 @@
  * Report one fresh Stage 3 qualification campaign without mixing historical
  * evidence into it.
  *
- * The 2026-09-12 evidence remains immutable evidence of the failed attempt. A
- * rerun belongs in its own directory and gets its own verdict. This generator
- * also pins the matrix: a subset cannot accidentally satisfy T1-T9 merely
- * because every record that happens to exist is clean.
- *
- * Usage:
- *   node tools/harness/src/stage3-campaign-report-cli.ts --campaign <id> [--out FILE]
+ * Besides the formal T1-T9 gate, this report validates the experiment matrix
+ * itself: one exact repository revision, qualification profile, Node runtime,
+ * Claude Code version and resolved model across all 22 trials.
  */
 
+import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { deriveRows, type TrialRecord } from './stage3-rows.ts';
+import {
+  summarizeStage3Campaign,
+  validateStage3Campaign,
+  type Stage3CampaignRecord,
+} from './stage3-campaign.ts';
+import { qualificationProfileFor } from './qualification-profile.ts';
+import { deriveRows, deterministicOf, type TrialRecord } from './stage3-rows.ts';
 import { STAGE_3_HARD_TASKS, STAGE_3_TASKS } from './task-bank.ts';
-
-interface CampaignRecord extends TrialRecord {
-  readonly campaign?: string;
-}
 
 const args = process.argv.slice(2);
 const flag = (name: string): string | undefined => {
@@ -39,6 +38,11 @@ const evidenceDir = join(eosRoot, 'qualification', 'evidence', 'stage-3', campai
 const outPath = resolve(
   flag('--out') ?? join(eosRoot, 'qualification', 'reports', `stage-03-${campaign}.md`),
 );
+const currentRevision = execFileSync('git', ['rev-parse', 'HEAD'], {
+  cwd: eosRoot,
+  encoding: 'utf8',
+}).trim();
+const expectedProfile = qualificationProfileFor();
 
 let names: string[];
 try {
@@ -51,72 +55,29 @@ try {
 }
 
 const records = names.map(
-  (name) => JSON.parse(readFileSync(join(evidenceDir, name), 'utf8')) as CampaignRecord,
+  (name) => JSON.parse(readFileSync(join(evidenceDir, name), 'utf8')) as Stage3CampaignRecord,
 );
-const primaryIds = new Set(STAGE_3_TASKS.map((task) => task.taskId));
-const hardIds = new Set(STAGE_3_HARD_TASKS.map((task) => task.taskId));
+const primaryIds = STAGE_3_TASKS.map((task) => task.taskId);
+const hardIds = STAGE_3_HARD_TASKS.map((task) => task.taskId);
+const primaryIdSet = new Set(primaryIds);
 
-const matrixReasons: string[] = [];
-if (records.length !== 22)
-  matrixReasons.push(`expected 22 records, found ${String(records.length)}`);
-if (records.some((record) => record.campaign !== campaign)) {
-  matrixReasons.push('one or more records do not declare this campaign');
-}
-if (new Set(records.map((record) => record.run_id)).size !== records.length) {
-  matrixReasons.push('run_id is not unique across the campaign');
-}
-if (new Set(records.map((record) => record.trial_id)).size !== records.length) {
-  matrixReasons.push('trial_id is not unique across the campaign');
-}
-if (new Set(records.map((record) => record.eos_revision)).size !== 1) {
-  matrixReasons.push('the campaign mixes EOS revisions');
-}
-
-for (const task of STAGE_3_TASKS) {
-  const found = records.filter((record) => record.task_id === task.taskId);
-  if (found.length !== 2) {
-    matrixReasons.push(`${task.taskId}: expected 2 primary trials, found ${String(found.length)}`);
-  }
-  if (found.some((record) => record.arm !== 'eos')) {
-    matrixReasons.push(`${task.taskId}: primary trials must run with the EOS installation present`);
-  }
-}
-
-for (const task of STAGE_3_HARD_TASKS) {
-  const found = records.filter((record) => record.task_id === task.taskId);
-  const eos = found.filter((record) => record.arm === 'eos');
-  const native = found.filter((record) => record.arm === 'native');
-  if (eos.length !== 2 || native.length !== 2 || found.length !== 4) {
-    matrixReasons.push(
-      `${task.taskId}: expected 2 eos + 2 native trials, found ${String(eos.length)} + ${String(native.length)}`,
-    );
-  }
-}
-
-const unknownTasks = records.filter(
-  (record) => !primaryIds.has(record.task_id) && !hardIds.has(record.task_id),
-);
-if (unknownTasks.length > 0) {
-  matrixReasons.push(
-    `unexpected task ids: ${[...new Set(unknownTasks.map((record) => record.task_id))].join(', ')}`,
-  );
-}
+const matrixReasons = validateStage3Campaign(records, {
+  campaign,
+  currentRevision,
+  expectedProfile,
+  expectedRequestedModel: 'claude-sonnet-5',
+  primaryTaskIds: primaryIds,
+  hardTaskIds: hardIds,
+});
 
 /**
- * `deriveRows` predates campaigns and identifies the primary bank by absence of
- * `arm`. The current runner always states what installation was present, so the
- * campaign report normalises the three primary task ids to that historical
- * representation before deriving T1/T2/T8. This changes no measured fact; it
- * makes the matrix role explicit instead of encoding it as a missing field.
- *
- * With `exactOptionalPropertyTypes`, "absent" and `undefined` are deliberately
- * different. Remove the campaign-only fields structurally rather than assigning
- * `arm: undefined`, so this adapter cannot manufacture a value the legacy shape
- * never had.
+ * deriveRows predates campaigns and identifies the formal primary bank by the
+ * absence of an arm. The current runner states arm=eos explicitly, so normalize
+ * only those three primary task records before deriving T1/T2/T8.
  */
 const normalized: TrialRecord[] = records.map((record): TrialRecord => {
   const { campaign: _campaign, ...withoutCampaign } = record;
-  if (!primaryIds.has(record.task_id)) return withoutCampaign;
+  if (!primaryIdSet.has(record.task_id)) return withoutCampaign;
   const { arm: _arm, ...primary } = withoutCampaign;
   return primary;
 });
@@ -125,31 +86,77 @@ const rowsPass = rows.length === 9 && rows.every((row) => row.status === 'PASS')
 const matrixPass = matrixReasons.length === 0;
 const verdict = matrixPass && rowsPass ? 'PASSED' : 'NOT PASSED';
 
-const hardSummary = STAGE_3_HARD_TASKS.map((task) => {
-  const found = records.filter((record) => record.task_id === task.taskId);
-  const summary = (arm: 'eos' | 'native'): string => {
-    const armRecords = found.filter((record) => record.arm === arm);
-    const passed = armRecords.filter((record) => {
-      const deterministic = record.verdicts.filter((item) => item.kind === 'deterministic');
-      return deterministic.length > 0 && deterministic.every((item) => item.status === 'proven');
-    }).length;
-    const resolved = armRecords.filter((record) => record.resolve_called_unprompted).length;
-    return `${String(passed)}/${String(armRecords.length)} solved; resolve ${String(resolved)}/${String(armRecords.length)}`;
-  };
-  return `| ${task.taskId} | ${summary('eos')} | ${summary('native')} |`;
-}).join('\n');
+const summaries = summarizeStage3Campaign(records, hardIds);
+const pct = (value: number | null): string =>
+  value === null ? 'n/a' : `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
+const signed = (value: number): string => `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
+
+const hardSummary = summaries
+  .map((summary) => {
+    const eosSolved = `${String(summary.eos.passed)}/${String(summary.eos.trials)}`;
+    const nativeSolved = `${String(summary.native.passed)}/${String(summary.native.trials)}`;
+    const resolve = [
+      `${String(summary.eos.resolveCalls)}/${String(summary.eos.trials)}`,
+      `${String(summary.native.resolveCalls)}/${String(summary.native.trials)}`,
+    ].join(' → ');
+    const cost =
+      `${summary.eos.meanCostUsd.toFixed(3)} → ${summary.native.meanCostUsd.toFixed(3)} ` +
+      `(EOS vs native ${pct(summary.delta.costPercent)})`;
+    const wall =
+      `${summary.eos.meanWallClockSeconds.toFixed(1)} → ` +
+      `${summary.native.meanWallClockSeconds.toFixed(1)} ` +
+      `(${pct(summary.delta.wallClockPercent)})`;
+    const tools =
+      `${summary.eos.meanToolCalls.toFixed(1)} → ` +
+      `${summary.native.meanToolCalls.toFixed(1)} ` +
+      `(${signed(summary.delta.toolCalls)})`;
+    const input =
+      `${String(Math.round(summary.eos.meanTotalInputTokens))} → ` +
+      `${String(Math.round(summary.native.meanTotalInputTokens))} ` +
+      `(${pct(summary.delta.totalInputTokensPercent)})`;
+    return `| ${summary.taskId} | ${eosSolved} | ${nativeSolved} | ${resolve} | ${cost} | ${wall} | ${tools} | ${input} |`;
+  })
+  .join('\n');
+
+const trialMeasurements = records
+  .map((record) => {
+    const deterministic = deterministicOf(record);
+    const proven = deterministic.filter((item) => item.status === 'proven').length;
+    return (
+      `| ${record.task_id} | ${record.arm ?? '?'} | ${record.trial_id.slice(-2)} | ` +
+      `${String(proven)}/${String(deterministic.length)} | ` +
+      `${record.resolve_called_unprompted ? 'yes' : 'no'} | ` +
+      `$${(record.usage?.costUsd ?? 0).toFixed(3)} | ` +
+      `${(record.usage?.wallClockSeconds ?? 0).toFixed(1)} | ` +
+      `${String(record.tool_calls.length)} | ` +
+      `${String(record.usage?.totalInputTokens ?? 0)} | ` +
+      `${String(record.usage?.outputTokens ?? 0)} | ` +
+      `${record.telemetry?.telemetry_state ?? 'missing'} |`
+    );
+  })
+  .join('\n');
+
+const one = (values: readonly (string | null | undefined)[]): string =>
+  [...new Set(values.map((value) => value ?? '(missing)'))].join(', ');
 
 const report = `# Stage 3 qualification campaign — ${campaign}
 
 **Verdict: ${verdict}**
 
 Evidence directory: \`qualification/evidence/stage-3/${campaign}/\`  
-Revision: \`${records[0]?.eos_revision ?? 'none'}\`  
+Current repository revision: \`${currentRevision}\`  
+Recorded revision(s): \`${one(records.map((record) => record.eos_revision))}\`  
+Qualification profile(s): \`${one(records.map((record) => record.qualification_profile))}\`  
+Knowledge index digest(s): \`${one(records.map((record) => record.knowledge_index_digest))}\`  
+Node runtime(s): \`${one(records.map((record) => record.runtime?.node))}\`  
+Claude Code version(s): \`${one(records.map((record) => record.agent?.cli_version))}\`  
+Requested model(s): \`${one(records.map((record) => record.model?.requested))}\`  
+Resolved model(s): \`${one(records.map((record) => record.model?.resolved))}\`  
 Records: **${String(records.length)} / 22**
 
 ## Matrix integrity
 
-**${matrixPass ? 'PASS' : 'FAIL'}** — 6 primary trials (3 tasks × 2) and 16 paired trials (4 tasks × 2 arms × 2), one campaign, one revision, unique trial/run ids.
+**${matrixPass ? 'PASS' : 'FAIL'}** — the campaign must contain the fixed 22-run matrix on one current revision, one qualification profile, one Node 24.x runtime, one Claude Code version and one resolved model.
 
 ${matrixReasons.length === 0 ? 'No matrix violations.' : matrixReasons.map((reason) => `- ${reason}`).join('\n')}
 
@@ -164,15 +171,25 @@ ${rows
   )
   .join('\n')}
 
-## Paired hard bank
+## Paired hard-bank vectors
 
-| Task | EOS arm | Native arm |
-| --- | --- | --- |
+No aggregate performance score is computed. Each task and resource axis is reported separately.
+
+| Task | EOS solved | Native solved | resolve EOS → native | Mean cost | Mean wall s | Mean tool calls | Mean total input tokens |
+| --- | ---: | ---: | --- | --- | --- | --- | --- |
 ${hardSummary}
 
-This report does not read the historical root-level Stage 3 records. They remain evidence of the earlier failed qualification and cannot be retroactively upgraded by a later run.
+\`plugin-install-marketplace\` remains the calibration/noise-floor task. It is not treated as a knowledge-value discriminator.
+
+## Per-trial measurements
+
+| Task | Arm | Trial | Deterministic rules | resolve | Cost | Wall s | Tool calls | Total input tokens | Output tokens | Telemetry |
+| --- | --- | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | --- |
+${trialMeasurements}
+
+This report reads only this campaign directory. Historical root-level Stage 3 records remain evidence of earlier attempts and cannot be retroactively upgraded by a later run.
 `;
 
 writeFileSync(outPath, report, 'utf8');
 process.stdout.write(`${report}\nreport: ${outPath}\n`);
-process.exit(verdict === 'PASSED' ? 0 : 3);
+process.exitCode = verdict === 'PASSED' ? 0 : 3;

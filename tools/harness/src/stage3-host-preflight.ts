@@ -1,4 +1,8 @@
 import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { windowsBashDirectory } from './git-bash.ts';
 
 export type Stage3HostCheckStatus = 'PASS' | 'FAIL' | 'WARN';
 
@@ -18,13 +22,17 @@ export interface Stage3HostPreflight {
 export interface Stage3HostProbe {
   readonly platform: string;
   readonly nodeVersion: string;
+  readonly pnpmVersion: string;
   commandAvailable(command: string): boolean;
+  windowsGitBashDirectory(): string | undefined;
+  symlinkCapability(): { readonly ok: boolean; readonly detail: string };
   run(
     command: string,
     args: readonly string[],
   ): { readonly status: number | null; readonly stderr: string };
 }
 
+export const PINNED_PNPM_VERSION = '11.25.0';
 export const WINDOWS_REQUIRED_TOOLS = ['git', 'claude'] as const;
 export const LINUX_NAMESPACE_REQUIRED_TOOLS = [
   'git',
@@ -43,9 +51,40 @@ function environmentOf(platform: string): Stage3HostPreflight['environment'] {
   return 'other';
 }
 
+function commandVersion(command: string): string {
+  const result = spawnSync(command, ['--version'], {
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  if (result.status !== 0) return '';
+  return (result.stdout ?? '').trim();
+}
+
+function systemSymlinkCapability(): { readonly ok: boolean; readonly detail: string } {
+  const root = mkdtempSync(join(tmpdir(), 'ieos-stage3-symlink-'));
+  const target = join(root, 'target');
+  const link = join(root, 'link');
+  try {
+    mkdirSync(target);
+    symlinkSync(target, link, 'dir');
+    return { ok: true, detail: 'directory symlink creation is permitted' };
+  } catch (error) {
+    return {
+      ok: false,
+      detail:
+        error instanceof Error
+          ? `directory symlink creation failed: ${error.message}`
+          : `directory symlink creation failed: ${String(error)}`,
+    };
+  } finally {
+    rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  }
+}
+
 const systemProbe: Stage3HostProbe = {
   platform: process.platform,
   nodeVersion: process.versions.node,
+  pnpmVersion: commandVersion('pnpm'),
   commandAvailable: (command) => {
     const check =
       process.platform === 'win32'
@@ -55,6 +94,8 @@ const systemProbe: Stage3HostProbe = {
           });
     return check.status === 0;
   },
+  windowsGitBashDirectory: () => windowsBashDirectory(),
+  symlinkCapability: systemSymlinkCapability,
   run: (command, args) => {
     const result = spawnSync(command, [...args], { encoding: 'utf8', windowsHide: true });
     return { status: result.status, stderr: result.stderr ?? '' };
@@ -80,6 +121,14 @@ export function inspectStage3Host(probe: Stage3HostProbe = systemProbe): Stage3H
         ? `Node ${probe.nodeVersion} matches the 24.x pin`
         : `Node ${probe.nodeVersion} does not match the required 24.x pin`,
   });
+  checks.push({
+    name: 'pnpm',
+    status: probe.pnpmVersion === PINNED_PNPM_VERSION ? 'PASS' : 'FAIL',
+    detail:
+      probe.pnpmVersion === PINNED_PNPM_VERSION
+        ? `pnpm ${probe.pnpmVersion} matches the exact workspace pin`
+        : `pnpm ${probe.pnpmVersion || '(unavailable)'} does not match required ${PINNED_PNPM_VERSION}`,
+  });
 
   if (probe.platform === 'win32') {
     checks.unshift({
@@ -96,6 +145,23 @@ export function inspectStage3Host(probe: Stage3HostProbe = systemProbe): Stage3H
         detail: available ? `${tool} is available` : `${tool} is missing`,
       });
     }
+    const gitBash = probe.windowsGitBashDirectory();
+    checks.push({
+      name: 'git-bash',
+      status: gitBash === undefined ? 'FAIL' : 'PASS',
+      detail:
+        gitBash === undefined
+          ? 'Git Bash could not be resolved from the Git for Windows installation'
+          : `Git Bash resolved from ${gitBash}; System32/WSL bash may remain first on the host PATH`,
+    });
+    const symlink = probe.symlinkCapability();
+    checks.push({
+      name: 'symlink',
+      status: symlink.ok ? 'PASS' : 'FAIL',
+      detail: symlink.ok
+        ? symlink.detail
+        : `${symlink.detail}. Enable Windows Developer Mode (or equivalent symlink privilege) before qualification`,
+    });
     checks.push({
       name: 'kernel-isolation',
       status: 'WARN',
