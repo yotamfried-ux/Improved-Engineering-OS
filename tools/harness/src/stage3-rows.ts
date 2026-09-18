@@ -12,6 +12,7 @@ export interface TrialRecord {
   readonly eos_revision: string;
   readonly qualification_profile?: 'windows-personal-v1' | 'linux-namespace-v1';
   readonly ipc_transport?: 'windows-named-pipe' | 'unix-socket' | string;
+  readonly knowledge_index_digest?: string;
   readonly setting_sources: string;
   readonly ranking_mode: string;
   readonly status: string;
