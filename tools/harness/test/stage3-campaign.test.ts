@@ -12,7 +12,11 @@ import {
   assertFreshTrialArtifacts,
 } from '../src/stage3-trial-artifacts.ts';
 
-const PRIMARY = ['guard-fail-closed', 'misleading-clue-merge', 'backoff-breaks-a-test'] as const;
+const PRIMARY = [
+  'guard-fail-closed',
+  'misleading-clue-merge',
+  'backoff-breaks-a-test',
+] as const;
 const HARD = [
   'plugin-install-marketplace',
   'plan-dod-external-gates',
@@ -52,7 +56,9 @@ function record(options: {
       totalInputTokens: arm === 'eos' ? 2000 : 1500,
       turns: 8,
     },
-    tool_calls: Array.from({ length: arm === 'eos' ? 12 : 9 }, () => ({ name: 'Bash' })),
+    tool_calls: Array.from({ length: arm === 'eos' ? 12 : 9 }, () => ({
+      name: 'Bash',
+    })),
     resolve_called_unprompted: arm === 'eos',
     eos_tools_used: arm === 'eos' ? ['resolve'] : [],
     isolation: { qualificationEligible: true },
@@ -68,7 +74,10 @@ function record(options: {
     rescue: { human_interventions: 0, prompts_sent: 1, interactive_stdin: false },
     namespace_observations: null,
     verdicts: [{ graderId: 'g', kind: 'deterministic', status: 'proven' }],
-    model: { requested: 'claude-sonnet-5', resolved: 'claude-sonnet-5-20260901' },
+    model: {
+      requested: 'claude-sonnet-5',
+      resolved: 'claude-sonnet-5-20260901',
+    },
     agent: { driver: 'claude-code', cli_version: '2.1.258' },
     runtime: { node: 'v24.20.0', platform: 'win32' },
   };
@@ -76,7 +85,11 @@ function record(options: {
 
 function fullCampaign(): Stage3CampaignRecord[] {
   return [
-    ...PRIMARY.flatMap((task) => [1, 2].map((trial) => record({ task, arm: 'eos', trial: trial as 1 | 2 }))),
+    ...PRIMARY.flatMap((task) =>
+      [1, 2].map((trial) =>
+        record({ task, arm: 'eos', trial: trial as 1 | 2 }),
+      ),
+    ),
     ...HARD.flatMap((task) =>
       (['eos', 'native'] as const).flatMap((arm) =>
         [1, 2].map((trial) => record({ task, arm, trial: trial as 1 | 2 })),
@@ -100,11 +113,42 @@ describe('Stage 3 fresh campaign integrity', () => {
   });
 
   it.each([
-    ['revision', (records: Stage3CampaignRecord[]) => (records[0]!.eos_revision = 'b'.repeat(40)), /revision/u],
-    ['profile', (records: Stage3CampaignRecord[]) => (records[0]!.qualification_profile = 'linux-namespace-v1'), /profile/u],
-    ['resolved model', (records: Stage3CampaignRecord[]) => (records[0]!.model = { requested: 'claude-sonnet-5', resolved: 'other-model' }), /resolved model/u],
-    ['agent version', (records: Stage3CampaignRecord[]) => (records[0]!.agent = { driver: 'claude-code', cli_version: '2.1.999' }), /Claude Code version/u],
-    ['node runtime', (records: Stage3CampaignRecord[]) => (records[0]!.runtime = { node: 'v22.18.0', platform: 'win32' }), /Node runtime/u],
+    [
+      'revision',
+      (records: Stage3CampaignRecord[]) =>
+        (records[0]!.eos_revision = 'b'.repeat(40)),
+      /revision/u,
+    ],
+    [
+      'profile',
+      (records: Stage3CampaignRecord[]) =>
+        (records[0]!.qualification_profile = 'linux-namespace-v1'),
+      /profile/u,
+    ],
+    [
+      'resolved model',
+      (records: Stage3CampaignRecord[]) =>
+        (records[0]!.model = {
+          requested: 'claude-sonnet-5',
+          resolved: 'other-model',
+        }),
+      /resolved model/u,
+    ],
+    [
+      'agent version',
+      (records: Stage3CampaignRecord[]) =>
+        (records[0]!.agent = {
+          driver: 'claude-code',
+          cli_version: '2.1.999',
+        }),
+      /Claude Code version/u,
+    ],
+    [
+      'node runtime',
+      (records: Stage3CampaignRecord[]) =>
+        (records[0]!.runtime = { node: 'v22.18.0', platform: 'win32' }),
+      /Node runtime/u,
+    ],
   ])('fails a campaign that mixes %s', (_label, mutate, expected) => {
     const records = fullCampaign();
     mutate(records);
@@ -139,8 +183,20 @@ describe('Stage 3 fresh campaign integrity', () => {
     const summary = summarizeStage3Campaign(fullCampaign(), HARD);
     const quality = summary.find((row) => row.taskId === 'quality-gate-cleanup');
     expect(quality).toMatchObject({
-      eos: { trials: 2, meanCostUsd: 0.6, meanWallClockSeconds: 120, meanToolCalls: 12, meanTotalInputTokens: 2000 },
-      native: { trials: 2, meanCostUsd: 0.4, meanWallClockSeconds: 90, meanToolCalls: 9, meanTotalInputTokens: 1500 },
+      eos: {
+        trials: 2,
+        meanCostUsd: 0.6,
+        meanWallClockSeconds: 120,
+        meanToolCalls: 12,
+        meanTotalInputTokens: 2000,
+      },
+      native: {
+        trials: 2,
+        meanCostUsd: 0.4,
+        meanWallClockSeconds: 90,
+        meanToolCalls: 9,
+        meanTotalInputTokens: 1500,
+      },
     });
     expect(quality?.delta.costPercent).toBeCloseTo(50);
     expect(quality?.delta.wallClockPercent).toBeCloseTo(33.333, 2);
@@ -178,9 +234,13 @@ describe('Stage 3 trial evidence immutability', () => {
     const recordPath = join(root, 'task-eos-t1.json');
     const transcriptPath = join(transcriptDir, 'task-eos-t1-task.ndjson');
 
-    expect(() => assertFreshTrialArtifacts({ recordPath, transcriptPath })).not.toThrow();
+    expect(() =>
+      assertFreshTrialArtifacts({ recordPath, transcriptPath }),
+    ).not.toThrow();
 
     writeFileSync(recordPath, '{}\n', 'utf8');
-    expect(() => assertFreshTrialArtifacts({ recordPath, transcriptPath })).toThrow(/record already exists/u);
+    expect(() =>
+      assertFreshTrialArtifacts({ recordPath, transcriptPath }),
+    ).toThrow(/record already exists/u);
   });
 });
