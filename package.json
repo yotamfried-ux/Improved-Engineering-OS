@@ -39,6 +39,7 @@
     "sqlite:qualify": "node tools/sqlite-qualification/src/cli.ts",
     "stage3:canary": "node tools/harness/src/stage3-canary-cli.ts",
     "stage3:preflight": "node tools/harness/src/stage3-preflight-cli.ts",
+    "stage3:report": "node tools/harness/src/stage3-campaign-report-cli.ts",
     "stage3:service-auth": "node tools/harness/src/stage3-service-auth-cli.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"

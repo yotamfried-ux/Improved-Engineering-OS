@@ -22,7 +22,7 @@ import {
 import { windowsBashDirectory } from './git-bash.ts';
 import { RunRegistry } from './run-registry.ts';
 import { createTrial } from './sandbox.ts';
-import { MAX_COST_USD_PER_TRIAL, runCheck, taskById } from './task-bank.ts';
+import { MAX_COST_USD_PER_TRIAL, STAGE_3_TASKS, runCheck, taskById } from './task-bank.ts';
 import { writeTargetRepo } from './target-repo.ts';
 import { readTrialTelemetry } from './trial-telemetry.ts';
 import { runTrial } from './trial.ts';
@@ -56,6 +56,9 @@ if (!/^[A-Za-z0-9_]{1,12}$/u.test(rawCampaign)) {
 
 const campaign = rawCampaign;
 const task = taskById(taskId);
+const bank = STAGE_3_TASKS.some((candidate) => candidate.taskId === taskId)
+  ? 'qualification'
+  : 'value';
 const trialNumber = Number(flag('--trial') ?? '1');
 if (!Number.isSafeInteger(trialNumber) || trialNumber < 1) {
   process.stderr.write('--trial must be a positive integer\n');
@@ -291,6 +294,7 @@ try {
 
   const trialRecord = {
     campaign,
+    bank,
     trial_id: trialId,
     run_id: runId,
     simulation_id: `stage-3-${taskId}`,

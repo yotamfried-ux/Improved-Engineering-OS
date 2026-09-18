@@ -70,6 +70,31 @@ describe('Stage 3 gate rows', () => {
     expect(rowById(allGood(), 'T3').evidence).toContain('does not claim PID/network');
   });
 
+
+  it('treats current eos-arm records marked qualification as the formal Stage 3 bank', () => {
+    const records = allGood().map((record) => ({
+      ...record,
+      campaign: 'qual2026',
+      bank: 'qualification' as const,
+      arm: 'eos',
+    }));
+    expect(deriveRows(records).map((row) => row.status)).toEqual(
+      deriveRows(records).map(() => 'PASS'),
+    );
+  });
+
+  it('does not let value-bank records satisfy the formal three-task gate', () => {
+    const records = allGood().map((record) => ({
+      ...record,
+      campaign: 'value2026',
+      bank: 'value' as const,
+      arm: 'eos',
+    }));
+    expect(rowById(records, 'T1').status).toBe('FAIL');
+    expect(rowById(records, 'T2').status).toBe('FAIL');
+    expect(rowById(records, 'T8').status).toBe('UNPROVEN');
+  });
+
   it('T3 fails if the new platform-integrity evidence is absent', () => {
     const records = allGood().map(({ trial_integrity, ...rest }) => rest);
     const row = rowById(records, 'T3');

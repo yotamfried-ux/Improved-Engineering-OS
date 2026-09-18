@@ -3,6 +3,8 @@
 export type Status = 'PASS' | 'FAIL' | 'UNPROVEN';
 
 export interface TrialRecord {
+  readonly campaign?: string;
+  readonly bank?: 'qualification' | 'value';
   readonly trial_id: string;
   readonly arm?: string;
   readonly obstructed?: boolean;
@@ -74,6 +76,12 @@ export const allRulesPassed = (record: TrialRecord): boolean => {
   const rules = deterministicOf(record);
   return rules.length > 0 && rules.every((verdict) => verdict.status === 'proven');
 };
+
+export const isQualificationRecord = (record: TrialRecord): boolean =>
+  record.bank === 'qualification' || (record.bank === undefined && record.arm === undefined);
+
+export const isValueRecord = (record: TrialRecord): boolean =>
+  record.bank === 'value' || (record.bank === undefined && record.arm !== undefined);
 
 function rescueEvidence(records: readonly TrialRecord[]): string {
   const missing = records.filter((record) => record.rescue === undefined);
@@ -157,7 +165,7 @@ function t3Evidence(records: readonly TrialRecord[]): string {
 
 export function deriveRows(records: readonly TrialRecord[]): readonly Row[] {
   const graded = records.filter((record) => record.ran_to_completion !== false);
-  const firstBank = graded.filter((record) => record.arm === undefined);
+  const firstBank = graded.filter(isQualificationRecord);
   const trialsPerTask = new Map<string, TrialRecord[]>();
   for (const record of firstBank) {
     trialsPerTask.set(record.task_id, [...(trialsPerTask.get(record.task_id) ?? []), record]);
