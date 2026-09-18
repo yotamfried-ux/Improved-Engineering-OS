@@ -21,6 +21,7 @@ import {
 } from './qualification-profile.ts';
 import { windowsBashDirectory } from './git-bash.ts';
 import { formatStage3HostPreflight, inspectStage3Host } from './stage3-host-preflight.ts';
+import { inspectKnowledgeIndex } from './stage3-index-preflight.ts';
 import {
   assertCampaignRevisionCompatible,
   assertFreshTrialArtifacts,
@@ -78,6 +79,11 @@ const currentRevision = execFileSync('git', ['rev-parse', 'HEAD'], {
   cwd: eosRoot,
   encoding: 'utf8',
 }).trim();
+const index = await inspectKnowledgeIndex(join(eosRoot, 'knowledge.sqlite'));
+if (!index.ok) {
+  process.stderr.write(`Stage 3 paid trial refused: ${index.reason}\n`);
+  process.exit(4);
+}
 const agentCliVersion = execFileSync('claude', ['--version'], {
   cwd: eosRoot,
   encoding: 'utf8',
@@ -345,6 +351,7 @@ try {
     eos_revision: currentRevision,
     qualification_profile: profile,
     ipc_transport: proxy.transport,
+    knowledge_index_digest: index.indexDigest,
     agent: {
       driver: 'claude-code',
       cli_version: agentCliVersion,
