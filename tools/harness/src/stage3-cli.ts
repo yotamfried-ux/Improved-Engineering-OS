@@ -397,6 +397,15 @@ try {
     transcript_ref: finalOutcome.result.transcriptRef,
   };
 
+  const endRevision = execFileSync('git', ['rev-parse', 'HEAD'], {
+    cwd: eosRoot,
+    encoding: 'utf8',
+  }).trim();
+  if (endRevision !== currentRevision) {
+    throw new Error(
+      `repository HEAD changed during the paid trial: started ${currentRevision}, ended ${endRevision}; refusing to record mixed-head evidence`,
+    );
+  }
   writeFileSync(recordPath, `${JSON.stringify(trialRecord, null, 2)}\n`, 'utf8');
   process.stdout.write(`\n${formatTrialReport(report)}`);
   process.stdout.write(`  qualification profile: ${profile}\n`);

@@ -22,7 +22,7 @@ import {
 import { windowsBashDirectory } from './git-bash.ts';
 import { RunRegistry } from './run-registry.ts';
 import { createTrial, probe } from './sandbox.ts';
-import { inspectStage3Host } from './stage3-host-preflight.ts';
+import { formatStage3HostPreflight, inspectStage3Host } from './stage3-host-preflight.ts';
 import { readTrialTelemetry } from './trial-telemetry.ts';
 import { buildTrialIntegrityReport } from './trial-integrity.ts';
 
@@ -35,9 +35,8 @@ const flag = (name: string): string | undefined => {
 const profile = qualificationProfileFor();
 const host = inspectStage3Host();
 if (!host.ready) {
-  process.stderr.write(
-    'Stage 3 canary refused: the active qualification host preflight is not ready\n',
-  );
+  process.stderr.write(formatStage3HostPreflight(host));
+  process.stderr.write('Stage 3 canary refused: the active qualification host preflight is not ready\n');
   process.exit(69);
 }
 
@@ -49,6 +48,10 @@ const outPath = resolve(
 );
 const credentialsPath = flag('--credentials');
 const serviceCredentialsPath = flag('--service-credentials');
+const eosRevision = execFileSync('git', ['rev-parse', 'HEAD'], {
+  cwd: eosRoot,
+  encoding: 'utf8',
+}).trim();
 
 function run(command: string, commandArgs: readonly string[], cwd: string): void {
   const result = spawnSync(command, [...commandArgs], {
@@ -228,10 +231,7 @@ try {
   evidence = {
     run_id: runId,
     recorded_at: new Date().toISOString(),
-    eos_revision: execFileSync('git', ['rev-parse', 'HEAD'], {
-      cwd: eosRoot,
-      encoding: 'utf8',
-    }).trim(),
+    eos_revision: eosRevision,
     qualification_profile: profile,
     ipc_transport: proxy.transport,
     registration: {
@@ -248,6 +248,10 @@ try {
     isolation,
     trial_integrity: integrity,
     telemetry,
+    runtime: {
+      node: process.version,
+      platform: process.platform,
+    },
     credential_boundary: {
       service_token_in_trial_environment: Object.values(preparedTrial.environment).includes(
         planeConfig.serviceToken,
@@ -265,6 +269,15 @@ try {
     verdict: passed ? 'PASSED' : 'NOT PASSED',
   };
 
+  const endRevision = execFileSync('git', ['rev-parse', 'HEAD'], {
+    cwd: eosRoot,
+    encoding: 'utf8',
+  }).trim();
+  if (endRevision !== eosRevision) {
+    throw new Error(
+      `repository HEAD changed during the canary: started ${eosRevision}, ended ${endRevision}`,
+    );
+  }
   mkdirSync(dirname(outPath), { recursive: true });
   writeFileSync(outPath, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
   process.stdout.write(
