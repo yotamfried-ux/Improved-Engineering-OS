@@ -68,6 +68,15 @@ export function validateStage3Campaign(
     );
   }
 
+  const indexDigests = unique(
+    records.map((record) => record.knowledge_index_digest ?? '(missing)'),
+  );
+  if (indexDigests.length !== 1 || indexDigests[0] === '(missing)') {
+    reasons.push(
+      `knowledge index digest must be reported and identical across the campaign; observed ${indexDigests.join(', ')}`,
+    );
+  }
+
   const requestedModels = unique(records.map((record) => record.model?.requested ?? '(missing)'));
   if (requestedModels.length !== 1 || requestedModels[0] !== options.expectedRequestedModel) {
     reasons.push(
