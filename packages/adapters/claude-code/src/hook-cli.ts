@@ -63,6 +63,83 @@ const UNCONFIGURED_INGEST: Ingest = {
   isReachable: () => Promise.resolve(false),
 };
 
+/**
+ * The launch-context variable by which a trusted host attests reachability.
+ *
+ * Exported so the harness sets the same name the hook reads. A second spelling
+ * of this would fail open silently: the hook would fall back to its own probe,
+ * which inside a trial is always false, and the run would look ineligible for a
+ * reason nobody could see.
+ */
+export const REACHABILITY_ATTESTATION = 'IEOS_INGEST_REACHABLE_AT_START';
+
+export interface ReachabilityDecision {
+  readonly reachable: boolean;
+  readonly source: 'host-attestation' | 'absent' | 'unreadable';
+  /** Set whenever the answer was not a clean attestation. Printed, never silent. */
+  readonly note: string | null;
+}
+
+/**
+ * Decide `ingest_reachable_at_start` (D23).
+ *
+ * D23 requires eligibility *declared before work starts*; it does not require
+ * that the component writing the declaration be the one that performed the
+ * probe. That distinction is what makes this possible at all. When the plane's
+ * credential deliberately lives outside the agent's namespace, a hook inside
+ * that namespace cannot reach the plane to probe it -- by design -- so a hook
+ * insisting on its own probe could never honestly declare `true`, and every
+ * trial would be ineligible however well the machine was configured.
+ *
+ * So the authority splits: the trusted host that launches the run is the
+ * authority on the fact, and states it in the same breath as it injects
+ * `IEOS_RUN_ID`; the hook remains the sole author of the run's lifecycle. The
+ * field means "at the declared start of this run, the trusted host verified the
+ * configured ingest path was reachable" -- not "the hook checked".
+ *
+ * There is no fall back to the hook's own probe, and that is a correction rather
+ * than a simplification. An earlier version of this function probed when no
+ * attestation was present, which was safe only for as long as the hook's only
+ * `Ingest` was the unconfigured one that always answered false. Once a hook
+ * inside a trial could reach a host proxy, the same fallback would have let a
+ * host that simply forgot to attest get `true` from the proxy -- a declaration
+ * D23 requires up front, arrived at afterwards by the run's own machinery. So:
+ *
+ *   "true"   -> true
+ *   "false"  -> false
+ *   anything else, including absent -> false, with a note
+ *
+ * Nothing is lost: without a proxy the only implementation is the unconfigured
+ * one, and with a proxy an explicit declaration is exactly what we want to
+ * require. The gain is that a future `Ingest` cannot quietly change what D23
+ * means here.
+ *
+ * This function can only ever remove eligibility. Granting it also requires the
+ * run to end COMPLETE, which is decided by what the flushes actually did.
+ */
+export function decideReachability(env: Record<string, string | undefined>): ReachabilityDecision {
+  const declared = env[REACHABILITY_ATTESTATION];
+  if (declared === 'true' || declared === 'false') {
+    return { reachable: declared === 'true', source: 'host-attestation', note: null };
+  }
+  if (declared === undefined) {
+    return {
+      reachable: false,
+      source: 'absent',
+      note:
+        `no ${REACHABILITY_ATTESTATION} was declared for this run, so it is not qualification ` +
+        'eligible. A qualification run is launched by a host that attests this before any work.',
+    };
+  }
+  return {
+    reachable: false,
+    source: 'unreadable',
+    note:
+      `${REACHABILITY_ATTESTATION} was set to something other than true or false, so this run ` +
+      'is not qualification eligible',
+  };
+}
+
 export interface HookDeps {
   readonly outboxPath: string;
   readonly registry: AttributeRegistry;
@@ -105,6 +182,9 @@ export async function runHook(raw: string, deps: HookDeps): Promise<HookOutcome>
     const outbox = new SqliteOutbox(db);
     const runs = new SqliteRunStateStore(db);
     const sessionKey = input.session_id as string;
+    // Declared before the run block, because opening a run can itself produce a
+    // note worth printing (a launch context that attested nonsense).
+    const notes: string[] = [];
 
     let state = runs.forSession(sessionKey);
     if (state === undefined) {
@@ -138,8 +218,9 @@ export async function runHook(raw: string, deps: HookDeps): Promise<HookOutcome>
           ? injectedRunId
           : mintId('run', deps.clock, deps.random);
       // Reachability is declared before any work, not inferred afterwards (D23).
-      const reachable = await deps.ingest.isReachable();
-      runs.begin(runId, reachable, deps.clock.nowIso(), sessionKey);
+      const decision = decideReachability(deps.env);
+      if (decision.note !== null) notes.push(`ieos telemetry: ${decision.note}`);
+      runs.begin(runId, decision.reachable, deps.clock.nowIso(), sessionKey);
       state = runs.forSession(sessionKey);
     }
     if (state === undefined) return failed('the run could not be recorded');
@@ -169,7 +250,6 @@ export async function runHook(raw: string, deps: HookDeps): Promise<HookOutcome>
       // R-11 added `emitter_id` for.
     });
 
-    const notes: string[] = [];
     if (plan.emit !== null) {
       const { event, dropped } = emitter.emit({
         eventType: plan.emit.eventType,
@@ -205,6 +285,7 @@ export async function runHook(raw: string, deps: HookDeps): Promise<HookOutcome>
           everFailed: flusher.everFailed,
         }),
         deps.clock.nowIso(),
+        flusher.everFailed,
       );
     }
 

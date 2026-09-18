@@ -6,12 +6,15 @@ and this document is one of the things that report is meant to be able to contra
 An earlier report, `stage-03-2026-09-11.md`, is kept and marked superseded rather than
 replaced.
 
-**Both failing rows are environmental and neither is about the agent or the tasks.**
-This session's egress policy does not reach the Evidence Plane, so no run could be
-confirmed as `qualification` (T4) and every trial ended `telemetry_state: INCOMPLETE`
-(T7), which this repository's own rule excludes from measurement. The remedy is an
-environment whose network policy permits that host; the trials re-run unmodified, and no
-code change is implied.
+**The first diagnosis of the two failing rows as environment-only was incomplete.**
+Subsequent wiring review found production defects on the path those rows measure: the
+Claude hook composition root had no configured Evidence Plane ingest path, T7 was not
+derived from trial telemetry, and the host/trial IPC protocol depended on EOF semantics
+that fail on Windows named pipes. Those defects are fixed in code. A fresh qualification
+bank is still blocked until an owner-run, no-model canary proves active installation and
+Harness service credentials, pre-registration, platform-profile trial integrity, durable
+ACK/drain, and a final `COMPLETE` + qualification-eligible run. The paid trials do not
+start before that canary passes.
 
 ## What the stage actually found
 
@@ -116,36 +119,70 @@ Recorded as approved deviation **C-12**, owner-approved on the evidence above.
 It relaxes the letter of a frozen parameter, so it is visible as a deviation
 rather than absorbed silently, per guide §6.1 rule 8.
 
-## The isolation precondition ADR-0005 deferred to this stage
+## Qualification platform profiles
 
-`defaultTrialPolicy` requires all four boundaries and the Stage 0 sandbox can
-prove two. Its own comment says so: proving `process` and `network` "needs a
-container, namespace or equivalent mechanism, which is a Stage 3 precondition".
-Left alone, every Stage 3 trial reports `qualificationEligible: false` and the
-stage cannot honestly pass. So the mechanism is built here.
+The owner's real v1 runtime is **native Windows**. Stage 3 therefore qualifies the
+system on Windows rather than requiring the owner to maintain WSL solely for the
+experiment. This is an owner-approved scope correction: the experiment must represent
+the product that is actually used, not a stronger operating-system sandbox that the
+product does not depend on.
 
-`tools/harness/scripts/ns-trial.sh` runs each trial inside a rootless Linux
-namespace set: user + mount + PID + network. What each boundary gets is different
-in kind from a directory check:
+`windows-personal-v1` is the canonical Stage 3 profile. It proves the controls the
+Windows harness can actually observe and enforce:
 
-| Boundary      | Mechanism                                                                            | Observed                                                                                                            |
-| ------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `filesystem`  | the evaluator tree is bind-mounted empty inside the namespace                        | `0` entries visible where the repository is on the host — "`evaluator/` never mounted" literally, not by convention |
-| `environment` | `env -i` plus the policy's named variables                                           | built, never filtered                                                                                               |
-| `process`     | PID namespace with `--mount-proc`                                                    | the trial is pid 1 and sees only its own tree                                                                       |
-| `network`     | `slirp4netns` for egress, `iptables -P OUTPUT DROP` plus one allowlisted destination | a control host is refused; the agent still completes, because the one allowed destination is the inference endpoint |
+- a fresh disposable task workspace, with before/after workspace-integrity probes;
+- a child environment built from an explicit allowlist rather than inherited;
+- installation, Harness service, and Supabase privileged credentials absent from the
+  child environment by both name and value;
+- `WebSearch` and `WebFetch` withheld from the subject agent;
+- project-only Claude settings, exactly one task prompt, and closed stdin;
+- Evidence Plane access only through the host-selected named-pipe proxy;
+- pre-registration, durable acknowledgement, terminal flush, empty outbox, and
+  `telemetry_state: COMPLETE` before the run is qualification eligible.
 
-The network policy for a real-agent trial is therefore `allowlist`, not `deny`,
-and that is a statement about what the trial is rather than a relaxation: the
-inference channel is the agent. Everything else — package registries, code
-search, the open internet — is dropped by the same rule that proves the
-boundary, and `WebSearch`/`WebFetch` are additionally not in the driver's
-`allowed_tools`, so a trial cannot fetch its own answer.
+This profile **does not claim Windows PID, network, or host-filesystem kernel
+confinement**. Network egress is not an isolation claim in personal v1, and an agent with
+Bash may have the network access the owner's normal Windows session has. Likewise, the
+workspace probe is evidence about the staged trial workspace, not a claim that Windows
+prevents an absolute-path read elsewhere on the host. T3 records those limits explicitly
+instead of turning an unmeasured property into a PASS.
 
-Two system packages (`slirp4netns`, `iproute2`) are required on the machine that
-runs trials. They are not build dependencies and nothing in `pnpm run check`
-needs them; a machine without them gets `network: unproven` and ineligible
-trials, which is the truthful outcome rather than a silent pass.
+The previous rootless Linux namespace mechanism is retained as the optional
+`linux-namespace-v1` profile. It still proves user + mount + PID + network namespaces,
+AF_UNIX socket mounting, and network allowlisting. It is useful for CI and for a future
+owner who chooses Linux, but it is not a v1 product prerequisite and the current owner
+does not need WSL or Linux packages to qualify or use the system.
+
+## Qualification preflight and credentials
+
+A qualification host owns two separate credentials, and neither enters the agent
+process. The installation credential has only the D22 ingest scopes. The Harness
+credential is a service principal with exactly `run.register`, so it can classify a Run
+before the first event but cannot insert telemetry as an installation. Both raw tokens
+stay in owner-only local credential files; the enrolment commands print only hash-bearing
+SQL for the owner to apply to the Evidence Plane.
+
+On native Windows, `pnpm stage3:preflight --host-only` requires the pinned Node 24
+runtime plus Git and Claude Code. It does **not** require WSL, `unshare`, `slirp4netns`,
+`iptables`, or other Linux namespace tooling.
+
+```powershell
+pnpm stage3:preflight --host-only
+pnpm ieos auth enroll --owner <supabase-auth-user-uuid>
+pnpm stage3:service-auth enroll --owner <supabase-auth-user-uuid>
+# Apply both printed hash-only SQL statements as the owner.
+$env:IEOS_INGEST_URL = "https://<project-ref>.supabase.co/functions/v1/ingest"
+pnpm stage3:preflight
+pnpm stage3:canary
+```
+
+The default files are `.ieos/credentials.json` and `.ieos/harness-service.json`. The
+canary is no-model and fail-closed. On Windows it uses a named pipe; on the optional Linux
+profile it uses the existing AF_UNIX socket mount. In both profiles the canary must prove
+authenticated reachability, pre-registration, host-proxy IPC, credential
+non-propagation, durable ingest acknowledgement, an empty outbox,
+`telemetry_state: COMPLETE`, and qualification eligibility before any paid trial bank
+starts.
 
 ## Trial protocol
 
@@ -182,10 +219,10 @@ inference from a neighbouring axis.
 
 - **No second agent.** Stage 8's, by T-07. `drivers/codex.ts` is not written
   here, and the task bank is built to be re-run rather than rewritten there.
-- **No CI trial job.** Trials cost money and need namespaces and credentials CI
-  does not have. The harness's own unit tests — including the graders' positive,
-  negative and mutation controls — run in CI with no agent and no network; the
-  trials themselves are owner-run and their artifacts are committed.
+- **No CI trial job.** Trials cost money and require owner credentials CI does not
+  have. The harness's own unit tests — including Windows named-pipe coverage and
+  the graders' positive, negative and mutation controls — run in CI with no paid
+  agent trial; the trials themselves are owner-run and their artifacts are committed.
 - **No grader weakened to fit a result.** Criteria may never be changed after a
   failure to produce a pass (D14). A scenario found invalid gets a new manifest
   `version` and the old failure stays.

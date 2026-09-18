@@ -10,14 +10,17 @@
 # The important property is that this script does not *claim* boundaries. It
 # builds them and then observes them from inside, writing what it saw to the
 # report file: how many entries are visible where a denied root sits on the host,
-# whether a control destination could be reached, whether the trial is pid 1.
+# whether a control destination could be reached, whether the trial is pid 1,
+# and whether any IPC socket was declared and mounted exactly as promised.
 # The TypeScript side turns those observations into boundary findings, so a step
 # that silently failed produces an observation contradicting it rather than an
 # absence that reads like success.
 #
 # Usage:
 #   ns-trial.sh --report FILE --node-bin PATH [--allow-host HOST:PORT]...
-#               [--deny-root DIR]... [--control-host IP:PORT] -- COMMAND...
+#               [--deny-root DIR]... [--declare-unix-socket PATH]
+#               [--mount-unix-socket HOST_PATH TRIAL_PATH]
+#               [--control-host IP:PORT] -- COMMAND...
 #
 # Exits with the command's own status, except 64 for a usage error and 69 when a
 # required mechanism is missing -- a machine without the namespace tooling fails
@@ -30,6 +33,9 @@ NODE_BIN=""
 ALLOW_HOSTS=""
 DENY_ROOTS=""
 CONTROL_HOST="93.184.216.34:443"
+DECLARED_SOCKET=""
+MOUNT_SOCKET_SOURCE=""
+MOUNT_SOCKET_TARGET=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -37,6 +43,18 @@ while [ $# -gt 0 ]; do
     --node-bin) NODE_BIN="$2"; shift 2 ;;
     --allow-host) ALLOW_HOSTS="$ALLOW_HOSTS $2"; shift 2 ;;
     --deny-root) DENY_ROOTS="$DENY_ROOTS $2"; shift 2 ;;
+    --declare-unix-socket)
+      [ -z "$DECLARED_SOCKET" ] || {
+        echo "ns-trial.sh: only one unix socket declaration is supported in Stage 3" >&2
+        exit 64
+      }
+      DECLARED_SOCKET="$2"; shift 2 ;;
+    --mount-unix-socket)
+      [ -z "$MOUNT_SOCKET_SOURCE" ] || {
+        echo "ns-trial.sh: only one unix socket mount is supported in Stage 3" >&2
+        exit 64
+      }
+      MOUNT_SOCKET_SOURCE="$2"; MOUNT_SOCKET_TARGET="$3"; shift 3 ;;
     --control-host) CONTROL_HOST="$2"; shift 2 ;;
     --) shift; break ;;
     *) echo "ns-trial.sh: unexpected argument $1" >&2; exit 64 ;;
@@ -47,9 +65,20 @@ done
 [ -n "$NODE_BIN" ] || { echo "ns-trial.sh: --node-bin is required" >&2; exit 64; }
 [ $# -gt 0 ] || { echo "ns-trial.sh: no command given" >&2; exit 64; }
 
+if [ -n "$MOUNT_SOCKET_SOURCE" ]; then
+  [ -n "$MOUNT_SOCKET_TARGET" ] || {
+    echo "ns-trial.sh: a unix socket mount needs a trial-visible target path" >&2
+    exit 64
+  }
+  [ -S "$MOUNT_SOCKET_SOURCE" ] || {
+    echo "ns-trial.sh: unix socket source is not a socket: $MOUNT_SOCKET_SOURCE" >&2
+    exit 69
+  }
+fi
+
 PATH="$PATH:/usr/sbin:/sbin"
 export PATH
-for tool in slirp4netns ip iptables unshare; do
+for tool in slirp4netns ip iptables unshare mount; do
   command -v "$tool" >/dev/null || {
     echo "ns-trial.sh: $tool is not installed; refusing to run an unisolated trial" >&2
     exit 69
@@ -71,12 +100,24 @@ for entry in $ALLOW_HOSTS; do
 done
 
 T=$(mktemp -d)
-cleanup() { rm -rf "$T"; }
+cleanup() {
+  if [ -n "$MOUNT_SOCKET_TARGET" ]; then rm -f "$MOUNT_SOCKET_TARGET" 2>/dev/null || true; fi
+  rm -rf "$T"
+}
 trap cleanup EXIT
 
 mkdir -p "$T/empty"
 READY="$T/ready"; GO="$T/go"; SLIRP_READY="$T/slirp"
 mkfifo "$READY" "$GO" "$SLIRP_READY"
+
+# A file bind mount needs a target inode. It is created on the host and removed
+# again after the namespace exits. The source remains the host proxy's socket;
+# the trial sees only the declared target path.
+if [ -n "$MOUNT_SOCKET_SOURCE" ]; then
+  mkdir -p "$(dirname "$MOUNT_SOCKET_TARGET")"
+  rm -f "$MOUNT_SOCKET_TARGET"
+  : > "$MOUNT_SOCKET_TARGET"
+fi
 
 # The inner stage is a file rather than an inline `sh -c` string. Three levels of
 # nested quoting is how a setup step silently becomes a no-op, and a no-op here
@@ -94,6 +135,27 @@ PATH="$PATH:/usr/sbin:/sbin"
 for root in $NS_DENY_ROOTS; do
   if [ -d "$root" ]; then mount --bind "$NS_EMPTY" "$root"; fi
 done
+
+# The Evidence Plane proxy is an explicit IPC exception to the filesystem
+# boundary. A mount without a declaration, a declaration pointing somewhere
+# else, or a target that is not actually AF_UNIX is recorded as such. Nothing in
+# this block changes iptables: IPC is not a new network route.
+ipc_declared=false
+ipc_declared_path="$NS_SOCKET_DECLARED"
+ipc_mounted_path=""
+ipc_path_matches=false
+ipc_is_unix=false
+if [ -n "$NS_SOCKET_DECLARED" ]; then ipc_declared=true; fi
+if [ -n "$NS_SOCKET_SOURCE" ]; then
+  mount --bind "$NS_SOCKET_SOURCE" "$NS_SOCKET_TARGET"
+  ipc_mounted_path="$NS_SOCKET_TARGET"
+fi
+if [ -n "$NS_SOCKET_DECLARED" ] && [ "$NS_SOCKET_DECLARED" = "$ipc_mounted_path" ]; then
+  ipc_path_matches=true
+fi
+if [ -n "$NS_SOCKET_DECLARED" ] && [ -S "$NS_SOCKET_DECLARED" ]; then
+  ipc_is_unix=true
+fi
 
 iptables -P OUTPUT DROP
 iptables -A OUTPUT -o lo -j ACCEPT
@@ -133,9 +195,23 @@ cat > "$NS_REPORT" <<REPORTJSON
   "control_result": "$control",
   "interfaces": "$interfaces",
   "pid_namespace_self": $(echo "$pid_report" | cut -d' ' -f1),
-  "pid_namespace_visible_processes": $(echo "$pid_report" | cut -d' ' -f2)
+  "pid_namespace_visible_processes": $(echo "$pid_report" | cut -d' ' -f2),
+  "ipc_socket_declared": $ipc_declared,
+  "ipc_socket_declared_path": "$ipc_declared_path",
+  "ipc_socket_mounted_path": "$ipc_mounted_path",
+  "ipc_socket_path_matches": $ipc_path_matches,
+  "ipc_socket_is_unix": $ipc_is_unix
 }
 REPORTJSON
+
+# The NS_* variables are setup-only. They were added by this wrapper after the
+# harness supplied its allowlisted environment, so inheriting them into the
+# subject would make the environment boundary claim false. In particular the
+# host-side socket source path must not become a trial variable just because the
+# namespace setup needed to know it.
+unset NS_READY NS_GO NS_EMPTY NS_REPORT NS_DENY_ROOTS NS_ALLOW_RULES NS_ALLOW_RECORD
+unset NS_SOCKET_DECLARED NS_SOCKET_SOURCE NS_SOCKET_TARGET
+unset NS_NODE_BIN NS_CONTROL_IP NS_CONTROL_PORT
 
 # The trial itself: its own PID namespace, so it is pid 1 and sees only the
 # process tree it creates.
@@ -145,6 +221,8 @@ chmod +x "$T/inner.sh"
 
 NS_READY="$READY" NS_GO="$GO" NS_EMPTY="$T/empty" NS_REPORT="$REPORT" \
 NS_DENY_ROOTS="$DENY_ROOTS" NS_ALLOW_RULES="$ALLOW_RULES" NS_ALLOW_RECORD="$ALLOW_RECORD" \
+NS_SOCKET_DECLARED="$DECLARED_SOCKET" NS_SOCKET_SOURCE="$MOUNT_SOCKET_SOURCE" \
+NS_SOCKET_TARGET="$MOUNT_SOCKET_TARGET" \
 NS_NODE_BIN="$NODE_BIN" NS_CONTROL_IP="$(echo "$CONTROL_HOST" | cut -d: -f1)" \
 NS_CONTROL_PORT="$(echo "$CONTROL_HOST" | cut -d: -f2)" \
   unshare --user --map-root-user --net --mount --propagation private \

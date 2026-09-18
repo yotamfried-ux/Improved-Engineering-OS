@@ -5,7 +5,7 @@
  * SECURITY DEFINER functions -- that is, by the database. Asserting them by
  * reading the migration's text would prove that the file says the right thing,
  * which is not the claim anyone cares about. So these tests execute the
- * migration and drive the RPCs.
+ * migrations and drive the RPCs.
  *
  * When no database is reachable the suite reports itself as SKIPPED rather than
  * passing. A skipped test is unproven, the qualification report counts it as
@@ -20,6 +20,8 @@
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
+import { readdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 /** Set by CI's postgres service, or by a developer pointing at their own. */
 export const DATABASE_URL = process.env['IEOS_TEST_DATABASE_URL'] ?? '';
@@ -89,8 +91,17 @@ export function json<T>(sql: string): T {
   return JSON.parse(exec(sql)) as T;
 }
 
-/** Apply the migration into a fresh schema, plus the objects Supabase provides. */
-export function applyMigration(migrationPath: string): void {
+/**
+ * Apply the current migration chain into a fresh schema, plus the objects
+ * Supabase provides.
+ *
+ * The caller names the first migration only so the directory remains explicit.
+ * Every numbered SQL migration in that directory is then applied in lexical
+ * order. Testing only `0001` after a `0002` exists is worse than no test for the
+ * latter: the suite would stay green while the deployed schema changed outside
+ * the thing it actually exercised.
+ */
+export function applyMigration(firstMigrationPath: string): void {
   // Roles and `auth.uid()` exist on a Supabase project and not on a bare
   // PostgreSQL. Created here rather than in the migration: a migration that
   // created `service_role` would be inventing part of the platform, and would
@@ -117,15 +128,32 @@ export function applyMigration(migrationPath: string): void {
     alter default privileges in schema public
       grant execute on functions to anon, authenticated, service_role;
   `);
-  const result = spawnSync(
-    'psql',
-    [DATABASE_URL, '-v', 'ON_ERROR_STOP=1', '-q', '-f', migrationPath],
-    {
-      encoding: 'utf8',
-    },
-  );
-  if (result.status !== 0) {
-    throw new SqlError(`the migration did not apply: ${result.stderr.trim()}`);
+
+  const migrationDir = dirname(firstMigrationPath);
+  const migrationPaths = readdirSync(migrationDir)
+    .filter((name) => /^\d+_.*\.sql$/u.test(name))
+    .sort()
+    .map((name) => join(migrationDir, name));
+
+  if (!migrationPaths.includes(firstMigrationPath)) {
+    throw new SqlError(
+      `the first migration is not in the migration directory: ${firstMigrationPath}`,
+    );
+  }
+
+  for (const migrationPath of migrationPaths.slice(migrationPaths.indexOf(firstMigrationPath))) {
+    const result = spawnSync(
+      'psql',
+      [DATABASE_URL, '-v', 'ON_ERROR_STOP=1', '-q', '-f', migrationPath],
+      {
+        encoding: 'utf8',
+      },
+    );
+    if (result.status !== 0) {
+      throw new SqlError(
+        `the migration ${migrationPath} did not apply: ${result.stderr.trim() || 'psql failed'}`,
+      );
+    }
   }
 }
 

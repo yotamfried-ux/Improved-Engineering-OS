@@ -1,22 +1,16 @@
 /**
- * The installation credential (D22.1, D22.5).
+ * Principal credentials (D22.1, D22.5, D36).
  *
- * `ieos auth enroll|rotate|revoke`, split into the pure part that lives here
- * and the I/O the composition root performs. What is pure is worth stating: the
- * token's shape, where the credential file goes, its mode, and the exact
- * enrolment record the owner applies. Those are the parts a test can hold, and
- * they are also the parts a mistake would be in.
+ * The installation path is used by `ieos auth enroll|rotate|revoke`. Stage 3
+ * also needs a host-only service principal for the qualification harness. Both
+ * identities intentionally share the same token, expiry, hashing and file-mode
+ * primitives so there is one credential implementation rather than a second
+ * Stage-3-only secret format.
  *
- * The command does NOT reach the Evidence Plane. Enrolment writes a row in
- * `principals`, which is an owner-authenticated action against a project this
- * repository has no credential for -- and inventing one would put a privileged
- * key on a developer's machine, which is the whole thing D22 exists to avoid.
- * So the tool mints the token, stores it locally, and emits the record for the
- * owner to apply. That is the same shape as the C-04 bootstrap path: the tool
- * prepares, the owner commits.
- *
- * The token is shown once (D22.5). Nothing here logs it, returns it twice, or
- * writes it anywhere but the credential file.
+ * These helpers do NOT reach the Evidence Plane. They mint an opaque token,
+ * store only the token on the trusted host, and emit SQL containing the hash.
+ * The owner applies that SQL. A raw token therefore never needs to cross a
+ * terminal log, Git, or the database boundary.
  */
 
 import { sha256Raw } from '@ieos/core';
@@ -46,13 +40,7 @@ export interface CredentialProtection {
  * D22.1 names the OS keychain first and a `0600` file as the fallback. On
  * Windows that fallback does not exist: `fs.chmod` only toggles the read-only
  * attribute, so a file written `0600` reports `0666` and the mode carries no
- * access control at all. Discovered when the Windows smoke job failed on a mode
- * assertion, which is the useful direction for it to have been discovered in.
- *
- * The mode is therefore checked rather than assumed, and a platform where it
- * means nothing says so. Silently accepting `0666` because "chmod returned
- * without error" would leave an owner believing in a protection they do not
- * have, which is worse than the missing protection itself.
+ * access control at all. The mode is checked rather than assumed.
  */
 export function protectionOf(mode: number, platform: string): CredentialProtection {
   const bits = mode & 0o777;
@@ -82,13 +70,7 @@ export class AuthError extends Error {
   }
 }
 
-/**
- * base64url of 32 random bytes: 43 characters, no padding.
- *
- * base64url rather than hex because the token travels in an HTTP header and
- * hex would need 64 characters for the same entropy; and rather than plain
- * base64 because `+` and `/` are not safe everywhere a token gets copied.
- */
+/** base64url of 32 random bytes: 43 characters, no padding. */
 export function mintToken(random: RandomSource): string {
   const bytes = random.bytes(TOKEN_BYTES);
   if (bytes.length !== TOKEN_BYTES) {
@@ -108,18 +90,18 @@ export function tokenHashLiteral(token: string): string {
   return `\\x${hex}`;
 }
 
+export function expiryFrom(nowIso: string, days = TOKEN_LIFETIME_DAYS): string {
+  const now = Date.parse(nowIso);
+  if (Number.isNaN(now)) throw new AuthError(`not a timestamp: ${nowIso}`);
+  return new Date(now + days * 24 * 60 * 60 * 1000).toISOString();
+}
+
 export interface Credentials {
   readonly schema_version: '1';
   readonly installation_id: string;
   readonly token: string;
   readonly created_at: string;
   readonly expires_at: string;
-}
-
-export function expiryFrom(nowIso: string, days = TOKEN_LIFETIME_DAYS): string {
-  const now = Date.parse(nowIso);
-  if (Number.isNaN(now)) throw new AuthError(`not a timestamp: ${nowIso}`);
-  return new Date(now + days * 24 * 60 * 60 * 1000).toISOString();
 }
 
 export function credentialsFor(options: {
@@ -144,12 +126,8 @@ export const INSTALLATION_SCOPES = [
 ] as const;
 
 /**
- * The statement the owner applies against their own project.
- *
- * It carries the HASH, never the token. That is the point of handing the owner
- * a statement rather than a token to paste: the value that travels through a
- * terminal, a clipboard and a shell history is the one that proves nothing on
- * its own.
+ * The statement the owner applies for an installation.
+ * It carries the HASH, never the token.
  */
 export function enrolmentStatement(options: {
   readonly installationId: string;
@@ -183,14 +161,7 @@ export function rotationStatement(options: {
   ].join('\n');
 }
 
-/**
- * Revocation sets a timestamp; it does not delete the row.
- *
- * The events this installation inserted remain attributable to it, which is
- * D22.6's accepted residual risk made auditable. Deleting the principal would
- * orphan its evidence and quietly turn "we know who wrote this" into "we do
- * not".
- */
+/** Revocation preserves the principal row so existing evidence remains attributable. */
 export function revocationStatement(installationId: string): string {
   return [
     'update principals',
@@ -200,13 +171,84 @@ export function revocationStatement(installationId: string): string {
 }
 
 /**
- * Single-quote a SQL literal.
- *
- * These statements are printed for a person to run, not executed here, so this
- * is not the injection boundary the Evidence Plane relies on -- that is the
- * parameterised RPC surface. It still escapes properly, because a label with an
- * apostrophe producing a statement that will not parse is a bad afternoon.
+ * Stage 3's harness identity has exactly one authority: classify a Run before
+ * its first event. Keeping this list separate from the database's broader
+ * service-principal allowlist makes least privilege explicit at provisioning.
  */
+export const HARNESS_SERVICE_SCOPES = ['run.register'] as const;
+
+export interface ServiceCredentials {
+  readonly schema_version: '1';
+  readonly service_id: string;
+  readonly scopes: readonly ['run.register'];
+  readonly token: string;
+  readonly created_at: string;
+  readonly expires_at: string;
+}
+
+export function serviceCredentialsFor(options: {
+  readonly serviceId: string;
+  readonly token: string;
+  readonly nowIso: string;
+}): ServiceCredentials {
+  if (!options.serviceId.startsWith('svc_')) {
+    throw new AuthError(
+      `service id must start with svc_, received ${JSON.stringify(options.serviceId)}`,
+    );
+  }
+  return {
+    schema_version: '1',
+    service_id: options.serviceId,
+    scopes: HARNESS_SERVICE_SCOPES,
+    token: options.token,
+    created_at: options.nowIso,
+    expires_at: expiryFrom(options.nowIso),
+  };
+}
+
+/** Hash-only owner statement for the Stage 3 harness service principal (D36). */
+export function serviceEnrolmentStatement(options: {
+  readonly serviceId: string;
+  readonly ownerId: string;
+  readonly tokenHash: string;
+  readonly expiresAt: string;
+  readonly label: string | null;
+}): string {
+  const label = options.label === null ? 'null' : quote(options.label);
+  return [
+    'insert into principals (id, kind, owner_id, token_hash, scopes, label, expires_at)',
+    `values (${quote(options.serviceId)}, 'service', ${quote(options.ownerId)}::uuid,`,
+    `        ${quote(options.tokenHash)}::bytea,`,
+    `        array[${HARNESS_SERVICE_SCOPES.map(quote).join(', ')}],`,
+    `        ${label}, ${quote(options.expiresAt)}::timestamptz);`,
+  ].join('\n');
+}
+
+/** Rotate the host-only token without changing the service principal identity. */
+export function serviceRotationStatement(options: {
+  readonly serviceId: string;
+  readonly tokenHash: string;
+  readonly expiresAt: string;
+}): string {
+  return [
+    'update principals',
+    `   set token_hash = ${quote(options.tokenHash)}::bytea,`,
+    `       expires_at = ${quote(options.expiresAt)}::timestamptz,`,
+    '       revoked_at = null',
+    ` where id = ${quote(options.serviceId)} and kind = 'service';`,
+  ].join('\n');
+}
+
+/** Revoke without deleting the identity that registered historical Runs. */
+export function serviceRevocationStatement(serviceId: string): string {
+  return [
+    'update principals',
+    '   set revoked_at = now()',
+    ` where id = ${quote(serviceId)} and kind = 'service' and revoked_at is null;`,
+  ].join('\n');
+}
+
+/** SQL-literal quoting for statements printed for the owner to apply. */
 function quote(value: string): string {
   return `'${value.replace(/'/gu, "''")}'`;
 }
