@@ -56,4 +56,28 @@ describe('Stage 3 trial integrity', () => {
     expect(report.qualificationEligible).toBe(false);
     expect(report.reasons.join('\n')).toContain('artifact-outside-workspace');
   });
+
+  it('states the failure it found rather than the condition it wanted', () => {
+    const inside = buildTrialIntegrityReport({
+      ...base(),
+      artifactPath: '/tmp/trial/transcript.ndjson',
+    });
+    expect(inside.reasons.join('\n')).toContain('is inside the agent workspace');
+    expect(inside.reasons.join('\n')).not.toContain('is stored outside');
+
+    const mismatched = buildTrialIntegrityReport({
+      ...base(),
+      environment: { ...base().environment, IEOS_INGEST_SOCKET: 'someone-elses-pipe' },
+    });
+    expect(mismatched.qualificationEligible).toBe(false);
+    expect(mismatched.reasons.join('\n')).toContain('does not match');
+
+    const unselected = buildTrialIntegrityReport({
+      ...base(),
+      environment: { ...base().environment, IEOS_INGEST_SOCKET: '' },
+      ipcTarget: '',
+    });
+    expect(unselected.qualificationEligible).toBe(false);
+    expect(unselected.reasons.join('\n')).toContain('no host-proxy IPC address');
+  });
 });

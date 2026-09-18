@@ -52,8 +52,13 @@ function invokeHook(payload: Record<string, unknown>): void {
       maxBuffer: 8 * 1024 * 1024,
     },
   );
-  if (run.stdout !== '') process.stdout.write(run.stdout);
-  if (run.stderr !== '') process.stderr.write(run.stderr);
+  if (run.error !== undefined) {
+    throw new Error(
+      `Stage 3 canary hook ${String(payload['hook_event_name'])} failed to start: ${run.error.message}`,
+    );
+  }
+  if (run.stdout) process.stdout.write(run.stdout);
+  if (run.stderr) process.stderr.write(run.stderr);
   if (run.status !== 0) {
     throw new Error(
       `Stage 3 canary hook ${String(payload['hook_event_name'])} exited ${String(run.status)}`,

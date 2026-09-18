@@ -204,9 +204,9 @@ ${
 ${
   verdict === 'PASSED'
     ? 'Every row is supported by evidence a trial produced.'
-    : `${failingRowsPhrase} fail (${rows
+    : `${failingRowsPhrase} did not pass (${rows
         .filter((row) => row.status !== 'PASS')
-        .map((row) => row.id)
+        .map((row) => `${row.id} ${row.status}`)
         .join(', ')}), and none is about the agent or the tasks.
 
 **T4 — registration.** The harness could not confirm any run with the Evidence

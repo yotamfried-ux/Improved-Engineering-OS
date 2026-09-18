@@ -45,10 +45,13 @@ export function buildTrialIntegrityReport(options: {
     findings.push({ check, status: pass ? 'PASS' : 'FAIL', evidence });
   };
 
+  const artifactInsideWorkspace = isContainedBy(options.workspaceRoot, options.artifactPath);
   add(
     'artifact-outside-workspace',
-    !isContainedBy(options.workspaceRoot, options.artifactPath),
-    'grader/transcript evidence is stored outside the disposable agent workspace',
+    !artifactInsideWorkspace,
+    artifactInsideWorkspace
+      ? `evidence path ${options.artifactPath} is inside the agent workspace ${options.workspaceRoot}`
+      : 'grader/transcript evidence is stored outside the disposable agent workspace',
   );
 
   const allowed = new Set(options.allowedEnvironment.map((name) => name.toLowerCase()));
@@ -110,10 +113,15 @@ export function buildTrialIntegrityReport(options: {
       ? 'an interactive stdin channel existed'
       : 'stdin is closed; no rescue channel exists',
   );
+  const ipcMatches = options.environment['IEOS_INGEST_SOCKET'] === options.ipcTarget;
   add(
     'host-proxy-ipc',
-    options.environment['IEOS_INGEST_SOCKET'] === options.ipcTarget && options.ipcTarget !== '',
-    'the child receives only the explicitly selected host-proxy IPC address',
+    ipcMatches && options.ipcTarget !== '',
+    options.ipcTarget === ''
+      ? 'no host-proxy IPC address was selected for the child'
+      : ipcMatches
+        ? 'the child receives only the explicitly selected host-proxy IPC address'
+        : 'IEOS_INGEST_SOCKET in the child environment does not match the selected host-proxy IPC address',
   );
 
   const reasons = findings
