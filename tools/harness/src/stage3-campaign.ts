@@ -62,8 +62,12 @@ export function validateStage3Campaign(
   }
 
   const expectedTransport =
-    options.expectedProfile === 'windows-personal-v1' ? 'windows-named-pipe' : 'unix-socket';
-  const transports = unique(records.map((record) => record.ipc_transport ?? '(missing)'));
+    options.expectedProfile === 'windows-personal-v1'
+      ? 'windows-named-pipe'
+      : 'unix-socket';
+  const transports = unique(
+    records.map((record) => record.ipc_transport ?? '(missing)'),
+  );
   if (transports.length !== 1 || transports[0] !== expectedTransport) {
     reasons.push(
       `IPC transport must be exactly ${expectedTransport}; observed ${transports.join(', ')}`,
@@ -91,7 +95,9 @@ export function validateStage3Campaign(
     );
   }
 
-  const drivers = unique(records.map((record) => record.agent?.driver ?? '(missing)'));
+  const drivers = unique(
+    records.map((record) => record.agent?.driver ?? '(missing)'),
+  );
   if (drivers.length !== 1 || drivers[0] !== 'claude-code') {
     reasons.push(`agent driver must be claude-code; observed ${drivers.join(', ')}`);
   }
@@ -104,7 +110,9 @@ export function validateStage3Campaign(
     );
   }
 
-  const nodeVersions = unique(records.map((record) => record.runtime?.node ?? '(missing)'));
+  const nodeVersions = unique(
+    records.map((record) => record.runtime?.node ?? '(missing)'),
+  );
   if (
     nodeVersions.length !== 1 ||
     nodeVersions[0] === '(missing)' ||
@@ -128,10 +136,14 @@ export function validateStage3Campaign(
   for (const taskId of options.primaryTaskIds) {
     const found = records.filter((record) => record.task_id === taskId);
     if (found.length !== 2) {
-      reasons.push(`${taskId}: expected 2 primary trials, found ${String(found.length)}`);
+      reasons.push(
+        `${taskId}: expected 2 primary trials, found ${String(found.length)}`,
+      );
     }
     if (found.some((record) => record.arm !== 'eos')) {
-      reasons.push(`${taskId}: primary trials must run with the EOS installation present`);
+      reasons.push(
+        `${taskId}: primary trials must run with the EOS installation present`,
+      );
     }
   }
 
@@ -146,10 +158,7 @@ export function validateStage3Campaign(
     }
   }
 
-  const expectedTaskIds = new Set([
-    ...options.primaryTaskIds,
-    ...options.hardTaskIds,
-  ]);
+  const expectedTaskIds = new Set([...options.primaryTaskIds, ...options.hardTaskIds]);
   const unexpected = unique(
     records
       .filter((record) => !expectedTaskIds.has(record.task_id))
