@@ -20,6 +20,11 @@ import {
   qualificationTrialPolicy,
 } from './qualification-profile.ts';
 import { windowsBashDirectory } from './git-bash.ts';
+import { formatStage3HostPreflight, inspectStage3Host } from './stage3-host-preflight.ts';
+import {
+  assertCampaignRevisionCompatible,
+  assertFreshTrialArtifacts,
+} from './stage3-trial-artifacts.ts';
 import { RunRegistry } from './run-registry.ts';
 import { createTrial } from './sandbox.ts';
 import { MAX_COST_USD_PER_TRIAL, runCheck, taskById } from './task-bank.ts';
@@ -38,6 +43,13 @@ try {
   profile = qualificationProfileFor();
 } catch (error) {
   process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+  process.exit(69);
+}
+
+const host = inspectStage3Host();
+process.stdout.write(formatStage3HostPreflight(host));
+if (!host.ready) {
+  process.stderr.write('Stage 3 paid trial refused: the owner host preflight is not ready\n');
   process.exit(69);
 }
 
@@ -62,6 +74,27 @@ if (!Number.isSafeInteger(trialNumber) || trialNumber < 1) {
   process.exit(64);
 }
 const eosRoot = resolve(import.meta.dirname, '..', '..', '..');
+const currentRevision = execFileSync('git', ['rev-parse', 'HEAD'], {
+  cwd: eosRoot,
+  encoding: 'utf8',
+}).trim();
+const agentCliVersion = execFileSync('claude', ['--version'], {
+  cwd: eosRoot,
+  encoding: 'utf8',
+  windowsHide: true,
+}).trim();
+const bashDirectory = windowsBashDirectory();
+if (profile === 'windows-personal-v1' && bashDirectory === undefined) {
+  process.stderr.write(
+    'Stage 3 paid trial refused: Git Bash could not be located from git --exec-path\n',
+  );
+  process.exit(69);
+}
+const gitBashPath =
+  profile === 'windows-personal-v1' && bashDirectory !== undefined
+    ? join(bashDirectory, 'bash.exe')
+    : undefined;
+
 const outDir = resolve(
   flag('--out') ?? join(eosRoot, 'qualification', 'evidence', 'stage-3', campaign),
 );
@@ -76,8 +109,13 @@ if (arm !== 'eos' && arm !== 'native') {
 
 const trialId = `${taskId}-${arm}-t${String(trialNumber)}`;
 const runId = `run_s3_${campaign}_${taskId.replace(/-/gu, '_')}_${arm}_t${String(trialNumber)}`;
-mkdirSync(outDir, { recursive: true });
 const transcriptDir = join(outDir, 'transcripts');
+const recordPath = join(outDir, `${trialId}.json`);
+const transcriptPath = join(transcriptDir, `${trialId}-${task.taskId}.ndjson`);
+
+assertCampaignRevisionCompatible({ outDir, campaign, currentRevision });
+assertFreshTrialArtifacts({ recordPath, transcriptPath });
+mkdirSync(outDir, { recursive: true });
 
 const planeConfig = loadQualificationPlaneConfig({
   eosRoot,
@@ -92,6 +130,8 @@ try {
     'IEOS_RUN_ID',
     INGEST_SOCKET_ENV,
     REACHABILITY_ATTESTATION_ENV,
+    'DISABLE_AUTOUPDATER',
+    ...(gitBashPath === undefined ? [] : ['CLAUDE_CODE_GIT_BASH_PATH']),
   ];
   const policyFor = (workspaceRoot: string) =>
     qualificationTrialPolicy({
@@ -108,11 +148,13 @@ try {
     policy: policyFor('(assigned below)'),
     sourceEnvironment: qualificationEnvironmentSource({
       // Git's bash, not the WSL launcher that shadows it on PATH.
-      bashDirectory: windowsBashDirectory(),
+      bashDirectory,
       trusted: {
         IEOS_RUN_ID: runId,
         [INGEST_SOCKET_ENV]: proxy.targetPath,
         [REACHABILITY_ATTESTATION_ENV]: proxy.hostReachableAtStart ? 'true' : 'false',
+        DISABLE_AUTOUPDATER: '1',
+        ...(gitBashPath === undefined ? {} : { CLAUDE_CODE_GIT_BASH_PATH: gitBashPath }),
       },
     }),
   });
@@ -297,12 +339,17 @@ try {
     task_id: taskId,
     arm,
     recorded_at: new Date().toISOString(),
-    eos_revision: execFileSync('git', ['rev-parse', 'HEAD'], {
-      cwd: eosRoot,
-      encoding: 'utf8',
-    }).trim(),
+    eos_revision: currentRevision,
     qualification_profile: profile,
     ipc_transport: proxy.transport,
+    agent: {
+      driver: 'claude-code',
+      cli_version: agentCliVersion,
+    },
+    runtime: {
+      node: process.version,
+      platform: process.platform,
+    },
     setting_sources: settingSources ?? 'project',
     ranking_mode: 'recorded',
     registration: { confirmed: registration.confirmed, reason: registration.reason },
@@ -340,7 +387,6 @@ try {
     transcript_ref: finalOutcome.result.transcriptRef,
   };
 
-  const recordPath = join(outDir, `${trialId}.json`);
   writeFileSync(recordPath, `${JSON.stringify(trialRecord, null, 2)}\n`, 'utf8');
   process.stdout.write(`\n${formatTrialReport(report)}`);
   process.stdout.write(`  qualification profile: ${profile}\n`);
