@@ -83,7 +83,8 @@ const normalized: TrialRecord[] = records.map((record): TrialRecord => {
   return primary;
 });
 const rows = deriveRows(normalized);
-const rowsPass = rows.length === 9 && rows.every((row) => row.status === 'PASS');
+const rowsPass =
+  rows.length === 9 && rows.every((row) => row.status === 'PASS');
 const matrixPass = matrixReasons.length === 0;
 const verdict = matrixPass && rowsPass ? 'PASSED' : 'NOT PASSED';
 
@@ -94,16 +95,38 @@ const signed = (value: number): string =>
   `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
 
 const hardSummary = summaries
-  .map(
-    (summary) =>
-      `| ${summary.taskId} | ${String(summary.eos.passed)}/${String(summary.eos.trials)} | ${String(summary.native.passed)}/${String(summary.native.trials)} | ${String(summary.eos.resolveCalls)}/${String(summary.eos.trials)} → ${String(summary.native.resolveCalls)}/${String(summary.native.trials)} | $${summary.eos.meanCostUsd.toFixed(3)} → $${summary.native.meanCostUsd.toFixed(3)} (EOS vs native ${pct(summary.delta.costPercent)}) | ${summary.eos.meanWallClockSeconds.toFixed(1)} → ${summary.native.meanWallClockSeconds.toFixed(1)} (${pct(summary.delta.wallClockPercent)}) | ${summary.eos.meanToolCalls.toFixed(1)} → ${summary.native.meanToolCalls.toFixed(1)} (${signed(summary.delta.toolCalls)}) | ${Math.round(summary.eos.meanTotalInputTokens)} → ${Math.round(summary.native.meanTotalInputTokens)} (${pct(summary.delta.totalInputTokensPercent)}) |`,
-  )
+  .map((summary) => {
+    const eosSolved = `${String(summary.eos.passed)}/${String(summary.eos.trials)}`;
+    const nativeSolved = `${String(summary.native.passed)}/${String(summary.native.trials)}`;
+    const resolve = [
+      `${String(summary.eos.resolveCalls)}/${String(summary.eos.trials)}`,
+      `${String(summary.native.resolveCalls)}/${String(summary.native.trials)}`,
+    ].join(' → ');
+    const cost =
+      `${summary.eos.meanCostUsd.toFixed(3)} → ${summary.native.meanCostUsd.toFixed(3)} ` +
+      `(EOS vs native ${pct(summary.delta.costPercent)})`;
+    const wall =
+      `${summary.eos.meanWallClockSeconds.toFixed(1)} → ` +
+      `${summary.native.meanWallClockSeconds.toFixed(1)} ` +
+      `(${pct(summary.delta.wallClockPercent)})`;
+    const tools =
+      `${summary.eos.meanToolCalls.toFixed(1)} → ` +
+      `${summary.native.meanToolCalls.toFixed(1)} ` +
+      `(${signed(summary.delta.toolCalls)})`;
+    const input =
+      `${String(Math.round(summary.eos.meanTotalInputTokens))} → ` +
+      `${String(Math.round(summary.native.meanTotalInputTokens))} ` +
+      `(${pct(summary.delta.totalInputTokensPercent)})`;
+    return `| ${summary.taskId} | ${eosSolved} | ${nativeSolved} | ${resolve} | ${cost} | ${wall} | ${tools} | ${input} |`;
+  })
   .join('\n');
 
 const trialMeasurements = records
   .map((record) => {
     const deterministic = deterministicOf(record);
-    const proven = deterministic.filter((item) => item.status === 'proven').length;
+    const proven = deterministic.filter(
+      (item) => item.status === 'proven',
+    ).length;
     return (
       `| ${record.task_id} | ${record.arm ?? '?'} | ${record.trial_id.slice(-2)} | ` +
       `${String(proven)}/${String(deterministic.length)} | ` +
