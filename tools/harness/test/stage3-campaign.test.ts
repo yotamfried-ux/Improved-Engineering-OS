@@ -36,6 +36,7 @@ function record(options: {
     eos_revision: HEAD,
     qualification_profile: 'windows-personal-v1',
     ipc_transport: 'windows-named-pipe',
+    knowledge_index_digest: 'idx_qualified',
     setting_sources: 'project',
     ranking_mode: 'recorded',
     status: 'proven',
@@ -117,6 +118,12 @@ describe('Stage 3 fresh campaign integrity', () => {
       (records: Stage3CampaignRecord[]) =>
         (records[0]!.qualification_profile = 'linux-namespace-v1'),
       /profile/u,
+    ],
+    [
+      'knowledge index',
+      (records: Stage3CampaignRecord[]) =>
+        (records[0]!.knowledge_index_digest = 'idx_other'),
+      /knowledge index digest/u,
     ],
     [
       'resolved model',
