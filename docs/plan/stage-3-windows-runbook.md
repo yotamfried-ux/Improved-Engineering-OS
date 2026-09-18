@@ -27,6 +27,18 @@ A ready Windows host reports profile `windows-personal-v1`. A warning that Windo
 not provide the optional Linux PID/network namespace confinement is informational, not a
 failure. Stage 3 does not claim those unmeasured properties on Windows.
 
+Before any exact-head canary, run the harness suite on the owner machine itself:
+
+```powershell
+pnpm vitest run --project harness
+```
+
+The target is **0 failed**. This owner-machine run is not interchangeable with GitHub's
+Windows runner: the owner's machine has WSL installed, so `C:\\Windows\\System32\\bash.exe`
+can shadow Git Bash in a way CI does not reproduce. If the only failures are symlink
+`EPERM` failures in `isolation.test.ts`, enable Windows Developer Mode, restart
+PowerShell, and rerun the suite. Do not weaken or skip those tests.
+
 ## Canonical owner identity
 
 Both qualification principals belong to one real Supabase Auth owner. Use the UUID of
@@ -66,13 +78,13 @@ select conname from pg_constraint where conname = 'runs_run_id_owner_unique';
 The current production Evidence Plane had this migration applied and verified on
 15 September 2026. Do not reapply it if the constraint already exists.
 
-`supabase/migrations/0003_observation_subject_kind.sql` must also be applied, and as of
-this writing it has not been. 0001 built `observations.subject_type` from
-`(o->'subject')->>'type'`, a key no Agent Contract producer emits: the contract types the
-subject as `{kind, id}`. Every real observation therefore arrived with a NULL
-`subject_type` and was refused by the column's NOT NULL constraint -- which is how the
-first live canary on this machine failed, with the observations rejected and the run
-fail-closed. Check first, read-only:
+`supabase/migrations/0003_observation_subject_kind.sql` is also required. It was applied
+to the current production Evidence Plane and verified on 17 September 2026. 0001 built
+`observations.subject_type` from `(o->'subject')->>'type'`, a key no Agent Contract
+producer emits: the contract types the subject as `{kind, id}`. Every real observation
+therefore arrived with a NULL `subject_type` and was refused by the column's NOT NULL
+constraint -- which is how the earlier live canary failed, with the observations rejected
+and the run fail-closed. Check first, read-only:
 
 ```sql
 select position('''kind''' in pg_get_functiondef('public.ingest_observations(bytea,jsonb)'::regprocedure)) > 0 as has_0003;
@@ -139,3 +151,50 @@ not present.
 
 Do not start the 22 paid Stage 3 trials until this canary evidence has been reviewed at
 the exact repository HEAD and the owner explicitly approves the paid bank.
+
+## Paid campaign matrix and reporting
+
+A fresh paid campaign is one campaign id, one exact repository HEAD, and **22 trials**.
+Choose a short campaign id using only ASCII letters, digits, or underscores (maximum
+12 characters), and do not reuse an earlier id.
+
+The matrix is fixed before the first paid run:
+
+- primary qualification bank: `guard-fail-closed`, `misleading-clue-merge`,
+  `backoff-breaks-a-test`; two `eos` trials each = **6 trials**;
+- paired hard bank: `plugin-install-marketplace`, `plan-dod-external-gates`,
+  `commit-message-protocol`, `quality-gate-cleanup`; two `eos` and two `native`
+  trials each = **16 trials**.
+
+Run every trial at the same exact HEAD. The CLI writes records under
+`qualification/evidence/stage-3/<campaign>/`. If HEAD changes after the campaign starts,
+do not combine the old and new revisions under one campaign.
+
+Each trial is launched explicitly:
+
+```powershell
+node tools/harness/src/stage3-cli.ts --task <task-id> --trial <1-or-2> --campaign <campaign> --arm <eos-or-native>
+```
+
+For the three primary tasks, use only `--arm eos`. For each hard-bank task, run trials
+1 and 2 in both `eos` and `native` arms. No rescue prompt, task-specific EOS coaching,
+grader change, or fixture repair is allowed inside a campaign.
+
+After all 22 records exist, generate the campaign-scoped report:
+
+```powershell
+node tools/harness/src/stage3-campaign-report-cli.ts --campaign <campaign>
+```
+
+The report refuses to mix historical root-level evidence, requires exactly 22 records,
+requires one EOS revision, requires unique run/trial ids, and derives the formal T1-T9
+gate from the campaign.
+
+Interpret the paired hard bank as a **vector of task-level results**, not one aggregate
+score. The three knowledge-discriminating tasks are
+`plan-dod-external-gates`, `commit-message-protocol`, and
+`quality-gate-cleanup`; each manifest already states its own stopping rule and what
+counts as value. `plugin-install-marketplace` is retained as the calibration/noise-floor
+task and is not a value discriminator. Do not invent a post-hoc overall threshold after
+seeing the results: report each task, cost, wall-clock, tool-call, token, telemetry, and
+resolve measurement separately, as required by `docs/budgets.md`.
