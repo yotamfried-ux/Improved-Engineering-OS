@@ -8,21 +8,14 @@
  *
  * What this store deliberately does NOT hold is `origin_class`. D36 gives run
  * classification to a service principal writing a record in the plane, and the
- * client is not one. Storing a classification here -- even `operational`, even
- * as a default -- would create a local claim about a fact the client has no
- * authority over, and the next reader would take it for the answer. The
- * absence is the mechanism: a caller that wants a classification has to go
- * where the authority is.
+ * client is not one. Storing a classification here would create a local claim
+ * about a fact the client has no authority over.
  *
- * Lives in the same database file as the outbox. One file, one WAL, one busy
- * timeout: a run's events and its terminal state are written by the same
- * process at the same moments, and splitting them across two files would add a
- * way for them to disagree.
+ * Lives in the same database file as the outbox and local evidence queue.
  */
 
 import type { RunTelemetryState } from '@ieos/core';
 
-/** The narrow slice of `node:sqlite` this store uses. */
 interface WritableDatabase {
   exec(sql: string): void;
   prepare(sql: string): {
@@ -34,19 +27,10 @@ interface WritableDatabase {
 
 export const CREATE_RUN_STATE_SQL = `create table if not exists run_state (
    run_id text primary key,
-   -- The agent's own session identifier, so every hook of one coding session
-   -- lands on one run. Unique: two runs claiming one session would split that
-   -- session's events across runs that each look half-empty, and an
-   -- investigation would read one session as several.
    session_key text unique,
    telemetry_state text not null,
    qualification_eligible integer not null,
    ingest_reachable_at_start integer not null,
-   -- Whether any flush during the run failed to drain. Folded into
-   -- \`telemetry_state\` already, but kept in its own column because the fold is
-   -- lossy: INCOMPLETE cannot say whether events were left queued or a batch
-   -- failed and was re-sent by another process, and a qualification report that
-   -- has to guess which is doing exactly the inference this column removes.
    flush_ever_failed integer not null default 0,
    started_at text not null,
    ended_at text
@@ -58,7 +42,6 @@ export interface LocalRunState {
   readonly telemetryState: 'COMPLETE' | 'INCOMPLETE';
   readonly qualificationEligible: boolean;
   readonly ingestReachableAtStart: boolean;
-  /** Whether any flush during the run failed to drain. */
   readonly flushEverFailed: boolean;
   readonly startedAt: string;
   readonly endedAt: string | null;
@@ -73,23 +56,6 @@ export class SqliteRunStateStore {
     this.#migrateFlushEverFailed();
   }
 
-  /**
-   * Add `flush_ever_failed` to a table created before it existed.
-   *
-   * `create table if not exists` leaves an older table untouched, so a
-   * developer's existing outbox needs this or it is a schema this code cannot
-   * query.
-   *
-   * The shape here is the point. An earlier version wrapped the `alter` in a bare
-   * `catch {}` on the assumption that any error meant "already present" -- so a
-   * migration that failed for any other reason was swallowed, the column stayed
-   * absent, and the reader turned the absence into `false`: a flush failure we
-   * could not know about becoming a run that reported none. That is the inversion
-   * every other part of this change exists to remove.
-   *
-   * So: ask the schema, act on the answer, and let a real failure be a real
-   * failure. Nothing is caught here at all.
-   */
   #migrateFlushEverFailed(): void {
     if (this.#hasFlushEverFailed()) return;
     try {
@@ -97,10 +63,6 @@ export class SqliteRunStateStore {
         'alter table run_state add column flush_ever_failed integer not null default 0',
       );
     } catch (error) {
-      // Two processes can open the same legacy outbox at once and both read the
-      // column as absent. Losing that race is not a failure; the column exists
-      // either way. Ask the schema again rather than catching blindly, so a
-      // migration that failed for any other reason still propagates.
       if (!this.#hasFlushEverFailed()) throw error;
     }
   }
@@ -112,15 +74,6 @@ export class SqliteRunStateStore {
     return Number(existing?.['n'] ?? 0) > 0;
   }
 
-  /**
-   * Record how a run started: reachability declared up front (D23).
-   *
-   * A run begins INCOMPLETE. That is the fail-safe direction and it is why the
-   * default is written at the start rather than left absent: a process killed
-   * before it could write a terminal state leaves a row that says the run did
-   * not finish, which is true, instead of no row at all, which reads as a run
-   * that never existed.
-   */
   begin(
     runId: string,
     ingestReachableAtStart: boolean,
@@ -137,32 +90,61 @@ export class SqliteRunStateStore {
       .run(runId, sessionKey, ingestReachableAtStart ? 1 : 0, startedAt);
   }
 
-  /**
-   * The run this agent session belongs to, if one has begun.
-   *
-   * Hooks after SessionStart have only the agent's session id, and minting a
-   * second run for the same session would be worse than dropping the event:
-   * two half-runs, neither of them what happened.
-   */
   forSession(sessionKey: string): LocalRunState | undefined {
     const row = this.#db.prepare('select * from run_state where session_key = ?').get(sessionKey);
     return row === undefined ? undefined : toState(row);
   }
 
-  /** Write the terminal state the runtime computed (guide §5.3). */
-  finish(state: RunTelemetryState, endedAt: string, flushEverFailed = false): void {
+  /**
+   * Persist a failed boundary immediately, before another hook process starts.
+   *
+   * Stop and SessionEnd are separate processes in the real adapter. An in-memory
+   * Flusher cannot carry failure across that boundary, so the database must.
+   */
+  markFlushFailed(runId: string): void {
     this.#db
       .prepare(
         `update run_state
-            set telemetry_state = ?, qualification_eligible = ?, ended_at = ?,
-                flush_ever_failed = ?
+            set flush_ever_failed = 1,
+                telemetry_state = 'INCOMPLETE',
+                qualification_eligible = 0
+          where run_id = ?`,
+      )
+      .run(runId);
+  }
+
+  /**
+   * Write terminal state without ever clearing or outranking an earlier failure.
+   *
+   * The invariant is enforced in SQL, not only in the hook caller: even a stale
+   * optimistic caller that submits COMPLETE cannot promote a row after a prior
+   * boundary persisted `flush_ever_failed = 1`.
+   */
+  finish(state: RunTelemetryState, endedAt: string, flushEverFailed = false): void {
+    const failedNow = flushEverFailed ? 1 : 0;
+    this.#db
+      .prepare(
+        `update run_state
+            set telemetry_state = case
+                  when flush_ever_failed = 1 or ? = 1 then 'INCOMPLETE'
+                  else ?
+                end,
+                qualification_eligible = case
+                  when flush_ever_failed = 1 or ? = 1 then 0
+                  else ?
+                end,
+                ended_at = ?,
+                flush_ever_failed = case
+                  when flush_ever_failed = 1 or ? = 1 then 1 else 0 end
           where run_id = ?`,
       )
       .run(
+        failedNow,
         state.telemetry_state,
+        failedNow,
         state.qualification_eligible ? 1 : 0,
         endedAt,
-        flushEverFailed ? 1 : 0,
+        failedNow,
         state.run_id,
       );
   }
@@ -172,7 +154,6 @@ export class SqliteRunStateStore {
     return row === undefined ? undefined : toState(row);
   }
 
-  /** The most recently started runs, newest first. Read by `doctor --last-run`. */
   recent(limit: number): readonly LocalRunState[] {
     if (limit <= 0) return [];
     return this.#db
@@ -182,13 +163,6 @@ export class SqliteRunStateStore {
   }
 }
 
-/**
- * A flag that must be present, so an absent one is an error rather than a false.
- *
- * Thrown, not defaulted. The one caller that reads these for qualification turns
- * a throw into "unreadable, therefore ineligible", which is the honest answer;
- * a default would have produced a confident wrong one.
- */
 function readRequiredFlag(row: Record<string, unknown>, column: string): boolean {
   const value = row[column];
   if (value === undefined || value === null) {
@@ -201,21 +175,15 @@ function readRequiredFlag(row: Record<string, unknown>, column: string): boolean
 
 function toState(row: Record<string, unknown>): LocalRunState {
   const telemetryState = String(row['telemetry_state']);
+  const flushEverFailed = readRequiredFlag(row, 'flush_ever_failed');
+  const complete = telemetryState === 'COMPLETE' && !flushEverFailed;
   return {
     runId: String(row['run_id']),
     sessionKey: row['session_key'] === null ? null : String(row['session_key']),
-    // Anything that is not literally COMPLETE reads as INCOMPLETE. A corrupt or
-    // hand-edited value must not be able to promote a run to "measured".
-    telemetryState: telemetryState === 'COMPLETE' ? 'COMPLETE' : 'INCOMPLETE',
-    qualificationEligible:
-      telemetryState === 'COMPLETE' && Number(row['qualification_eligible']) === 1,
+    telemetryState: complete ? 'COMPLETE' : 'INCOMPLETE',
+    qualificationEligible: complete && Number(row['qualification_eligible']) === 1,
     ingestReachableAtStart: Number(row['ingest_reachable_at_start']) === 1,
-    // Not `?? 0`. A missing column is something we do not know, and defaulting
-    // it to `false` would report "no flush failed" about a run whose flushes we
-    // cannot see. The constructor guarantees the column or throws, so reaching
-    // here without it means the schema changed underneath us -- which a caller
-    // must handle as unreadable, not read as clean.
-    flushEverFailed: readRequiredFlag(row, 'flush_ever_failed'),
+    flushEverFailed,
     startedAt: String(row['started_at']),
     endedAt: row['ended_at'] === null ? null : String(row['ended_at']),
   };

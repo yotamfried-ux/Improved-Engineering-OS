@@ -58,9 +58,6 @@ describe('Stage 3 trial integrity', () => {
   });
 
   it('states the failure it found rather than the condition it wanted', () => {
-    // A reason is copied verbatim into the Stage 3 report evidence column, so
-    // evidence that asserts the passing condition beside a FAIL is a report
-    // that contradicts itself.
     const inside = buildTrialIntegrityReport({
       ...base(),
       artifactPath: '/tmp/trial/transcript.ndjson',

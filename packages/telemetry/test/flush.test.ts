@@ -40,6 +40,10 @@ class MemoryOutbox implements Outbox {
     return Promise.resolve(limit <= 0 ? [] : this.#events.slice(0, limit));
   }
 
+  pendingCount(): Promise<number> {
+    return Promise.resolve(this.#events.length);
+  }
+
   acknowledge(eventIds: readonly string[]): Promise<void> {
     const gone = new Set(eventIds);
     this.#events = this.#events.filter((event) => !gone.has(event.event_id));

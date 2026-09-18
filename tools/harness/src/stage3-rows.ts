@@ -24,6 +24,8 @@ export interface TrialRecord {
     readonly costUsd: number;
     readonly inputTokens: number;
     readonly outputTokens: number;
+    /** Absent on the trials recorded before this field existed. */
+    readonly totalInputTokens?: number;
     readonly turns: number;
   } | null;
   readonly tool_calls: readonly { readonly name: string }[];

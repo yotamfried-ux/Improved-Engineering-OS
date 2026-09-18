@@ -18,6 +18,7 @@
  */
 
 import type { RegisterRunRequest } from '@ieos/core';
+import { requireHttpsEndpoint } from './plane-ingest.ts';
 import { RunRegistry } from './run-registry.ts';
 
 /** The one call the harness makes against the Evidence Plane. */
@@ -82,9 +83,17 @@ export function httpRegisterRun(options: {
   readonly serviceToken: string;
   readonly fetch: typeof globalThis.fetch;
 }): RegisterRunTransport {
+  const base = requireHttpsEndpoint(options.endpoint);
   return async (request) => {
-    const response = await options.fetch(`${options.endpoint.replace(/\/$/u, '')}/register_run`, {
+    const response = await options.fetch(`${base}/register_run`, {
       method: 'POST',
+      // `requireHttpsEndpoint` validates the URL this code writes; it cannot
+      // vouch for one the far end names. A 307/308 replays the method, the body
+      // and this custom header -- which undici does not strip the way it strips
+      // `authorization` -- and nothing in fetch refuses an https->http hop. A
+      // redirect is therefore a way to move the service token into cleartext,
+      // so it is an error rather than something to follow.
+      redirect: 'error',
       headers: {
         'content-type': 'application/json',
         // D22.2: the installation token header carries the service token too.

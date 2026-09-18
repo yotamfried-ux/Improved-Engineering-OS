@@ -6,13 +6,17 @@
  * sharing an implementation can agree on a protocol neither reads correctly.
  */
 
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { Ingest, ProxyRequest, ProxyResponse } from '@ieos/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { httpIngest, servePlaneProxy, type PlaneProxy } from '../src/plane-ingest.ts';
+
+/** The repository root: this file is `tools/harness/test/`, three levels down. */
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
 const scratch: string[] = [];
 const proxies: PlaneProxy[] = [];
@@ -94,6 +98,16 @@ const accepted = (...ids: string[]) => ({
 });
 
 describe('the plane client the repository did not have (D22, D22.2)', () => {
+  it('refuses a cleartext endpoint before any credential can be sent', () => {
+    const { fetch, calls } = stubFetch(() => accepted());
+    for (const endpoint of ['http://plane.invalid/ingest', 'ws://plane.invalid', 'not a url']) {
+      expect(() => httpIngest({ endpoint, installationToken: 'inst-token', fetch })).toThrow(
+        /https|valid URL/u,
+      );
+    }
+    expect(calls).toEqual([]);
+  });
+
   it('sends events to ingest_events with the installation token in the D22.2 header', async () => {
     const { ingest, calls } = client(() => accepted('evt_1'));
     const outcome = await ingest.sendEvents([{ event_id: 'evt_1' } as never]);
@@ -135,6 +149,43 @@ describe('the plane client the repository did not have (D22, D22.2)', () => {
     const { ingest, calls } = client(() => accepted('evt_1'));
     await ingest.sendEvents([{ event_id: 'evt_1' } as never]);
     expect(String(calls[0]?.init.body)).not.toContain('origin_class');
+  });
+
+  it('sends context snapshots under the key the ingest function reads', async () => {
+    // Two halves of one contract that live in different files and disagreed:
+    // the client sent `snapshots`, the deployed function reads
+    // `context_snapshots`. The mismatch is invisible to a status code -- the
+    // function coalesces the missing key to an empty batch and returns 200 with
+    // an empty acknowledgement -- so the live canary delivered every snapshot
+    // into nothing and was told it had succeeded. Both halves are asserted here.
+    const { ingest, calls } = client(() => accepted('ctx_1'));
+    const outcome = await ingest.sendContextSnapshots?.([
+      { context_snapshot_id: 'ctx_1' } as never,
+    ]);
+
+    expect(outcome).toEqual({ status: 'accepted', acceptedEventIds: ['ctx_1'] });
+    expect(calls[0]?.url.endsWith('/ingest_context_snapshots')).toBe(true);
+    // The only key: an extra one would mean the old name was left beside it.
+    expect(Object.keys(JSON.parse(String(calls[0]?.init.body)) as object)).toEqual([
+      'context_snapshots',
+    ]);
+
+    // The far half of the contract, read from the function that serves it.
+    const ingestFunction = readFileSync(
+      join(REPO_ROOT, 'supabase', 'functions', 'ingest', 'index.ts'),
+      'utf8',
+    );
+    expect(ingestFunction).toContain("p_snapshots: payload['context_snapshots']");
+  });
+
+  it('refuses a redirect instead of replaying the credential to its target', async () => {
+    // Same reason as the registrar's: a 307/308 replays the body and the
+    // custom token header, and fetch will happily hop https->http. Every route
+    // goes through one `post`, so asserting it once covers events,
+    // observations, snapshots and reads alike.
+    const { ingest, calls } = client(() => accepted('evt_1'));
+    await ingest.sendEvents([{ event_id: 'evt_1' } as never]);
+    expect(calls[0]?.init.redirect).toBe('error');
   });
 
   it('separates a refusal from an outage', async () => {

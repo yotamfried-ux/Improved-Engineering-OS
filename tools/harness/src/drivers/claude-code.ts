@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type {
   AgentDriver,
+  AgentModel,
   AgentRunUsage,
   DriverResult,
   ToolCallRecord,
@@ -55,7 +56,7 @@ export interface ClaudeCodeRunRecord {
   };
 }
 
-interface StreamEvent {
+export interface StreamEvent {
   readonly type?: string;
   readonly subtype?: string;
   readonly timestamp?: string;
@@ -63,6 +64,8 @@ interface StreamEvent {
     readonly content?: readonly { readonly type?: string; readonly name?: string }[];
   };
   readonly result?: unknown;
+  /** Present on the agent's `system`/`init` event: the model it actually ran. */
+  readonly model?: string;
   readonly permission_denials?: readonly { readonly tool_name?: string }[];
   readonly total_cost_usd?: number;
   readonly duration_ms?: number;
@@ -74,6 +77,47 @@ interface StreamEvent {
     readonly cache_read_input_tokens?: number;
     readonly cache_creation_input_tokens?: number;
   };
+}
+
+/**
+ * The consumption a finished run reported, or `null` when it reported none.
+ *
+ * `totalInputTokens` is the sum the three input fields are meaningless apart
+ * from: a real trial reports 36 uncached input tokens beside 879,130 cache
+ * reads, so reading `inputTokens` alone understates the run by four orders of
+ * magnitude. The parts are kept because they price differently.
+ */
+export function usageOf(
+  final: StreamEvent | undefined,
+  wallClockSeconds: number,
+): AgentRunUsage | null {
+  if (final === undefined) return null;
+  const inputTokens = final.usage?.input_tokens ?? 0;
+  const cacheReadInputTokens = final.usage?.cache_read_input_tokens ?? 0;
+  const cacheCreationInputTokens = final.usage?.cache_creation_input_tokens ?? 0;
+  return {
+    wallClockSeconds,
+    costUsd: final.total_cost_usd ?? 0,
+    inputTokens,
+    outputTokens: final.usage?.output_tokens ?? 0,
+    cacheReadInputTokens,
+    cacheCreationInputTokens,
+    totalInputTokens: inputTokens + cacheReadInputTokens + cacheCreationInputTokens,
+    turns: final.num_turns ?? 0,
+  };
+}
+
+/**
+ * What was asked for beside what the agent said it ran.
+ *
+ * Read from the run's own start-up event rather than assumed from the flag: a
+ * model substituted underneath the harness and one that was never reported
+ * look identical in the configuration, and only one of them invalidates a
+ * comparison between arms.
+ */
+export function modelOf(events: readonly StreamEvent[], requested: string | null): AgentModel {
+  const init = events.find((event) => event.type === 'system' && event.subtype === 'init');
+  return { requested, resolved: init?.model ?? null };
 }
 
 export class ClaudeCodeDriver implements AgentDriver {
@@ -89,7 +133,7 @@ export class ClaudeCodeDriver implements AgentDriver {
     return this.#lastRecord;
   }
 
-  run(trial: Trial, task: TrialTask): Promise<DriverResult> {
+  async run(trial: Trial, task: TrialTask): Promise<DriverResult> {
     const options = this.#options;
     const profile = options.qualificationProfile ?? qualificationProfileFor();
     const settingSources = options.settingSources ?? ['project'];
@@ -115,7 +159,7 @@ export class ClaudeCodeDriver implements AgentDriver {
     const environment = { ...trial.environment, ...options.extraEnvironment };
 
     const startedAt = Date.now();
-    const run = runQualificationProcess({
+    const run = await runQualificationProcess({
       command: argv,
       cwd: trial.workspaceRoot,
       environment,
@@ -131,24 +175,15 @@ export class ClaudeCodeDriver implements AgentDriver {
     const events = parseStream(run.stdout);
     const toolCalls = toolCallsOf(events);
     const final = events.findLast((event) => event.type === 'result');
-    const usage: AgentRunUsage | null =
-      final === undefined
-        ? null
-        : {
-            wallClockSeconds,
-            costUsd: final.total_cost_usd ?? 0,
-            inputTokens: final.usage?.input_tokens ?? 0,
-            outputTokens: final.usage?.output_tokens ?? 0,
-            cacheReadInputTokens: final.usage?.cache_read_input_tokens ?? 0,
-            cacheCreationInputTokens: final.usage?.cache_creation_input_tokens ?? 0,
-            turns: final.num_turns ?? 0,
-          };
+    const usage = usageOf(final, wallClockSeconds);
+    const model = modelOf(events, options.model ?? null);
 
     const result: DriverResult = {
       completed: final !== undefined && final.subtype === 'success' && final.is_error !== true,
       toolCalls,
       transcriptRef: transcriptPath,
       usage,
+      model,
     };
     const rescue = {
       promptsSent: argv.filter((argument) => argument === '-p').length,
@@ -192,7 +227,7 @@ export class ClaudeCodeDriver implements AgentDriver {
       integrity,
       rescue,
     };
-    return Promise.resolve(result);
+    return result;
   }
 }
 

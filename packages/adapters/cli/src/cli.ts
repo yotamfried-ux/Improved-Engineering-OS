@@ -378,13 +378,12 @@ async function runInit(): Promise<number> {
 /**
  * `ieos investigate <run_id>` (guide Stage 2, T-03).
  *
- * Reads the LOCAL outbox and derives attribution from it. Two limits come with
+ * Reads the LOCAL event history and derives attribution from it. Two limits come with
  * that, and both are printed rather than left for the reader to discover:
  *
- *   Events already acknowledged by the Evidence Plane are gone from the outbox,
- *   because the outbox deletes only on durable acknowledgement. So this shows
- *   what is still local. Stage 7's server-side investigation reads the plane and
- *   sees the whole run.
+ *   The history is a retained local copy, not proof that the Evidence Plane
+ *   accepted an event. Stage 7's server-side investigation reads the plane and
+ *   establishes remote durability.
  *
  *   `origin_class` is not something this side knows. D36 puts classification in
  *   a record a service principal writes, and the client is not one, so the run
@@ -412,14 +411,13 @@ async function runInvestigate(): Promise<number> {
   const db = await openOutbox(outboxPath);
   try {
     const outbox = new SqliteOutbox(db);
-    const all = await outbox.pending(Number.MAX_SAFE_INTEGER);
-    const events = all.filter((event) => event.run_id === runId);
+    const events = await outbox.historyForRun(runId);
     const localState = new SqliteRunStateStore(db).get(runId);
 
     if (events.length === 0 && localState === undefined) {
       process.stderr.write(
-        `run ${runId} is not in the local outbox. It may have been flushed to the ` +
-          'Evidence Plane already, or it may never have run here.\n',
+        `run ${runId} is not in the local event history. It may never have run here, ` +
+          'or this machine may not retain its telemetry database.\n',
       );
       return 4;
     }
@@ -447,8 +445,8 @@ async function runInvestigate(): Promise<number> {
     const rows = deriveAttribution({ events, run, derivedAt: systemClock.nowIso() });
     process.stdout.write(renderInvestigation(investigate({ run, events, rows })));
     process.stdout.write(
-      '\nread from the local outbox only. Events already acknowledged by the Evidence Plane ' +
-        'are no longer here, and origin_class is shown as the D36 default because a client ' +
+      '\nread from retained local event history only; this does not prove Evidence Plane ' +
+        'acceptance. origin_class is shown as the D36 default because a client ' +
         'cannot classify its own run.\n',
     );
     return 0;

@@ -204,7 +204,4 @@ function run(): number {
   }
 }
 
-// The enrol and rotate paths print the owner-applied SQL last. process.exit
-// does not flush a piped stdout, which would leave a local token the Evidence
-// Plane never learns about.
 process.exitCode = run();

@@ -1,47 +1,10 @@
-/**
- * The primary agent's hook contract, as a pure decision (Q-09, D23, D26).
- *
- * Only one agent gets hooks at Stage 2. Q-09 is explicit about that, and the
- * reason is worth keeping in view: Stage 3 asks whether EOS is natural for one
- * real agent end to end, and agent neutrality is a different question that
- * Stage 8 asks with a second adapter. Building both now would answer neither.
- *
- * Everything here is a pure function of the hook payload. The composition root
- * beside it does the I/O. That split is what makes the exit-code rule testable
- * without a running agent -- and the exit-code rule is the part where a mistake
- * is worst.
- *
- * **The exit-code rule.** Verified against the published hook reference:
- *
- *   exit 0    success. stdout is read as JSON when it looks like JSON;
- *             stderr goes to the debug log only.
- *   exit 2    a BLOCKING error on events that can block -- and on `Stop` what
- *             it blocks is stopping. A telemetry hook that returned 2 there
- *             would hold a coding session open because a network call failed.
- *   other     non-blocking. The action proceeds and a notice is shown.
- *
- * So this adapter never returns 2, from any event, for any reason. D23 states
- * the same rule from the other direction: telemetry failure is recorded as
- * `telemetry_state`, reported through stderr, and never allowed to block
- * coding. A failure exits 1 -- non-blocking, but visible, because a telemetry
- * hook that failed silently would leave a run looking quiet rather than lossy.
- */
+/** Pure Claude Code hook decisions and attribution extraction (Q-09/D23/D32). */
 
 import type { EventType, SessionKind } from '@ieos/core';
 
-/** The four events this adapter handles (Q-09). */
 export const HOOK_EVENTS = ['SessionStart', 'PostToolUse', 'Stop', 'SessionEnd'] as const;
 export type HookEvent = (typeof HOOK_EVENTS)[number];
-
-/**
- * Exit codes this adapter may return.
- *
- * `2` is deliberately absent from the type, not merely unused. A value that
- * cannot be named cannot be returned by a later edit either.
- */
 export type HookExit = 0 | 1;
-
-/** The blocking code, named so tests can assert it is never produced. */
 export const BLOCKING_EXIT_CODE = 2;
 
 export interface HookInput {
@@ -50,6 +13,10 @@ export interface HookInput {
   readonly cwd?: string;
   readonly tool_name?: string;
   readonly tool_use_id?: string;
+  readonly tool_input?: unknown;
+  /** Current Claude Code PostToolUse field. */
+  readonly tool_response?: unknown;
+  /** Legacy compatibility only; new hooks use `tool_response`. */
   readonly tool_output?: unknown;
   readonly exit_reason?: string;
   readonly startup_reason?: string;
@@ -67,15 +34,6 @@ export function isHookEvent(value: string): value is HookEvent {
   return (HOOK_EVENTS as readonly string[]).includes(value);
 }
 
-/**
- * Parse the JSON the agent writes to the hook's stdin.
- *
- * Unknown fields are kept rather than rejected: the hook payload is the agent's
- * contract, not ours, and a new field appearing in a future version must not
- * stop telemetry. An unknown *event* is a different matter -- this adapter is
- * registered for four, so a fifth arriving means the registration and the code
- * disagree, and guessing would emit an event nobody can interpret.
- */
 export function parseHookInput(raw: string): HookInput & { hook_event_name: HookEvent } {
   let parsed: unknown;
   try {
@@ -94,38 +52,24 @@ export function parseHookInput(raw: string): HookInput & { hook_event_name: Hook
     );
   }
   if (typeof input.session_id !== 'string' || input.session_id === '') {
-    // Every event of one coding session must land on one run. Without the
-    // session id there is nothing to key that on, and events would scatter
-    // across runs that each look half-empty.
     throw new HookInputError('the hook payload carries no session_id');
   }
   return input as HookInput & { hook_event_name: HookEvent };
 }
 
-/** What one hook invocation should do. */
+export interface HookEmission {
+  readonly eventType: EventType;
+  readonly attributes: Record<string, unknown>;
+}
+
 export interface HookPlan {
   readonly event: HookEvent;
-  /** The telemetry event to emit, or null when this hook only flushes. */
-  readonly emit: {
-    readonly eventType: EventType;
-    readonly attributes: Record<string, unknown>;
-  } | null;
-  /** Whether this event is a terminal boundary that must flush synchronously. */
+  readonly emit: HookEmission | null;
   readonly flush: boolean;
-  /** Whether this event ends the run and writes its terminal state. */
   readonly finishesRun: boolean;
-  /** Whether this event begins the run and declares eligibility up front (D23). */
   readonly startsRun: boolean;
 }
 
-/**
- * Decide what a hook invocation does.
- *
- * `Stop` flushes without emitting. It fires when the assistant finishes a turn,
- * which happens many times in a session; emitting there would add an event per
- * turn that says only "a turn ended", and the boundary flush is the whole
- * reason D23 names Stop at all.
- */
 export function planHook(input: HookInput & { hook_event_name: HookEvent }): HookPlan {
   switch (input.hook_event_name) {
     case 'SessionStart':
@@ -133,8 +77,6 @@ export function planHook(input: HookInput & { hook_event_name: HookEvent }): Hoo
         event: 'SessionStart',
         emit: {
           eventType: 'session.start',
-          // `startup_reason` distinguishes a fresh session from a resume or a
-          // compact, which is the difference between a run and a continuation.
           attributes: { 'session.startup_reason': input.startup_reason ?? 'startup' },
         },
         flush: false,
@@ -149,10 +91,7 @@ export function planHook(input: HookInput & { hook_event_name: HookEvent }): Hoo
           eventType: 'tool.call',
           attributes: {
             'tool.name': input.tool_name ?? 'unknown',
-            // The outcome, never the output. A tool's output is arbitrary text
-            // -- source, a prompt, an error body -- and D26's allowlist exists
-            // because that is exactly where a secret rides along.
-            'tool.outcome': toolOutcome(input.tool_output),
+            'tool.outcome': toolOutcome(input.tool_response ?? input.tool_output),
             ...assetAttribute(input),
           },
         },
@@ -184,49 +123,152 @@ export function planHook(input: HookInput & { hook_event_name: HookEvent }): Hoo
   }
 }
 
-/**
- * `ok` or `error`, and nothing else.
- *
- * The allowlist declares `tool.outcome` as one of a small vocabulary precisely
- * so this cannot become a place where an error message escapes. A tool output
- * that looks like a failure is reported as `error`; what the failure said is
- * not this hook's to carry.
- */
 function toolOutcome(output: unknown): string {
+  if (typeof output === 'object' && output !== null) {
+    const record = output as Record<string, unknown>;
+    if (record['success'] === false || record['isError'] === true) return 'error';
+    return 'ok';
+  }
   if (typeof output !== 'string') return 'ok';
   return /\berror\b|\bfailed\b|\bexception\b/iu.test(output) ? 'error' : 'ok';
 }
 
-/**
- * The asset an EOS tool call was about, when the call names one.
- *
- * Read from the tool NAME and the tool's own input, so attribution is about
- * calls the agent actually made to EOS rather than about anything it said.
- */
+function typedAsset(value: unknown): string | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  return record['kind'] === 'asset' && typeof record['id'] === 'string' && record['id'] !== ''
+    ? record['id']
+    : undefined;
+}
+
 function assetAttribute(input: HookInput): Record<string, unknown> {
   const name = input.tool_name ?? '';
   if (!name.includes('ieos') && !['inspect', 'observe', 'expand'].includes(name)) return {};
-  const toolInput = (input as { tool_input?: unknown }).tool_input;
-  if (toolInput === null || typeof toolInput !== 'object') return {};
-  const handle = (toolInput as Record<string, unknown>)['handle'];
-  return typeof handle === 'string' && handle.startsWith('asset_') ? { 'asset.id': handle } : {};
+  if (input.tool_input === null || typeof input.tool_input !== 'object') return {};
+  const record = input.tool_input as Record<string, unknown>;
+  const assetId = typedAsset(record['handle']) ?? typedAsset(record['subject']);
+  return assetId === undefined ? {} : { 'asset.id': assetId };
+}
+
+/** The MCP server name `ieos init` registers; Claude Code exposes its tools as `mcp__ieos__<tool>`. */
+const IEOS_MCP_PREFIX = 'mcp__ieos__';
+
+function ieosTool(name: string | undefined): 'resolve' | 'inspect' | 'observe' | 'expand' | null {
+  if (name === undefined) return null;
+  // Another server's `mcp__other__resolve` is not IEOS use and must not become
+  // IEOS attribution evidence.
+  const bare = name.startsWith(IEOS_MCP_PREFIX) ? name.slice(IEOS_MCP_PREFIX.length) : name;
+  for (const tool of ['resolve', 'inspect', 'observe', 'expand'] as const) {
+    if (bare === tool) return tool;
+  }
+  return null;
+}
+
+function parseJsonText(value: unknown): unknown {
+  if (typeof value !== 'string') return undefined;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Extract only the structured MCP result needed for attribution.
+ *
+ * The hook never persists the tool response itself. This parser deliberately
+ * narrows arbitrary output to ids and counts, preserving D26's metadata-only
+ * boundary while accepting the content-block shape MCP tools return.
+ */
+function mcpResult(response: unknown): unknown {
+  const direct = parseJsonText(response);
+  if (direct !== undefined) return direct;
+  if (response === null || typeof response !== 'object' || Array.isArray(response)) return response;
+  const record = response as Record<string, unknown>;
+  if (record['structuredContent'] !== undefined) return record['structuredContent'];
+  const content = record['content'];
+  if (Array.isArray(content)) {
+    for (const block of content) {
+      if (block !== null && typeof block === 'object') {
+        const parsed = parseJsonText((block as Record<string, unknown>)['text']);
+        if (parsed !== undefined) return parsed;
+      }
+    }
+  }
+  return response;
+}
+
+/**
+ * Semantic events consumed by evidence derivation.
+ *
+ * Hooks are the single attribution source. MCP handlers do not emit a second
+ * copy, so one real tool call cannot be counted twice. These events record what
+ * the agent reported through its tool lifecycle; they do not upgrade the claim
+ * to verified outcome evidence.
+ */
+export function attributionEvents(input: HookInput): readonly HookEmission[] {
+  if (input.hook_event_name !== 'PostToolUse') return [];
+  const tool = ieosTool(input.tool_name);
+  if (tool === null || input.tool_input === null || typeof input.tool_input !== 'object') return [];
+  const request = input.tool_input as Record<string, unknown>;
+
+  if (tool === 'inspect') {
+    const assetId = typedAsset(request['handle']);
+    return assetId === undefined
+      ? []
+      : [
+          {
+            eventType: 'inspect.request',
+            attributes: { 'tool.name': input.tool_name ?? tool, 'asset.id': assetId },
+          },
+        ];
+  }
+
+  if (tool === 'observe') {
+    const assetId = typedAsset(request['subject']);
+    return assetId === undefined
+      ? []
+      : [
+          {
+            eventType: 'observe.request',
+            attributes: { 'tool.name': input.tool_name ?? tool, 'asset.id': assetId },
+          },
+        ];
+  }
+
+  if (tool !== 'resolve') return [];
+  const result = mcpResult(input.tool_response ?? input.tool_output);
+  if (result === null || typeof result !== 'object' || Array.isArray(result)) return [];
+  const response = result as Record<string, unknown>;
+  const items = response['items'];
+  if (!Array.isArray(items)) return [];
+  const snapshotId =
+    typeof response['context_snapshot_id'] === 'string'
+      ? response['context_snapshot_id']
+      : undefined;
+  const emitted: HookEmission[] = [];
+  for (const item of items) {
+    if (item === null || typeof item !== 'object') continue;
+    const id = (item as Record<string, unknown>)['id'];
+    if (typeof id !== 'string' || id === '') continue;
+    emitted.push({
+      eventType: 'resolve.response',
+      attributes: {
+        'tool.name': input.tool_name ?? tool,
+        'asset.id': id,
+        ...(snapshotId === undefined ? {} : { 'context_snapshot.id': snapshotId }),
+      },
+    });
+  }
+  return emitted;
 }
 
 export interface HookOutcome {
   readonly exitCode: HookExit;
   readonly stderr: string;
-  /** Written to stdout only when there is something the agent should see. */
   readonly stdout: string;
 }
 
-/**
- * Turn a telemetry failure into a hook result.
- *
- * Never `2`, whatever went wrong. On `Stop` that code prevents the session from
- * stopping, so an unreachable Evidence Plane would hold a coding session open
- * -- telemetry deciding whether work may finish, which is the inversion D23
- * forbids in one sentence: coding continues.
- */
 export function failed(reason: string): HookOutcome {
   return {
     exitCode: 1,
@@ -239,5 +281,4 @@ export function succeeded(note = ''): HookOutcome {
   return { exitCode: 0, stderr: note, stdout: '' };
 }
 
-/** The session kinds this adapter may report, re-exported for the settings docs. */
 export type { SessionKind };

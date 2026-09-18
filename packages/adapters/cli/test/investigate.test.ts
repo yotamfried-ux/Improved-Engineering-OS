@@ -104,6 +104,17 @@ async function anOutbox(options: { complete: boolean }): Promise<string> {
   return path;
 }
 
+async function acknowledgeEveryEvent(path: string): Promise<void> {
+  const db = await openOutbox(path);
+  try {
+    const outbox = new SqliteOutbox(db);
+    const events = await outbox.pending(Number.MAX_SAFE_INTEGER);
+    await outbox.acknowledge(events.map((event) => event.event_id));
+  } finally {
+    db.close();
+  }
+}
+
 describe('ieos investigate', () => {
   it('prints the raw timeline and the attribution derived from it', async () => {
     const outbox = await anOutbox({ complete: true });
@@ -133,11 +144,22 @@ describe('ieos investigate', () => {
     expect(result.stdout).toContain('cannot classify its own run');
   });
 
-  it('says so when the local outbox has been flushed away, rather than showing an empty run', async () => {
+  it('retains an acknowledged timeline for local investigation', async () => {
+    const outbox = await anOutbox({ complete: true });
+    await acknowledgeEveryEvent(outbox);
+
+    const result = run('investigate', 'run_investigated', '--outbox', outbox);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('evt_resolve');
+    expect(result.stdout).toContain('retained local event history');
+    expect(result.stdout).toContain('does not prove Evidence Plane acceptance');
+  });
+
+  it('says so when a different run is absent from local history', async () => {
     const outbox = await anOutbox({ complete: true });
     const result = run('investigate', 'run_elsewhere', '--outbox', outbox);
     expect(result.code).toBe(4);
-    expect(result.stderr).toContain('not in the local outbox');
+    expect(result.stderr).toContain('not in the local event history');
   });
 
   it('distinguishes "no outbox on this machine" from "no such run"', async () => {

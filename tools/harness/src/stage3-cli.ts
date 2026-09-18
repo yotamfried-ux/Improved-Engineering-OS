@@ -19,6 +19,7 @@ import {
   qualificationProfileFor,
   qualificationTrialPolicy,
 } from './qualification-profile.ts';
+import { windowsBashDirectory } from './git-bash.ts';
 import { RunRegistry } from './run-registry.ts';
 import { createTrial } from './sandbox.ts';
 import { MAX_COST_USD_PER_TRIAL, runCheck, taskById } from './task-bank.ts';
@@ -106,6 +107,8 @@ try {
     trialId,
     policy: policyFor('(assigned below)'),
     sourceEnvironment: qualificationEnvironmentSource({
+      // Git's bash, not the WSL launcher that shadows it on PATH.
+      bashDirectory: windowsBashDirectory(),
       trusted: {
         IEOS_RUN_ID: runId,
         [INGEST_SOCKET_ENV]: proxy.targetPath,
@@ -312,6 +315,9 @@ try {
     origin_class_the_plane_would_stamp: registry.originClassFor(runId),
     budget: report.budget,
     usage,
+    // Recorded per trial rather than taken from the configuration, so a run
+    // that silently used another model cannot be compared as though it had not.
+    model: finalOutcome.result.model ?? { requested: null, resolved: null },
     tool_calls: toolCalls,
     resolve_called_unprompted: resolveCalled,
     eos_tools_used: [...new Set(toolCalls.map((call) => call.name))].filter((name) =>

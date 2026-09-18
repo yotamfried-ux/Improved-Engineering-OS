@@ -16,7 +16,12 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { httpIngest, servePlaneProxy, type PlaneProxy } from './plane-ingest.ts';
+import {
+  httpIngest,
+  requireHttpsEndpoint,
+  servePlaneProxy,
+  type PlaneProxy,
+} from './plane-ingest.ts';
 
 export const INGEST_SOCKET_ENV = 'IEOS_INGEST_SOCKET';
 export const REACHABILITY_ATTESTATION_ENV = 'IEOS_INGEST_REACHABLE_AT_START';
@@ -134,18 +139,10 @@ export function loadQualificationPlaneConfig(options: {
       'Stage 3 qualification requires IEOS_INGEST_URL (IEOS_INGEST_ENDPOINT is accepted as a legacy alias)',
     );
   }
-  // Both host credentials are sent to this endpoint, so it is checked before
-  // either is read off disk: a cleartext endpoint would put them on the wire.
-  let endpointUrl: URL;
   try {
-    endpointUrl = new URL(endpoint);
-  } catch {
-    throw new QualificationPlaneError(`the ingest endpoint is not a valid URL: ${endpoint}`);
-  }
-  if (endpointUrl.protocol !== 'https:') {
-    throw new QualificationPlaneError(
-      `the ingest endpoint must use https, not ${endpointUrl.protocol}; the installation and service tokens are sent to it`,
-    );
+    requireHttpsEndpoint(endpoint);
+  } catch (error) {
+    throw new QualificationPlaneError(error instanceof Error ? error.message : String(error));
   }
 
   const service = loadServiceCredential({

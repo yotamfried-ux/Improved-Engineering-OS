@@ -15,12 +15,12 @@
  * proof: an absent report yields `unproven` for every boundary, with the reason.
  */
 
-import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { BoundaryFinding } from './isolation.ts';
+import { runTrialProcess } from './trial-process.ts';
 
 /** Exit status the script uses for "this machine cannot isolate a trial". */
 export const MECHANISM_UNAVAILABLE = 69;
@@ -90,7 +90,7 @@ export interface NamespaceRunResult {
   readonly unavailableReason: string | null;
 }
 
-export function runInNamespace(options: NamespaceRunOptions): NamespaceRunResult {
+export async function runInNamespace(options: NamespaceRunOptions): Promise<NamespaceRunResult> {
   const reportDir = mkdtempSync(join(tmpdir(), 'ieos-ns-report-'));
   const reportPath = join(reportDir, 'boundaries.json');
   const args = [
@@ -112,20 +112,19 @@ export function runInNamespace(options: NamespaceRunOptions): NamespaceRunResult
   ];
 
   try {
-    const run = spawnSync(options.scriptPath ?? NS_TRIAL_SCRIPT, args, {
+    // Asynchronous, because the host proxy the trial flushes through lives on
+    // this process's event loop. No `input`, and no option by which a caller
+    // could supply one: T6 -- "no rescue: no human intervention inside any
+    // trial" -- rests on the absence of a channel rather than on a promise not
+    // to use one. `runTrialProcess` gives the child `ignore` for stdin, so there
+    // is nothing to write to even from inside this process. A test asserts this.
+    const run = await runTrialProcess(options.scriptPath ?? NS_TRIAL_SCRIPT, args, {
       cwd: options.cwd,
       // Built, not inherited: `env` replaces the environment outright, so the
       // only names present are the ones the policy granted.
-      env: { ...options.environment },
-      // No `input`, and no option by which a caller could supply one. This is
-      // what T6 -- "no rescue: no human intervention inside any trial" -- rests
-      // on, and it rests on the absence of a channel rather than on a promise
-      // not to use one. `spawnSync` without `input` closes the child's stdin
-      // immediately, so there is nothing to write to even from inside this
-      // process. A test asserts this option is not accepted.
-      encoding: 'utf8',
-      timeout: options.timeoutSeconds * 1000,
-      maxBuffer: 64 * 1024 * 1024,
+      env: options.environment,
+      timeoutMs: options.timeoutSeconds * 1000,
+      maxBufferBytes: 64 * 1024 * 1024,
     });
 
     let observations: NamespaceObservations | null = null;
@@ -136,12 +135,17 @@ export function runInNamespace(options: NamespaceRunOptions): NamespaceRunResult
       // is reported as such; it is never treated as a clean run.
     }
 
-    const timedOut = run.signal !== null && observations !== null;
     return {
       status: run.status,
       stdout: run.stdout ?? '',
       stderr: run.stderr ?? '',
-      timedOut,
+      // The helper knows whether it killed this trial for running long; it is
+      // the only thing that does. Inferring it from `signal !== null &&
+      // observations !== null` was wrong twice over: a timeout before the
+      // report is written leaves `observations` null and would have been
+      // reported as an ordinary failure, and any other signal -- a crash --
+      // would have been reported as a timeout once a report existed.
+      timedOut: run.timedOut,
       observations,
       unavailableReason:
         run.status === MECHANISM_UNAVAILABLE

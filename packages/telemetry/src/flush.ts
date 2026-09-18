@@ -1,51 +1,26 @@
-/**
- * Flush strategy and run state (D23).
- *
- * D23 gives one rule that everything here serves: **telemetry loss must never
- * look like a measured run.** Not "should be avoided" -- must never look like.
- * That makes the interesting path the failing one. When every retry has failed,
- * the correct outcome is not an error the caller can swallow; it is a run marked
- * `telemetry_state: INCOMPLETE` with `qualification_eligible: false`, and coding
- * that continues regardless.
- *
- * The two failure directions are deliberately asymmetric:
- *
- *   ingest is down     the run is INCOMPLETE. Work continues, nothing is
- *                      written to Git, and no measurement claims the run.
- *   flush blocks       never. A terminal hook that hung would make the agent's
- *                      session hang, so timeouts are short and retries bounded.
- *
- * `local_persistent` and `remote_ephemeral` differ only in when a flush is
- * mandatory, not in what a failed flush means. A laptop can retry later because
- * its outbox file will still be there; a container that is about to be
- * destroyed cannot, so a boundary flush is its last chance and its failure is
- * final. The container case is the Stage 2 mandatory scenario: killed right
- * after the last tool call, either the events arrive or the run is INCOMPLETE --
- * never silently "complete".
- */
+/** Flush strategy and run state (D23). */
 
 import { runTelemetryStateSchema } from '@ieos/core';
-import type { Ingest, IngestOutcome, Outbox, RunTelemetryState, SessionKind } from '@ieos/core';
+import type {
+  ContextSnapshotDocument,
+  EvidenceQueue,
+  Ingest,
+  IngestOutcome,
+  Observation,
+  Outbox,
+  RunTelemetryState,
+  SessionKind,
+  TelemetryEvent,
+} from '@ieos/core';
 
-/** Terminal boundaries, where an ephemeral session must flush synchronously. */
 export type FlushBoundary = 'stop' | 'session_end' | 'interval' | 'manual';
 
 export interface FlushPolicy {
-  /** Events per request. Bounded so one oversized batch cannot fail them all. */
   readonly batchSize: number;
-  /** Attempts per boundary, including the first. Bounded, per D23. */
   readonly maxAttempts: number;
-  /** Milliseconds between attempts. */
   readonly retryDelayMs: number;
 }
 
-/**
- * Defaults sized for a terminal hook, not for a background sync.
- *
- * Three attempts a second apart is at most a couple of seconds added to session
- * teardown. Generous retries here would trade a bounded delay for an unbounded
- * one at the exact moment the container is being torn down anyway.
- */
 export const DEFAULT_FLUSH_POLICY: FlushPolicy = {
   batchSize: 100,
   maxAttempts: 3,
@@ -56,24 +31,18 @@ export interface FlushResult {
   readonly boundary: FlushBoundary;
   readonly attempted: number;
   readonly acknowledged: number;
-  /** Still queued after this flush: zero means the outbox drained. */
+  /** Events + evidence documents still pending after this boundary. */
   readonly remaining: number;
   readonly outcome: 'drained' | 'partial' | 'unreachable' | 'rejected';
   readonly lastReason?: string;
 }
 
-/** Which boundaries force a synchronous flush, by session kind (D23). */
 export function mandatoryBoundaries(kind: SessionKind): readonly FlushBoundary[] {
   switch (kind) {
-    // A discardable container has no "later": Stop and SessionEnd are the last
-    // moments its outbox exists at all.
     case 'remote_ephemeral':
       return ['stop', 'session_end', 'interval'];
-    // CI is ephemeral too, and its run ends when the job does.
     case 'ci':
       return ['stop', 'session_end'];
-    // A laptop keeps its outbox file. Background sync may pick it up later, so
-    // only the end of the session is a hard boundary.
     case 'local_persistent':
       return ['session_end'];
   }
@@ -81,22 +50,39 @@ export function mandatoryBoundaries(kind: SessionKind): readonly FlushBoundary[]
 
 export interface FlusherOptions {
   readonly outbox: Outbox;
+  /** Optional for old callers; MCP/hook production wiring supplies it. */
+  readonly evidence?: EvidenceQueue;
   readonly ingest: Ingest;
   readonly sessionKind: SessionKind;
   readonly policy?: FlushPolicy;
-  /** Injected so a test never waits a real second. */
   readonly sleep?: (ms: number) => Promise<void>;
 }
 
+type PendingDocument = TelemetryEvent | Observation | ContextSnapshotDocument;
+
+type QueueAdapter<T extends PendingDocument> = {
+  pending(limit: number): Promise<readonly T[]>;
+  acknowledge(ids: readonly string[]): Promise<void>;
+  id(item: T): string;
+  send(items: readonly T[]): Promise<IngestOutcome>;
+};
+
+interface DrainResult {
+  attempted: number;
+  acknowledged: number;
+  failed?: { outcome: 'partial' | 'unreachable' | 'rejected'; reason?: string };
+}
+
 /**
- * Drains the outbox into the Evidence Plane.
+ * Drains telemetry, observations and context snapshots into the Evidence Plane.
  *
- * Never throws for an ingest failure. A telemetry exception escaping into an
- * agent hook would turn an observability problem into a coding outage, and D23
- * is explicit that coding continues.
+ * A boundary is `drained` only when every queue is empty. A single partial ACK
+ * is sticky failure for the run even if a later process eventually delivers the
+ * rest; this process did not observe a lossless measurement.
  */
 export class Flusher {
   readonly #outbox: Outbox;
+  readonly #evidence: EvidenceQueue | undefined;
   readonly #ingest: Ingest;
   readonly #sessionKind: SessionKind;
   readonly #policy: FlushPolicy;
@@ -105,6 +91,7 @@ export class Flusher {
 
   constructor(options: FlusherOptions) {
     this.#outbox = options.outbox;
+    this.#evidence = options.evidence;
     this.#ingest = options.ingest;
     this.#sessionKind = options.sessionKind;
     this.#policy = options.policy ?? DEFAULT_FLUSH_POLICY;
@@ -116,68 +103,132 @@ export class Flusher {
         }));
   }
 
-  /** True once any flush has failed to drain, which no later success erases. */
   get everFailed(): boolean {
     return this.#everFailed;
   }
 
   async flush(boundary: FlushBoundary): Promise<FlushResult> {
-    const pending = await this.#outbox.pending(this.#policy.batchSize);
-    if (pending.length === 0) {
-      return { boundary, attempted: 0, acknowledged: 0, remaining: 0, outcome: 'drained' };
+    try {
+      return await this.#flush(boundary);
+    } catch (error) {
+      // A local queue that throws mid-boundary is not a drained boundary. Make
+      // the failure sticky before the caller sees the exception.
+      this.#everFailed = true;
+      throw error;
     }
-
-    let outcome: IngestOutcome | undefined;
-    for (let attempt = 1; attempt <= this.#policy.maxAttempts; attempt += 1) {
-      outcome = await this.#send(pending);
-      if (outcome.status === 'accepted') break;
-      // A rejection is the plane saying no, not the network saying nothing.
-      // Retrying it would send the same rejected batch again for no reason.
-      if (outcome.status === 'rejected') break;
-      if (attempt < this.#policy.maxAttempts) await this.#sleep(this.#policy.retryDelayMs);
-    }
-
-    if (outcome?.status === 'accepted') {
-      await this.#outbox.acknowledge(outcome.acceptedEventIds);
-      const remaining = (await this.#outbox.pending(1)).length;
-      // A partial acceptance leaves the rest queued rather than dropping it:
-      // the ids the plane named are the only ones proven durable.
-      const drained = outcome.acceptedEventIds.length === pending.length && remaining === 0;
-      if (!drained) this.#everFailed = true;
-      return {
-        boundary,
-        attempted: pending.length,
-        acknowledged: outcome.acceptedEventIds.length,
-        remaining,
-        outcome: drained ? 'drained' : 'partial',
-      };
-    }
-
-    this.#everFailed = true;
-    const remaining = (await this.#outbox.pending(this.#policy.batchSize)).length;
-    // `outcome` is set unless maxAttempts was non-positive, which the policy
-    // forbids; treated as unreachable rather than asserted, because the safe
-    // reading of "we do not know what happened" is "it did not arrive".
-    const failed = outcome?.status === 'rejected' ? 'rejected' : 'unreachable';
-    return {
-      boundary,
-      attempted: pending.length,
-      acknowledged: 0,
-      remaining,
-      outcome: failed,
-      ...(outcome === undefined ? {} : { lastReason: outcome.reason }),
-    };
   }
 
-  /**
-   * One send attempt, with an ingest failure turned into an outcome.
-   *
-   * A thrown transport error and an `unreachable` outcome are the same event as
-   * far as the run is concerned, and only one of them is in the port's type.
-   */
-  async #send(events: Parameters<Ingest['sendEvents']>[0]): Promise<IngestOutcome> {
+  async #flush(boundary: FlushBoundary): Promise<FlushResult> {
+    let attempted = 0;
+    let acknowledged = 0;
+
+    const eventResult = await this.#drain<TelemetryEvent>({
+      pending: (limit) => this.#outbox.pending(limit),
+      acknowledge: (ids) => this.#outbox.acknowledge(ids),
+      id: (event) => event.event_id,
+      send: (events) => this.#safeSend(() => this.#ingest.sendEvents(events)),
+    });
+    attempted += eventResult.attempted;
+    acknowledged += eventResult.acknowledged;
+    if (eventResult.failed !== undefined) {
+      return this.#failedResult(boundary, attempted, acknowledged, eventResult.failed);
+    }
+
+    if (this.#evidence !== undefined) {
+      const observationResult = await this.#drain<Observation>({
+        pending: (limit) => this.#evidence?.pendingObservations(limit) ?? Promise.resolve([]),
+        acknowledge: (ids) => this.#evidence?.acknowledgeObservations(ids) ?? Promise.resolve(),
+        id: (observation) => observation.observation_id,
+        send: (observations) => this.#safeSend(() => this.#ingest.sendObservations(observations)),
+      });
+      attempted += observationResult.attempted;
+      acknowledged += observationResult.acknowledged;
+      if (observationResult.failed !== undefined) {
+        return this.#failedResult(boundary, attempted, acknowledged, observationResult.failed);
+      }
+
+      const snapshotResult = await this.#drain<ContextSnapshotDocument>({
+        pending: (limit) => this.#evidence?.pendingContextSnapshots(limit) ?? Promise.resolve([]),
+        acknowledge: (ids) => this.#evidence?.acknowledgeContextSnapshots(ids) ?? Promise.resolve(),
+        id: (snapshot) => snapshot.context_snapshot_id,
+        send: (snapshots) =>
+          this.#safeSend(() => {
+            if (this.#ingest.sendContextSnapshots === undefined) {
+              return Promise.resolve({
+                status: 'unreachable',
+                reason: 'the configured ingest does not support context snapshots',
+              } as const);
+            }
+            return this.#ingest.sendContextSnapshots(snapshots);
+          }),
+      });
+      attempted += snapshotResult.attempted;
+      acknowledged += snapshotResult.acknowledged;
+      if (snapshotResult.failed !== undefined) {
+        return this.#failedResult(boundary, attempted, acknowledged, snapshotResult.failed);
+      }
+    }
+
+    const remaining = await this.#remaining();
+    if (remaining !== 0) {
+      this.#everFailed = true;
+      return { boundary, attempted, acknowledged, remaining, outcome: 'partial' };
+    }
+    return { boundary, attempted, acknowledged, remaining: 0, outcome: 'drained' };
+  }
+
+  async #drain<T extends PendingDocument>(adapter: QueueAdapter<T>): Promise<DrainResult> {
+    let attempted = 0;
+    let acknowledged = 0;
+    while (true) {
+      const pending = await adapter.pending(this.#policy.batchSize);
+      if (pending.length === 0) return { attempted, acknowledged };
+      attempted += pending.length;
+
+      let outcome: IngestOutcome | undefined;
+      for (let attempt = 1; attempt <= this.#policy.maxAttempts; attempt += 1) {
+        outcome = await adapter.send(pending);
+        if (outcome.status === 'accepted' || outcome.status === 'rejected') break;
+        if (attempt < this.#policy.maxAttempts) await this.#sleep(this.#policy.retryDelayMs);
+      }
+
+      if (outcome?.status !== 'accepted') {
+        const failed = outcome?.status === 'rejected' ? 'rejected' : 'unreachable';
+        return {
+          attempted,
+          acknowledged,
+          failed: {
+            outcome: failed,
+            ...(outcome === undefined ? {} : { reason: outcome.reason }),
+          },
+        };
+      }
+
+      const requested = new Set(pending.map((item) => adapter.id(item)));
+      const accepted = [...new Set(outcome.acceptedEventIds)];
+      if (accepted.some((id) => !requested.has(id))) {
+        return {
+          attempted,
+          acknowledged,
+          failed: {
+            outcome: 'unreachable',
+            reason: 'ingest acknowledged an id that was not in the request',
+          },
+        };
+      }
+      await adapter.acknowledge(accepted);
+      acknowledged += accepted.length;
+      if (accepted.length !== requested.size) {
+        return { attempted, acknowledged, failed: { outcome: 'partial' } };
+      }
+      // A fully accepted batch may still leave more than batchSize in the queue.
+      // Keep draining instead of calling that state COMPLETE or partial.
+    }
+  }
+
+  async #safeSend(send: () => Promise<IngestOutcome>): Promise<IngestOutcome> {
     try {
-      return await this.#ingest.sendEvents(events);
+      return await send();
     } catch (error) {
       return {
         status: 'unreachable',
@@ -186,7 +237,30 @@ export class Flusher {
     }
   }
 
-  /** The boundaries this session kind must flush at synchronously. */
+  async #remaining(): Promise<number> {
+    const events = await this.#outbox.pendingCount();
+    const evidence = this.#evidence === undefined ? 0 : await this.#evidence.pendingEvidenceCount();
+    return events + evidence;
+  }
+
+  async #failedResult(
+    boundary: FlushBoundary,
+    attempted: number,
+    acknowledged: number,
+    failed: NonNullable<DrainResult['failed']>,
+  ): Promise<FlushResult> {
+    this.#everFailed = true;
+    const remaining = await this.#remaining();
+    return {
+      boundary,
+      attempted,
+      acknowledged,
+      remaining,
+      outcome: failed.outcome,
+      ...(failed.reason === undefined ? {} : { lastReason: failed.reason }),
+    };
+  }
+
   get mandatoryBoundaries(): readonly FlushBoundary[] {
     return mandatoryBoundaries(this.#sessionKind);
   }
@@ -194,28 +268,12 @@ export class Flusher {
 
 export interface RunStateInputs {
   readonly runId: string;
-  /** Declared up front at SessionStart, not inferred afterwards (D23). */
   readonly ingestReachableAtStart: boolean;
-  /** Events still queued when the run ended. */
+  /** Telemetry events plus evidence documents still pending. */
   readonly remaining: number;
-  /** Whether any flush during the run failed to drain. */
   readonly everFailed: boolean;
 }
 
-/**
- * The run-level state the runtime writes (guide §5.3).
- *
- * Note what makes a run INCOMPLETE. Not only "events are still queued at the
- * end" but also "a flush failed at any point", because a batch that failed and
- * was later re-sent by a different process is not something this run observed.
- * And a run that could not reach ingest at SessionStart was never eligible in
- * the first place -- D23 requires eligibility declared before work starts,
- * precisely so it cannot be decided afterwards by how the run happened to go.
- *
- * `qualification_eligible` is derived, never passed in. The contract's own
- * invariant forbids an INCOMPLETE run from being eligible, and computing it
- * here means no caller can be the one that gets it wrong.
- */
 export function runTelemetryState(inputs: RunStateInputs): RunTelemetryState {
   const complete = inputs.remaining === 0 && !inputs.everFailed;
   return runTelemetryStateSchema.parse({

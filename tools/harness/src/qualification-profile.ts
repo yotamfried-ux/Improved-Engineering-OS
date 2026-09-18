@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { pathWithGitBashFirst } from './git-bash.ts';
 import type { IsolationPolicy } from './isolation.ts';
 import { namespaceTrialPolicy } from './isolation.ts';
 import { runInNamespace, type NamespaceRunOptions, type NamespaceRunResult } from './ns-sandbox.ts';
@@ -8,6 +8,7 @@ import {
   openQualificationProxy,
   type QualificationPlaneConfig,
 } from './qualification-plane.ts';
+import { runTrialProcess } from './trial-process.ts';
 
 export type QualificationProfile = 'windows-personal-v1' | 'linux-namespace-v1';
 
@@ -99,6 +100,16 @@ export function qualificationEnvironmentSource(options: {
   readonly platform?: NodeJS.Platform;
   readonly env?: Readonly<Record<string, string | undefined>>;
   readonly trusted: Readonly<Record<string, string>>;
+  /**
+   * Where a Windows trial's `bash` should come from, from
+   * `windowsBashDirectory()`.
+   *
+   * Passed in rather than resolved here: this function's job is to build an
+   * environment from the one it is given, and a test asserts exactly that it
+   * does not inherit host state. Reaching for the host's `git` from inside it
+   * broke that guarantee -- and the CI job on Windows caught it.
+   */
+  readonly bashDirectory?: string | undefined;
 }): Readonly<Record<string, string | undefined>> {
   const platform = options.platform ?? process.platform;
   const env = options.env ?? process.env;
@@ -109,6 +120,14 @@ export function qualificationEnvironmentSource(options: {
         ? (envValue(env, 'HOME', platform) ?? envValue(env, 'USERPROFILE', platform))
         : envValue(env, name, platform);
   }
+
+  // A trial's `bash` must be Git's, not the WSL launcher that shadows it. Done
+  // here rather than in the fixture because the fixture is graded content, and
+  // through the shared helper so the evaluator path cannot drift from this one.
+  if (platform === 'win32' && options.bashDirectory !== undefined) {
+    source['PATH'] = pathWithGitBashFirst(source['PATH'] ?? '', options.bashDirectory);
+  }
+
   Object.assign(source, options.trusted);
   return source;
 }
@@ -118,29 +137,28 @@ export function qualificationEnvironmentSource(options: {
  * Linux keeps the namespace wrapper. Windows gets a replaced environment,
  * closed stdin and a dedicated workspace, with no invented kernel-sandbox claim.
  */
-export function runQualificationProcess(
+export async function runQualificationProcess(
   options: NamespaceRunOptions & { readonly platform?: NodeJS.Platform },
-): NamespaceRunResult {
+): Promise<NamespaceRunResult> {
   const platform = options.platform ?? process.platform;
   if (platform === 'linux') return runInNamespace(options);
   if (platform !== 'win32') qualificationProfileFor(platform);
 
   const [command, ...args] = options.command;
   if (command === undefined) throw new Error('qualification process command is empty');
-  const run = spawnSync(command, args, {
+  // Asynchronous so the named-pipe proxy on this event loop keeps answering the
+  // trial's hooks while it runs.
+  const run = await runTrialProcess(command, args, {
     cwd: options.cwd,
-    env: { ...options.environment },
-    encoding: 'utf8',
-    timeout: options.timeoutSeconds * 1000,
-    maxBuffer: 64 * 1024 * 1024,
-    windowsHide: true,
+    env: options.environment,
+    timeoutMs: options.timeoutSeconds * 1000,
+    maxBufferBytes: 64 * 1024 * 1024,
   });
-  const error = run.error as NodeJS.ErrnoException | undefined;
   return {
     status: run.status,
-    stdout: run.stdout ?? '',
-    stderr: run.stderr ?? '',
-    timedOut: error?.code === 'ETIMEDOUT',
+    stdout: run.stdout,
+    stderr: run.error === null ? run.stderr : `${run.stderr}${run.error}\n`,
+    timedOut: run.timedOut,
     observations: null,
     unavailableReason: null,
   };

@@ -10,6 +10,7 @@
  */
 
 import { randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -29,6 +30,9 @@ import {
   serverVersion,
   unavailable,
 } from './harness.ts';
+
+/** The repository root: this file is `supabase/tests/`, two levels down. */
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 const MIGRATION = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -382,13 +386,46 @@ suite(SUITE, () => {
         {
           observation_id: 'obs_1',
           run_id: 'run_a',
-          subject: { type: 'asset', id: 'asset_alpha' },
+          subject: { kind: 'asset', id: 'asset_alpha' },
           claim: 'it helped',
         },
       ])}'::jsonb`;
       json(`select ingest_observations(${INSTALLATION}, ${observation})`);
       json(`select ingest_observations(${INSTALLATION}, ${observation})`);
       expect(rows('select count(*)::int as n from observations')).toEqual([{ n: 1 }]);
+    });
+
+    it('reads the subject as the Agent Contract types it: {kind, id}', () => {
+      // 0001 read `subject->>'type'`, a key no producer emits, so `subject_type`
+      // came out NULL and the NOT NULL column rejected every real observation.
+      // The fixture above had the same invented shape, which is why a suite that
+      // executes the migration against a real database still missed it. The
+      // contract is the authority here, so it is read rather than restated.
+      truncate();
+      const schema = JSON.parse(
+        readFileSync(
+          join(REPO_ROOT, 'contracts', 'schemas', 'agent-contract-observation.schema.json'),
+          'utf8',
+        ),
+      ) as { properties: { subject: { required: readonly string[] } } };
+      expect(schema.properties.subject.required).toEqual(['kind', 'id']);
+
+      const observation = `'${JSON.stringify([
+        {
+          observation_id: 'obs_contract',
+          run_id: 'run_a',
+          kind: 'outcome',
+          subject: { kind: 'asset', id: 'asset_alpha' },
+        },
+      ])}'::jsonb`;
+      expect(
+        json<{ accepted: readonly string[] }>(
+          `select ingest_observations(${INSTALLATION}, ${observation})`,
+        ).accepted,
+      ).toEqual(['obs_contract']);
+      expect(rows('select subject_type, subject_id from observations')).toEqual([
+        { subject_type: 'asset', subject_id: 'asset_alpha' },
+      ]);
     });
   });
 

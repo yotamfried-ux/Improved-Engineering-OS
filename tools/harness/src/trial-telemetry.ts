@@ -1,48 +1,38 @@
 /**
- * Reading a trial's telemetry state out of the trial (D23, T7).
+ * Reading a trial's local evidence-delivery state out of the trial (D23, T7).
  *
- * T7 asks whether every trial's telemetry was complete. Until now the Stage 3
- * report answered that with a constant, and the evidence records carried nothing
- * it could have read instead -- `registration` and a trial-level
- * `qualification_eligible`, but none of the four facts the rule is actually
- * about. So this exists to put the reading in the evidence, where a report can
- * only report it.
- *
- * Every field here is read, not inferred. `flush_ever_failed` in particular:
- * `telemetry_state` already folds it in, but the fold is lossy -- INCOMPLETE
- * cannot say whether events were left queued or a batch failed and was re-sent
- * by another process -- and a report forced to guess which would be doing exactly
- * the inference this exists to remove.
- *
- * Fail closed throughout. A trial whose outbox is missing, unreadable, or holds
- * no row for the run is not a trial whose telemetry was fine; it is one we cannot
- * say anything about, and `qualification_eligible` is false with the reason
- * recorded.
+ * COMPLETE means every runtime write path has drained, not merely raw telemetry.
+ * The reader therefore reports the event queue and the observation/snapshot queue
+ * separately and makes qualification fail closed if either still contains data.
  */
 
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { openOutbox, SqliteOutbox, SqliteRunStateStore } from '@ieos/store-sqlite';
+import {
+  openOutbox,
+  SqliteEvidenceDocuments,
+  SqliteOutbox,
+  SqliteRunStateStore,
+} from '@ieos/store-sqlite';
 
-/** Exactly what T7 needs to be derivable, and nothing the report has to interpret. */
 export interface TrialTelemetrySnapshot {
   readonly ingest_reachable_at_start: boolean;
   readonly flush_ever_failed: boolean;
   readonly outbox_events_remaining: number;
+  readonly evidence_documents_remaining: number;
   readonly telemetry_state: 'COMPLETE' | 'INCOMPLETE';
   readonly qualification_eligible: boolean;
   readonly run_id: string | null;
   readonly ended_at: string | null;
-  /** Why this snapshot says nothing useful, when it says nothing useful. */
   readonly unavailable_reason: string | null;
 }
 
-/** The state a trial we cannot read is in: ineligible, and honest about why. */
 function unreadable(reason: string): TrialTelemetrySnapshot {
   return {
     ingest_reachable_at_start: false,
     flush_ever_failed: false,
     outbox_events_remaining: 0,
+    evidence_documents_remaining: 0,
     telemetry_state: 'INCOMPLETE',
     qualification_eligible: false,
     run_id: null,
@@ -51,27 +41,15 @@ function unreadable(reason: string): TrialTelemetrySnapshot {
   };
 }
 
-/** Where `ieos init --with-hooks` puts a project's outbox. */
 export const outboxPathFor = (workspaceRoot: string): string =>
   join(workspaceRoot, '.ieos', 'outbox.sqlite');
 
-/**
- * Read the telemetry state a trial's run ended in.
- *
- * Addressed by run id rather than "the most recent run", deliberately. A trial
- * workspace should hold exactly one run, but if it ever held two, taking the
- * newest would silently attribute one run's completeness to another -- the same
- * class of mistake as S-7, where a registered run and an emitting run were
- * different runs that each looked internally consistent.
- */
 export async function readTrialTelemetry(options: {
   readonly workspaceRoot: string;
   readonly runId: string;
 }): Promise<TrialTelemetrySnapshot> {
   const path = outboxPathFor(options.workspaceRoot);
-  if (!existsSync(path)) {
-    return unreadable(`no telemetry outbox exists at ${path}`);
-  }
+  if (!existsSync(path)) return unreadable(`no telemetry outbox exists at ${path}`);
 
   let db;
   try {
@@ -89,11 +67,6 @@ export async function readTrialTelemetry(options: {
     try {
       state = new SqliteRunStateStore(db).get(options.runId);
     } catch (error) {
-      // Reading is where a schema surprise surfaces -- a `run_state` missing a
-      // column the reader requires, say. Unreadable and therefore ineligible,
-      // which is the honest answer; letting it throw would abort the trial after
-      // the agent run had already been paid for, and reporting a default would be
-      // a confident wrong one.
       return unreadable(
         `the run state could not be read: ${
           error instanceof Error ? error.message : String(error)
@@ -101,26 +74,24 @@ export async function readTrialTelemetry(options: {
       );
     }
     if (state === undefined) {
-      // The run the harness registered produced no run state, which is the S-7
-      // shape again: the id that was registered is not the id that ran.
       return unreadable(`the outbox holds no run state for ${options.runId}`);
     }
-    const remaining = new SqliteOutbox(db).depth();
+
+    const eventsRemaining = new SqliteOutbox(db).depth();
+    const evidenceRemaining = await new SqliteEvidenceDocuments(db).pendingEvidenceCount();
+    const allDrained = eventsRemaining === 0 && evidenceRemaining === 0;
     return {
       ingest_reachable_at_start: state.ingestReachableAtStart,
       flush_ever_failed: state.flushEverFailed,
-      outbox_events_remaining: remaining,
+      outbox_events_remaining: eventsRemaining,
+      evidence_documents_remaining: evidenceRemaining,
       telemetry_state: state.telemetryState,
-      // Read from the store, which derives it under the contract's own
-      // invariant, and then re-checked against the facts beside it. The store
-      // cannot be wrong about this, but a snapshot that agreed with a store that
-      // was would be a snapshot nobody could audit.
       qualification_eligible:
         state.qualificationEligible &&
         state.telemetryState === 'COMPLETE' &&
         state.ingestReachableAtStart &&
         !state.flushEverFailed &&
-        remaining === 0,
+        allDrained,
       run_id: state.runId,
       ended_at: state.endedAt,
       unavailable_reason: null,

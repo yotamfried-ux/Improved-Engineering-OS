@@ -72,6 +72,18 @@ describe('registering a run', () => {
 });
 
 describe('the transport', () => {
+  it('refuses a cleartext endpoint before the service token can be sent', () => {
+    let calls = 0;
+    const fetch = (() => {
+      calls += 1;
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    }) as unknown as typeof globalThis.fetch;
+    expect(() =>
+      httpRegisterRun({ endpoint: 'http://plane.invalid/ingest', serviceToken: 't', fetch }),
+    ).toThrow(/must use https/u);
+    expect(calls).toBe(0);
+  });
+
   it('sends the service token in the D22.2 header, to the register_run route', async () => {
     interface Seen {
       url: string;
@@ -96,6 +108,25 @@ describe('the transport', () => {
     expect(seen?.url).toBe('https://plane.invalid/ingest/register_run');
     expect(seen?.headers['X-IEOS-Installation-Token']).toBe('a'.repeat(43));
     expect(JSON.parse(seen?.body ?? '{}')).toEqual(request);
+  });
+
+  it('refuses a redirect instead of replaying the service token to its target', async () => {
+    // The HTTPS check covers the URL written here, not one the far end names.
+    // A 307/308 replays the body and this custom header -- which undici does
+    // not strip the way it strips `authorization` -- and fetch does not refuse
+    // an https->http hop, so following one would move the run-classifying
+    // credential into cleartext.
+    let seenRedirect: RequestInit['redirect'];
+    const transport = httpRegisterRun({
+      endpoint: 'https://plane.invalid/ingest',
+      serviceToken: 'a'.repeat(43),
+      fetch: ((_url: string, init: RequestInit) => {
+        seenRedirect = init.redirect;
+        return Promise.resolve(new Response('{}', { status: 200 }));
+      }) as unknown as typeof globalThis.fetch,
+    });
+    await transport(request);
+    expect(seenRedirect).toBe('error');
   });
 
   it('reads the refusal code from the body but does not need one', async () => {

@@ -19,6 +19,7 @@ import {
   qualificationTrialPolicy,
   runQualificationProcess,
 } from './qualification-profile.ts';
+import { windowsBashDirectory } from './git-bash.ts';
 import { RunRegistry } from './run-registry.ts';
 import { createTrial, probe } from './sandbox.ts';
 import { inspectStage3Host } from './stage3-host-preflight.ts';
@@ -87,6 +88,8 @@ const trial = createTrial({
   trialId: 'stage3-canary',
   policy: policyFor('(assigned below)'),
   sourceEnvironment: qualificationEnvironmentSource({
+    // Git's bash, not the WSL launcher that shadows it on PATH.
+    bashDirectory: windowsBashDirectory(),
     trusted: {
       IEOS_RUN_ID: runId,
       [INGEST_SOCKET_ENV]: proxy.targetPath,
@@ -159,7 +162,7 @@ try {
   }
 
   const before = probe(preparedTrial);
-  const execution = runQualificationProcess({
+  const execution = await runQualificationProcess({
     command: [
       process.execPath,
       join(eosRoot, 'tools', 'harness', 'src', 'stage3-canary-child.ts'),
