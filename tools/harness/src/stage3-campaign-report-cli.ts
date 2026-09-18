@@ -160,7 +160,7 @@ No aggregate performance score is computed. Each task and resource axis is repor
 | --- | ---: | ---: | --- | --- | --- | --- | --- |
 ${hardSummary}
 
-`plugin-install-marketplace` remains the calibration/noise-floor task. It is not treated as a knowledge-value discriminator.
+\`plugin-install-marketplace\` remains the calibration/noise-floor task. It is not treated as a knowledge-value discriminator.
 
 ## Per-trial measurements
 
