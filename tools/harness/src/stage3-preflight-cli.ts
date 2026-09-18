@@ -1,4 +1,5 @@
 import { join, resolve } from 'node:path';
+import { httpIngest } from './plane-ingest.ts';
 import { QualificationPlaneError, loadQualificationPlaneConfig } from './qualification-plane.ts';
 import { formatStage3HostPreflight, inspectStage3Host } from './stage3-host-preflight.ts';
 import { inspectKnowledgeIndex } from './stage3-index-preflight.ts';
@@ -26,8 +27,9 @@ if (hostOnly) {
   process.exit(0);
 }
 
+let config: ReturnType<typeof loadQualificationPlaneConfig>;
 try {
-  const config = loadQualificationPlaneConfig({
+  config = loadQualificationPlaneConfig({
     eosRoot,
     ...(credentialsPath === undefined ? {} : { credentialsPath }),
     ...(serviceCredentialsPath === undefined ? {} : { serviceCredentialsPath }),
@@ -56,6 +58,29 @@ try {
   );
   process.exit(error instanceof QualificationPlaneError ? 3 : 1);
 }
+
+const ingest = httpIngest({
+  endpoint: config.endpoint,
+  installationToken: config.installationToken,
+  fetch: globalThis.fetch,
+});
+if (!(await ingest.isReachable())) {
+  process.stderr.write(
+    [
+      'Stage 3 Evidence Plane reachability preflight: FAIL',
+      '  authenticated installation read_minimal health check did not succeed',
+      '',
+    ].join('\n'),
+  );
+  process.exit(5);
+}
+process.stdout.write(
+  [
+    'Stage 3 Evidence Plane reachability preflight: PASS',
+    '  authenticated installation path accepted read_minimal health',
+    '',
+  ].join('\n'),
+);
 
 const indexPath = flag('--index') ?? join(eosRoot, 'knowledge.sqlite');
 const index = await inspectKnowledgeIndex(indexPath);
