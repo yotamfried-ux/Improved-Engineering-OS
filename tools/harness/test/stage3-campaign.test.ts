@@ -12,11 +12,7 @@ import {
   assertFreshTrialArtifacts,
 } from '../src/stage3-trial-artifacts.ts';
 
-const PRIMARY = [
-  'guard-fail-closed',
-  'misleading-clue-merge',
-  'backoff-breaks-a-test',
-] as const;
+const PRIMARY = ['guard-fail-closed', 'misleading-clue-merge', 'backoff-breaks-a-test'] as const;
 const HARD = [
   'plugin-install-marketplace',
   'plan-dod-external-gates',
@@ -86,9 +82,7 @@ function record(options: {
 function fullCampaign(): Stage3CampaignRecord[] {
   return [
     ...PRIMARY.flatMap((task) =>
-      [1, 2].map((trial) =>
-        record({ task, arm: 'eos', trial: trial as 1 | 2 }),
-      ),
+      [1, 2].map((trial) => record({ task, arm: 'eos', trial: trial as 1 | 2 })),
     ),
     ...HARD.flatMap((task) =>
       (['eos', 'native'] as const).flatMap((arm) =>
@@ -115,8 +109,7 @@ describe('Stage 3 fresh campaign integrity', () => {
   it.each([
     [
       'revision',
-      (records: Stage3CampaignRecord[]) =>
-        (records[0]!.eos_revision = 'b'.repeat(40)),
+      (records: Stage3CampaignRecord[]) => (records[0]!.eos_revision = 'b'.repeat(40)),
       /revision/u,
     ],
     [
@@ -234,13 +227,11 @@ describe('Stage 3 trial evidence immutability', () => {
     const recordPath = join(root, 'task-eos-t1.json');
     const transcriptPath = join(transcriptDir, 'task-eos-t1-task.ndjson');
 
-    expect(() =>
-      assertFreshTrialArtifacts({ recordPath, transcriptPath }),
-    ).not.toThrow();
+    expect(() => assertFreshTrialArtifacts({ recordPath, transcriptPath })).not.toThrow();
 
     writeFileSync(recordPath, '{}\n', 'utf8');
-    expect(() =>
-      assertFreshTrialArtifacts({ recordPath, transcriptPath }),
-    ).toThrow(/record already exists/u);
+    expect(() => assertFreshTrialArtifacts({ recordPath, transcriptPath })).toThrow(
+      /record already exists/u,
+    );
   });
 });
