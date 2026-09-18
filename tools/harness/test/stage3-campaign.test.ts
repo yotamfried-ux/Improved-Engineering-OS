@@ -94,21 +94,18 @@ function fullCampaign(): Stage3CampaignRecord[] {
 }
 
 describe('Stage 3 fresh campaign integrity', () => {
-  it(
-    'accepts exactly one current revision, profile, runtime, agent version and resolved model',
-    () => {
-      expect(
-        validateStage3Campaign(fullCampaign(), {
-          campaign: 'fresh26',
-          currentRevision: HEAD,
-          expectedProfile: 'windows-personal-v1',
-          expectedRequestedModel: 'claude-sonnet-5',
-          primaryTaskIds: PRIMARY,
-          hardTaskIds: HARD,
-        }),
-      ).toEqual([]);
-    },
-  );
+  it('accepts exactly one current revision, profile, runtime, agent version and resolved model', () => {
+    expect(
+      validateStage3Campaign(fullCampaign(), {
+        campaign: 'fresh26',
+        currentRevision: HEAD,
+        expectedProfile: 'windows-personal-v1',
+        expectedRequestedModel: 'claude-sonnet-5',
+        primaryTaskIds: PRIMARY,
+        hardTaskIds: HARD,
+      }),
+    ).toEqual([]);
+  });
 
   it.each([
     [
@@ -124,8 +121,7 @@ describe('Stage 3 fresh campaign integrity', () => {
     ],
     [
       'knowledge index',
-      (records: Stage3CampaignRecord[]) =>
-        (records[0]!.knowledge_index_digest = 'idx_other'),
+      (records: Stage3CampaignRecord[]) => (records[0]!.knowledge_index_digest = 'idx_other'),
       /knowledge index digest/u,
     ],
     [
