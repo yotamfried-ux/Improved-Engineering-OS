@@ -147,6 +147,7 @@ Evidence directory: \`qualification/evidence/stage-3/${campaign}/\`
 Current repository revision: \`${currentRevision}\`  
 Recorded revision(s): \`${one(records.map((record) => record.eos_revision))}\`  
 Qualification profile(s): \`${one(records.map((record) => record.qualification_profile))}\`  
+Knowledge index digest(s): \`${one(records.map((record) => record.knowledge_index_digest))}\`  
 Node runtime(s): \`${one(records.map((record) => record.runtime?.node))}\`  
 Claude Code version(s): \`${one(records.map((record) => record.agent?.cli_version))}\`  
 Requested model(s): \`${one(records.map((record) => record.model?.requested))}\`  
