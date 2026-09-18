@@ -82,6 +82,7 @@ const agentCliVersion = execFileSync('claude', ['--version'], {
   cwd: eosRoot,
   encoding: 'utf8',
   windowsHide: true,
+  env: { ...process.env, DISABLE_AUTOUPDATER: '1' },
 }).trim();
 const bashDirectory = windowsBashDirectory();
 if (profile === 'windows-personal-v1' && bashDirectory === undefined) {
@@ -148,7 +149,9 @@ try {
     policy: policyFor('(assigned below)'),
     sourceEnvironment: qualificationEnvironmentSource({
       // Git's bash, not the WSL launcher that shadows it on PATH.
-      bashDirectory,
+      // Keep the resolver at the call site: a structural regression test pins
+      // every real trial launcher to this host-aware helper.
+      bashDirectory: windowsBashDirectory(),
       trusted: {
         IEOS_RUN_ID: runId,
         [INGEST_SOCKET_ENV]: proxy.targetPath,
