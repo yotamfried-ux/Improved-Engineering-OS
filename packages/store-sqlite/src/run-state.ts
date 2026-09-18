@@ -91,11 +91,25 @@ export class SqliteRunStateStore {
    * failure. Nothing is caught here at all.
    */
   #migrateFlushEverFailed(): void {
+    if (this.#hasFlushEverFailed()) return;
+    try {
+      this.#db.exec(
+        'alter table run_state add column flush_ever_failed integer not null default 0',
+      );
+    } catch (error) {
+      // Two processes can open the same legacy outbox at once and both read the
+      // column as absent. Losing that race is not a failure; the column exists
+      // either way. Ask the schema again rather than catching blindly, so a
+      // migration that failed for any other reason still propagates.
+      if (!this.#hasFlushEverFailed()) throw error;
+    }
+  }
+
+  #hasFlushEverFailed(): boolean {
     const existing = this.#db
       .prepare(`select count(*) as n from pragma_table_info('run_state') where name = ?`)
       .get('flush_ever_failed');
-    if (Number(existing?.['n'] ?? 0) > 0) return;
-    this.#db.exec('alter table run_state add column flush_ever_failed integer not null default 0');
+    return Number(existing?.['n'] ?? 0) > 0;
   }
 
   /**

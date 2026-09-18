@@ -140,7 +140,7 @@ export function runQualificationProcess(
     status: run.status,
     stdout: run.stdout ?? '',
     stderr: run.stderr ?? '',
-    timedOut: error?.code === 'ETIMEDOUT' || run.signal !== null,
+    timedOut: error?.code === 'ETIMEDOUT',
     observations: null,
     unavailableReason: null,
   };

@@ -53,8 +53,17 @@ for (const payload of payloads) {
       maxBuffer: 8 * 1024 * 1024,
     },
   );
-  if (run.stdout !== '') process.stdout.write(run.stdout);
-  if (run.stderr !== '') process.stderr.write(run.stderr);
+  if (run.error !== undefined) {
+    // spawnSync leaves stdout and stderr null when the child never started.
+    // Writing null throws, and the canary would die with a TypeError that hides
+    // the real reason.
+    process.stderr.write(
+      `Stage 3 canary hook ${String(payload.hook_event_name)} failed to start: ${run.error.message}\n`,
+    );
+    process.exit(1);
+  }
+  if (run.stdout) process.stdout.write(run.stdout);
+  if (run.stderr) process.stderr.write(run.stderr);
   if (run.status !== 0) {
     process.stderr.write(
       `Stage 3 canary hook ${String(payload.hook_event_name)} exited ${String(run.status)}\n`,

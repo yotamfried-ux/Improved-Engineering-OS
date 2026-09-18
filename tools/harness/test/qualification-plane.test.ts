@@ -141,6 +141,36 @@ describe('Stage 3 qualification plane configuration', () => {
     ).toThrow(/expired expiry/u);
   });
 
+  it('refuses a cleartext or malformed ingest endpoint before reading a credential', () => {
+    const dir = tempDir();
+    const serviceCredentialsPath = join(dir, 'harness-service.json');
+    writeServiceCredential(serviceCredentialsPath);
+
+    // The endpoint is rejected even though both credentials are present and
+    // valid: it is checked before either is read, because both are sent to it.
+    expect(() =>
+      loadQualificationPlaneConfig({
+        eosRoot: '/unused',
+        serviceCredentialsPath,
+        env: {
+          IEOS_INGEST_URL: 'http://plane.invalid/ingest',
+          IEOS_INSTALLATION_TOKEN: 'environment-installation-secret',
+        },
+      }),
+    ).toThrow(/must use https/u);
+
+    expect(() =>
+      loadQualificationPlaneConfig({
+        eosRoot: '/unused',
+        serviceCredentialsPath,
+        env: {
+          IEOS_INGEST_URL: 'plane.invalid/ingest',
+          IEOS_INSTALLATION_TOKEN: 'environment-installation-secret',
+        },
+      }),
+    ).toThrow(/not a valid URL/u);
+  });
+
   it('fails closed before a trial when either host identity is absent', () => {
     expect(() =>
       loadQualificationPlaneConfig({

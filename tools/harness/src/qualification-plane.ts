@@ -134,6 +134,19 @@ export function loadQualificationPlaneConfig(options: {
       'Stage 3 qualification requires IEOS_INGEST_URL (IEOS_INGEST_ENDPOINT is accepted as a legacy alias)',
     );
   }
+  // Both host credentials are sent to this endpoint, so it is checked before
+  // either is read off disk: a cleartext endpoint would put them on the wire.
+  let endpointUrl: URL;
+  try {
+    endpointUrl = new URL(endpoint);
+  } catch {
+    throw new QualificationPlaneError(`the ingest endpoint is not a valid URL: ${endpoint}`);
+  }
+  if (endpointUrl.protocol !== 'https:') {
+    throw new QualificationPlaneError(
+      `the ingest endpoint must use https, not ${endpointUrl.protocol}; the installation and service tokens are sent to it`,
+    );
+  }
 
   const service = loadServiceCredential({
     eosRoot: options.eosRoot,
