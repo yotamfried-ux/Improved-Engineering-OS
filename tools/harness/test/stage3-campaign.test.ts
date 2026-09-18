@@ -7,7 +7,10 @@ import {
   validateStage3Campaign,
   type Stage3CampaignRecord,
 } from '../src/stage3-campaign.ts';
-import { assertFreshTrialArtifacts } from '../src/stage3-trial-artifacts.ts';
+import {
+  assertCampaignRevisionCompatible,
+  assertFreshTrialArtifacts,
+} from '../src/stage3-trial-artifacts.ts';
 
 const PRIMARY = ['guard-fail-closed', 'misleading-clue-merge', 'backoff-breaks-a-test'] as const;
 const HARD = [
@@ -145,6 +148,29 @@ describe('Stage 3 fresh campaign integrity', () => {
 });
 
 describe('Stage 3 trial evidence immutability', () => {
+  it('refuses to continue a campaign after the repository HEAD changed', () => {
+    const root = mkdtempSync(join(tmpdir(), 'ieos-stage3-artifacts-'));
+    writeFileSync(
+      join(root, 'task-eos-t1.json'),
+      JSON.stringify({ campaign: 'fresh26', eos_revision: HEAD }),
+      'utf8',
+    );
+    expect(() =>
+      assertCampaignRevisionCompatible({
+        outDir: root,
+        campaign: 'fresh26',
+        currentRevision: HEAD,
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertCampaignRevisionCompatible({
+        outDir: root,
+        campaign: 'fresh26',
+        currentRevision: 'b'.repeat(40),
+      }),
+    ).toThrow(/different repository revision/u);
+  });
+
   it('refuses to overwrite an existing trial record or transcript', () => {
     const root = mkdtempSync(join(tmpdir(), 'ieos-stage3-artifacts-'));
     const transcriptDir = join(root, 'transcripts');
