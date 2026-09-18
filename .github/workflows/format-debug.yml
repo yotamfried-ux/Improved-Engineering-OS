@@ -1,0 +1,28 @@
+name: format-debug
+
+on:
+  push:
+    branches:
+      - fix/stage3-experiment-integrity
+
+permissions:
+  contents: read
+
+jobs:
+  prettier-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.20.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Print exact Prettier diff
+        shell: bash
+        run: |
+          pnpm exec prettier --write             tools/harness/src/stage3-campaign-report-cli.ts             tools/harness/src/stage3-campaign.ts             tools/harness/test/stage3-campaign.test.ts
+          git diff --             tools/harness/src/stage3-campaign-report-cli.ts             tools/harness/src/stage3-campaign.ts             tools/harness/test/stage3-campaign.test.ts
