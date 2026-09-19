@@ -51,11 +51,31 @@ function environmentOf(platform: string): Stage3HostPreflight['environment'] {
   return 'other';
 }
 
-function commandVersion(command: string): string {
-  const result = spawnSync(command, ['--version'], {
+export interface CommandVersionRunner {
+  (
+    command: string,
+    args: readonly string[],
+  ): { readonly status: number | null; readonly stdout?: string };
+}
+
+const systemCommandVersionRunner: CommandVersionRunner = (command, args) => {
+  const result = spawnSync(command, [...args], {
     encoding: 'utf8',
     windowsHide: true,
   });
+  return { status: result.status, stdout: result.stdout ?? '' };
+};
+
+export function commandVersion(
+  command: string,
+  platform: string = process.platform,
+  runner: CommandVersionRunner = systemCommandVersionRunner,
+  comspec: string = process.env['ComSpec'] ?? 'cmd.exe',
+): string {
+  const executable = platform === 'win32' ? comspec : command;
+  const args =
+    platform === 'win32' ? ['/d', '/s', '/c', `${command} --version`] : ['--version'];
+  const result = runner(executable, args);
   if (result.status !== 0) return '';
   return (result.stdout ?? '').trim();
 }
