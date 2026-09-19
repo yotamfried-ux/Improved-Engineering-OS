@@ -52,7 +52,10 @@ function environmentOf(platform: string): Stage3HostPreflight['environment'] {
 }
 
 export interface CommandVersionRunner {
-  (command: string, args: readonly string[]): {
+  (
+    command: string,
+    args: readonly string[],
+  ): {
     readonly status: number | null;
     readonly stdout?: string;
   };
@@ -73,8 +76,7 @@ export function commandVersion(
   comspec: string = process.env['ComSpec'] ?? 'cmd.exe',
 ): string {
   const executable = platform === 'win32' ? comspec : command;
-  const args =
-    platform === 'win32' ? ['/d', '/s', '/c', `${command} --version`] : ['--version'];
+  const args = platform === 'win32' ? ['/d', '/s', '/c', `${command} --version`] : ['--version'];
   const result = runner(executable, args);
   if (result.status !== 0) return '';
   return (result.stdout ?? '').trim();
