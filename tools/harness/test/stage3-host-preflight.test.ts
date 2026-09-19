@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   LINUX_NAMESPACE_REQUIRED_TOOLS,
   WINDOWS_REQUIRED_TOOLS,
+  commandVersion,
   formatStage3HostPreflight,
   inspectStage3Host,
   type Stage3HostProbe,
@@ -37,6 +38,40 @@ function fakeProbe(
     },
   };
 }
+
+describe('Stage 3 command version probing', () => {
+  it('uses cmd.exe on Windows so pnpm.cmd shims resolve from PATH', () => {
+    const calls: Array<{ command: string; args: readonly string[] }> = [];
+    const version = commandVersion(
+      'pnpm',
+      'win32',
+      (command, args) => {
+        calls.push({ command, args });
+        return { status: 0, stdout: '11.25.0\r\n' };
+      },
+      'C:\\Windows\\System32\\cmd.exe',
+    );
+
+    expect(version).toBe('11.25.0');
+    expect(calls).toEqual([
+      {
+        command: 'C:\\Windows\\System32\\cmd.exe',
+        args: ['/d', '/s', '/c', 'pnpm --version'],
+      },
+    ]);
+  });
+
+  it('executes the binary directly off Windows', () => {
+    const calls: Array<{ command: string; args: readonly string[] }> = [];
+    const version = commandVersion('pnpm', 'linux', (command, args) => {
+      calls.push({ command, args });
+      return { status: 0, stdout: '11.25.0\n' };
+    });
+
+    expect(version).toBe('11.25.0');
+    expect(calls).toEqual([{ command: 'pnpm', args: ['--version'] }]);
+  });
+});
 
 describe('Stage 3 trusted-host preflight', () => {
   it('accepts native Windows without WSL or namespace packages', () => {
