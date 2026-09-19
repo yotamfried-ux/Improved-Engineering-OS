@@ -52,10 +52,10 @@ function environmentOf(platform: string): Stage3HostPreflight['environment'] {
 }
 
 export interface CommandVersionRunner {
-  (
-    command: string,
-    args: readonly string[],
-  ): { readonly status: number | null; readonly stdout?: string };
+  (command: string, args: readonly string[]): {
+    readonly status: number | null;
+    readonly stdout?: string;
+  };
 }
 
 const systemCommandVersionRunner: CommandVersionRunner = (command, args) => {
