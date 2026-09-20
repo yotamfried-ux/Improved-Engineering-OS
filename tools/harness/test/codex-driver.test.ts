@@ -6,6 +6,7 @@ import {
   codexModelOf,
   codexToolCallsOf,
   codexUsageOf,
+  unexpectedCodexToolCalls,
   parseCodexEvents,
 } from '../src/drivers/codex.ts';
 
@@ -50,6 +51,36 @@ describe('Codex JSONL evidence parser', () => {
       'Bash',
       'mcp__ieos__resolve',
     ]);
+  });
+
+  it('fails closed on observed web, foreign MCP, or EOS calls in the native arm', () => {
+    expect(
+      unexpectedCodexToolCalls(
+        [
+          { name: 'Bash', at: '' },
+          { name: 'WebSearch', at: '' },
+          { name: 'mcp__github__search', at: '' },
+          { name: 'mcp__ieos__resolve', at: '' },
+        ],
+        false,
+      ),
+    ).toEqual(['WebSearch', 'mcp__github__search', 'mcp__ieos__resolve']);
+  });
+
+  it('accepts only the four IEOS MCP tools in the EOS arm', () => {
+    expect(
+      unexpectedCodexToolCalls(
+        [
+          { name: 'Bash', at: '' },
+          { name: 'Edit', at: '' },
+          { name: 'mcp__ieos__resolve', at: '' },
+          { name: 'mcp__ieos__inspect', at: '' },
+          { name: 'mcp__ieos__expand', at: '' },
+          { name: 'mcp__ieos__observe', at: '' },
+        ],
+        true,
+      ),
+    ).toEqual([]);
   });
 
   it('records token usage without inventing a dollar charge', () => {
