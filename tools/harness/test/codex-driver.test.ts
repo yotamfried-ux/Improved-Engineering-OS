@@ -272,10 +272,10 @@ describe('Codex experiment configuration', () => {
     expect(args).toContain('check_for_update_on_startup=false');
     expect(args).toContain('default_permissions="ieos-stage3"');
     expect(args).toContain('permissions.ieos-stage3.extends=":workspace"');
-    expect(args).toContain('permissions.ieos-stage3.filesystem.":root"="deny"');
-    expect(args).toContain('permissions.ieos-stage3.filesystem.":minimal"="read"');
-    expect(args).toContain('permissions.ieos-stage3.filesystem.":tmpdir"="deny"');
-    expect(args).toContain('permissions.ieos-stage3.filesystem.":slash_tmp"="deny"');
+    expect(args).toContain('permissions.ieos-stage3.filesystem.:root="deny"');
+    expect(args).toContain('permissions.ieos-stage3.filesystem.:minimal="read"');
+    expect(args).toContain('permissions.ieos-stage3.filesystem.:tmpdir="deny"');
+    expect(args).toContain('permissions.ieos-stage3.filesystem.:slash_tmp="deny"');
     expect(args).toContain('permissions.ieos-stage3.network.enabled=false');
     expect(args).toContain('windows.sandbox="elevated"');
     expect(args).not.toContain('--sandbox');
