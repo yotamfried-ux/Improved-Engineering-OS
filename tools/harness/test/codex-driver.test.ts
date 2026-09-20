@@ -171,6 +171,8 @@ describe('Codex experiment configuration', () => {
     const args = codexArgsFor({ model: 'gpt-5.6-sol', prompt: 'task', mcpServer: server });
     expect(args).toContain('--ignore-user-config');
     expect(args).toContain('--ignore-rules');
+    expect(args).toContain('cli_auth_credentials_store="file"');
+    expect(args).toContain('check_for_update_on_startup=false');
     expect(args).toContain('--ephemeral');
     expect(args).toContain('web_search="disabled"');
     expect(args).toContain('features.multi_agent=false');
