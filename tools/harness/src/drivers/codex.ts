@@ -278,6 +278,18 @@ export function codexArgsFor(options: {
     'features.apps=false',
     '-c',
     'features.remote_plugin=false',
+    // Remote/curated plugins can inject their own MCP servers and skills even
+    // when user config is ignored. Disable the plugin surface at session
+    // precedence so Stage 3 sees only the harness-declared tool surface.
+    '-c',
+    'features.plugins=false',
+    // Keep ambient/bundled skills out of the model-visible prompt. Stage 3
+    // measures the task prompt plus the explicit native/EOS tool surface, not
+    // account- or host-specific skill catalogues.
+    '-c',
+    'skills.include_instructions=false',
+    '-c',
+    'skills.bundled.enabled=false',
     '-c',
     codexMcpOverride(options.mcpServer),
     'exec',
