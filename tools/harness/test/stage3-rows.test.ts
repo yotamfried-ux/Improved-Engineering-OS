@@ -154,7 +154,6 @@ describe('Stage 3 gate rows', () => {
     expect(rowById(records, 'T7').evidence).toContain('4 event(s) left queued');
   });
 
-
   it('T9 is unproven when dollar cost is unavailable', () => {
     const records = allGood();
     records[0] = goodTrial({
