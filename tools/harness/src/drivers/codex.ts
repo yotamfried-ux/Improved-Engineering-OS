@@ -220,6 +220,9 @@ export function codexArgsFor(options: {
     'cli_auth_credentials_store="file"',
     '-c',
     'check_for_update_on_startup=false',
+    // Do not add --sandbox here. Codex permission profiles and the legacy
+    // sandbox flags are mutually exclusive; a legacy flag would silently take
+    // precedence and restore broad filesystem read access, including CODEX_HOME.
     '-c',
     'default_permissions="ieos-stage3"',
     '-c',
