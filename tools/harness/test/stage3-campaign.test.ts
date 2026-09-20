@@ -166,7 +166,8 @@ describe('Stage 3 fresh campaign integrity', () => {
   it('rejects a count-correct campaign that substituted t3 for preregistered t2', () => {
     const records = fullCampaign();
     const target = records.find(
-      (record) => record.task_id === 'plugin-install-marketplace' && record.trial_id.endsWith('-t2'),
+      (record) =>
+        record.task_id === 'plugin-install-marketplace' && record.trial_id.endsWith('-t2'),
     );
     expect(target).toBeDefined();
     target!.trial_id = target!.trial_id.replace(/-t2$/u, '-t3');
