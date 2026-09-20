@@ -103,6 +103,8 @@ describe('Codex experiment configuration', () => {
     expect(args).toContain('--ephemeral');
     expect(args).toContain('web_search="disabled"');
     expect(args).toContain('features.multi_agent=false');
+    expect(args).toContain('features.apps=false');
+    expect(args).toContain('features.remote_plugin=false');
     expect(args.filter((arg) => arg === 'task')).toHaveLength(1);
   });
 });
