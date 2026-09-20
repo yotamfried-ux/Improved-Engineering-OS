@@ -111,7 +111,12 @@ function isOptionalString(value: unknown): boolean {
 }
 
 function isTokenCount(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value) && value >= 0;
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    Number.isInteger(value) &&
+    value >= 0
+  );
 }
 
 function isCodexUsage(value: unknown): value is NonNullable<CodexEvent['usage']> {
@@ -124,7 +129,10 @@ function isCodexUsage(value: unknown): value is NonNullable<CodexEvent['usage']>
   ) {
     return false;
   }
-  return value['reasoning_output_tokens'] === undefined || isTokenCount(value['reasoning_output_tokens']);
+  return (
+    value['reasoning_output_tokens'] === undefined ||
+    isTokenCount(value['reasoning_output_tokens'])
+  );
 }
 
 function isCodexEvent(value: unknown): value is CodexEvent {
@@ -393,38 +401,38 @@ export class CodexDriver implements AgentDriver {
     const isolatedCodexHome = prepareIsolatedCodexHome(options.authSourceDir);
     try {
       const environment = { ...trial.environment, CODEX_HOME: isolatedCodexHome };
-    const args = codexArgsFor({
-      model: options.model,
-      prompt: task.prompt,
-      ...(options.mcpServer === undefined ? {} : { mcpServer: options.mcpServer }),
-    });
-    const executable = options.executable ?? 'codex';
-    const sessionId = `codex-${trial.trialId}-${String(process.pid)}`;
-    const installation = readInstallation(trial.workspaceRoot);
-    const ingest = socketIngest({ socketPath: options.telemetrySocketPath });
-    const hookDeps = {
-      outboxPath: outboxPathFor(trial.workspaceRoot),
-      registry: loadRegistry(options.eosRoot),
-      ingest,
-      clock: systemClock,
-      random: systemRandom,
-      repoSha: repoSha(trial.workspaceRoot),
-      eosRelease: '0.1.0',
-      installationId: installation.installationId,
-      projectId: installation.projectId,
-      env: environment,
-      harnessAgent: 'codex',
-    } as const;
-
-    await runHook(
-      JSON.stringify({
-        hook_event_name: 'SessionStart',
-        session_id: sessionId,
-        startup_reason: 'stage3-codex',
+      const args = codexArgsFor({
         model: options.model,
-      }),
-      hookDeps,
-    );
+        prompt: task.prompt,
+        ...(options.mcpServer === undefined ? {} : { mcpServer: options.mcpServer }),
+      });
+      const executable = options.executable ?? 'codex';
+      const sessionId = `codex-${trial.trialId}-${String(process.pid)}`;
+      const installation = readInstallation(trial.workspaceRoot);
+      const ingest = socketIngest({ socketPath: options.telemetrySocketPath });
+      const hookDeps = {
+        outboxPath: outboxPathFor(trial.workspaceRoot),
+        registry: loadRegistry(options.eosRoot),
+        ingest,
+        clock: systemClock,
+        random: systemRandom,
+        repoSha: repoSha(trial.workspaceRoot),
+        eosRelease: '0.1.0',
+        installationId: installation.installationId,
+        projectId: installation.projectId,
+        env: environment,
+        harnessAgent: 'codex',
+      } as const;
+
+      await runHook(
+        JSON.stringify({
+          hook_event_name: 'SessionStart',
+          session_id: sessionId,
+          startup_reason: 'stage3-codex',
+          model: options.model,
+        }),
+        hookDeps,
+      );
 
       const startedAt = Date.now();
       const run = await runQualificationProcess({
