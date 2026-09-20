@@ -179,6 +179,7 @@ describe('Codex experiment configuration', () => {
     expect(args).toContain('permissions.ieos-stage3.filesystem.":minimal"="read"');
     expect(args).toContain('permissions.ieos-stage3.filesystem.":tmpdir"="deny"');
     expect(args).toContain('permissions.ieos-stage3.filesystem.":slash_tmp"="deny"');
+    expect(args).toContain('permissions.ieos-stage3.network.enabled=false');
     expect(args).not.toContain('--sandbox');
     expect(args).not.toContain('workspace-write');
     expect(args).toContain('--ephemeral');
