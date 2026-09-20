@@ -5,6 +5,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { buildTrialReport, formatTrialReport } from './collect.ts';
 import { ClaudeCodeDriver, bareToolName } from './drivers/claude-code.ts';
+import { CodexDriver } from './drivers/codex.ts';
 import { gradeDeterministic, gradeTrace } from './graders.ts';
 import { httpRegisterRun, registerWithPlane } from './plane-registrar.ts';
 import {
@@ -39,6 +40,15 @@ const flag = (name: string): string | undefined => {
   return index >= 0 ? args[index + 1] : undefined;
 };
 
+type Stage3Agent = 'claude-code' | 'codex';
+const rawAgent = flag('--agent') ?? 'claude-code';
+if (rawAgent !== 'claude-code' && rawAgent !== 'codex') {
+  process.stderr.write(`--agent must be "claude-code" or "codex", not "${rawAgent}"\n`);
+  process.exit(64);
+}
+const agent: Stage3Agent = rawAgent;
+const requestedModel = agent === 'codex' ? 'gpt-5.6-sol' : 'claude-sonnet-5';
+
 let profile: ReturnType<typeof qualificationProfileFor>;
 try {
   profile = qualificationProfileFor();
@@ -58,7 +68,7 @@ const taskId = flag('--task');
 const rawCampaign = flag('--campaign');
 if (taskId === undefined || rawCampaign === undefined) {
   process.stderr.write(
-    'usage: stage3-cli.ts --task <id> --trial <n> --campaign <id> [--arm eos|native] [--out DIR]\n',
+    'usage: stage3-cli.ts --task <id> --trial <n> --campaign <id> [--arm eos|native] [--agent claude-code|codex] [--out DIR]\n',
   );
   process.exit(64);
 }
@@ -84,12 +94,15 @@ if (!index.ok) {
   process.stderr.write(`Stage 3 paid trial refused: ${index.reason}\n`);
   process.exit(4);
 }
-const agentCliVersion = execFileSync('claude', ['--version'], {
+
+const agentExecutable = agent === 'codex' ? 'codex' : 'claude';
+const agentCliVersion = execFileSync(agentExecutable, ['--version'], {
   cwd: eosRoot,
   encoding: 'utf8',
   windowsHide: true,
   env: { ...process.env, DISABLE_AUTOUPDATER: '1' },
 }).trim();
+
 const bashDirectory = windowsBashDirectory();
 if (profile === 'windows-personal-v1' && bashDirectory === undefined) {
   process.stderr.write(
@@ -106,6 +119,10 @@ const outDir = resolve(
   flag('--out') ?? join(eosRoot, 'qualification', 'evidence', 'stage-3', campaign),
 );
 const settingSources = flag('--setting-sources');
+if (agent === 'codex' && settingSources !== undefined && settingSources !== 'project') {
+  process.stderr.write('Codex Stage 3 trials require project-only settings/instructions\n');
+  process.exit(64);
+}
 const credentialsPath = flag('--credentials');
 const serviceCredentialsPath = flag('--service-credentials');
 const arm = flag('--arm') ?? 'eos';
@@ -132,20 +149,25 @@ const planeConfig = loadQualificationPlaneConfig({
 const proxy = await openPlatformQualificationProxy({ config: planeConfig, runId });
 
 try {
+  const inferenceHosts =
+    agent === 'codex'
+      ? ['chatgpt.com:443', 'api.openai.com:443']
+      : ['api.anthropic.com:443'];
   const grantedEnvironment = [
     ...qualificationEnvironmentNames(),
     'IEOS_RUN_ID',
     INGEST_SOCKET_ENV,
     REACHABILITY_ATTESTATION_ENV,
     'DISABLE_AUTOUPDATER',
+    ...(agent === 'codex' ? ['CODEX_HOME'] : []),
     ...(gitBashPath === undefined ? [] : ['CLAUDE_CODE_GIT_BASH_PATH']),
   ];
   const policyFor = (workspaceRoot: string) =>
     qualificationTrialPolicy({
       workspaceRoot,
       evaluatorRoot: join(eosRoot, 'evaluator'),
-      allowedHosts: ['api.anthropic.com:443'],
-      allowedExecutables: ['node', 'bash', 'git', 'claude'],
+      allowedHosts: inferenceHosts,
+      allowedExecutables: ['node', 'bash', 'git', agentExecutable],
       allowedEnvironment: grantedEnvironment,
       ipcTarget: proxy.targetPath,
     });
@@ -154,9 +176,6 @@ try {
     trialId,
     policy: policyFor('(assigned below)'),
     sourceEnvironment: qualificationEnvironmentSource({
-      // Git's bash, not the WSL launcher that shadows it on PATH.
-      // Keep the resolver at the call site: a structural regression test pins
-      // every real trial launcher to this host-aware helper.
       bashDirectory: windowsBashDirectory(),
       trusted: {
         IEOS_RUN_ID: runId,
@@ -183,6 +202,7 @@ try {
   }
 
   process.stdout.write(`qualification profile: ${profile}\n`);
+  process.stdout.write(`agent: ${agent}\n`);
   process.stdout.write(`preparing ${trialId} in ${trial.workspaceRoot}\n`);
   writeTargetRepo(trial.workspaceRoot, task.repo());
   run('git', ['init', '-q', '.'], trial.workspaceRoot);
@@ -215,15 +235,24 @@ try {
 
   const mcpConfigPath = join(trial.workspaceRoot, '.mcp.json');
   const mcpConfig = JSON.parse(readFileSync(mcpConfigPath, 'utf8')) as {
-    mcpServers: Record<string, { args?: string[] }>;
+    mcpServers: Record<string, { command?: string; args?: string[] }>;
   };
   const ieosServer = mcpConfig.mcpServers['ieos'];
-  if (ieosServer === undefined) {
-    throw new Error('`ieos init` did not register an ieos MCP server');
+  if (ieosServer === undefined || typeof ieosServer.command !== 'string') {
+    throw new Error('`ieos init` did not register a complete ieos MCP server');
   }
+  const codexConfigPath = join(trial.workspaceRoot, '.codex', 'config.toml');
+  const codexConfig = readFileSync(codexConfigPath, 'utf8');
+  const codexIeosPattern = /\[mcp_servers\.ieos\][\s\S]*?(?=\n\[|$)/u;
+
   if (arm === 'native') {
     delete mcpConfig.mcpServers['ieos'];
     writeFileSync(mcpConfigPath, `${JSON.stringify(mcpConfig, null, 2)}\n`, 'utf8');
+    writeFileSync(
+      codexConfigPath,
+      codexConfig.replace(codexIeosPattern, '').replace(/^\s+|\s+$/gu, '') + '\n',
+      'utf8',
+    );
     for (const file of ['CLAUDE.md', 'AGENTS.md']) {
       const path = join(trial.workspaceRoot, file);
       const before = readFileSync(path, 'utf8');
@@ -236,6 +265,19 @@ try {
   } else {
     ieosServer.args = [...(ieosServer.args ?? []), '--ranking-mode', 'recorded'];
     writeFileSync(mcpConfigPath, `${JSON.stringify(mcpConfig, null, 2)}\n`, 'utf8');
+    const codexBlock = [
+      '[mcp_servers.ieos]',
+      `command = ${JSON.stringify(ieosServer.command)}`,
+      `args = [${(ieosServer.args ?? []).map((value) => JSON.stringify(value)).join(', ')}]`,
+      '',
+    ].join('\n');
+    writeFileSync(
+      codexConfigPath,
+      codexIeosPattern.test(codexConfig)
+        ? codexConfig.replace(codexIeosPattern, codexBlock.trimEnd())
+        : `${codexConfig.trimEnd()}\n\n${codexBlock}`,
+      'utf8',
+    );
   }
 
   const registry = new RunRegistry();
@@ -261,6 +303,11 @@ try {
   }
   process.stdout.write('registration: confirmed by the plane\n');
 
+  const deniedRoots = [join(eosRoot, 'evaluator'), join(eosRoot, 'simulations')];
+  const unixSocketMounts =
+    profile === 'linux-namespace-v1'
+      ? [{ sourcePath: proxy.sourcePath, targetPath: proxy.targetPath }]
+      : [];
   const allowedTools = [
     'Read',
     'Write',
@@ -272,23 +319,48 @@ try {
       ? []
       : ['mcp__ieos__resolve', 'mcp__ieos__inspect', 'mcp__ieos__expand', 'mcp__ieos__observe']),
   ];
-  const driver = new ClaudeCodeDriver({
-    transcriptDir,
-    allowedTools,
-    allowedHosts: ['api.anthropic.com:443'],
-    deniedRoots: [join(eosRoot, 'evaluator'), join(eosRoot, 'simulations')],
-    unixSocketMounts:
-      profile === 'linux-namespace-v1'
-        ? [{ sourcePath: proxy.sourcePath, targetPath: proxy.targetPath }]
-        : [],
-    executable: 'claude',
-    model: 'claude-sonnet-5',
-    qualificationProfile: profile,
-    forbiddenCredentialValues: [planeConfig.serviceToken, planeConfig.installationToken],
-    ...(settingSources === undefined
-      ? {}
-      : { settingSources: settingSources.split(',').filter(Boolean) }),
-  });
+
+  const hostHome = process.env['HOME'] ?? process.env['USERPROFILE'] ?? '';
+  const codexAuthSource =
+    process.env['CODEX_HOME'] ?? (hostHome === '' ? '' : join(hostHome, '.codex'));
+
+  const driver =
+    agent === 'codex'
+      ? new CodexDriver({
+          eosRoot,
+          transcriptDir,
+          allowedHosts: inferenceHosts,
+          deniedRoots,
+          telemetrySocketPath: proxy.sourcePath,
+          authSourceDir: codexAuthSource,
+          ...(arm === 'native'
+            ? {}
+            : {
+                mcpServer: {
+                  command: ieosServer.command,
+                  args: ieosServer.args ?? [],
+                },
+              }),
+          unixSocketMounts,
+          executable: 'codex',
+          model: requestedModel,
+          qualificationProfile: profile,
+          forbiddenCredentialValues: [planeConfig.serviceToken, planeConfig.installationToken],
+        })
+      : new ClaudeCodeDriver({
+          transcriptDir,
+          allowedTools,
+          allowedHosts: inferenceHosts,
+          deniedRoots,
+          unixSocketMounts,
+          executable: 'claude',
+          model: requestedModel,
+          qualificationProfile: profile,
+          forbiddenCredentialValues: [planeConfig.serviceToken, planeConfig.installationToken],
+          ...(settingSources === undefined
+            ? {}
+            : { settingSources: settingSources.split(',').filter(Boolean) }),
+        });
 
   const finalOutcome = await runTrial({
     trial: preparedTrial,
@@ -330,7 +402,7 @@ try {
     usage: {
       wallClockSeconds: usage?.wallClockSeconds ?? 0,
       toolCalls: finalOutcome.result.toolCalls.length,
-      ...(usage === null ? {} : { costUsd: usage.costUsd }),
+      ...(typeof usage?.costUsd === 'number' ? { costUsd: usage.costUsd } : {}),
     },
     artifacts:
       finalOutcome.result.transcriptRef === null
@@ -353,14 +425,14 @@ try {
     ipc_transport: proxy.transport,
     knowledge_index_digest: index.indexDigest,
     agent: {
-      driver: 'claude-code',
+      driver: agent,
       cli_version: agentCliVersion,
     },
     runtime: {
       node: process.version,
       platform: process.platform,
     },
-    setting_sources: settingSources ?? 'project',
+    setting_sources: agent === 'codex' ? 'project' : (settingSources ?? 'project'),
     ranking_mode: 'recorded',
     registration: { confirmed: registration.confirmed, reason: registration.reason },
     status: report.status,
@@ -372,8 +444,6 @@ try {
     origin_class_the_plane_would_stamp: registry.originClassFor(runId),
     budget: report.budget,
     usage,
-    // Recorded per trial rather than taken from the configuration, so a run
-    // that silently used another model cannot be compared as though it had not.
     model: finalOutcome.result.model ?? { requested: null, resolved: null },
     tool_calls: toolCalls,
     resolve_called_unprompted: resolveCalled,
@@ -411,10 +481,11 @@ try {
   process.stdout.write(`  qualification profile: ${profile}\n`);
   process.stdout.write(`  IPC transport: ${proxy.transport}\n`);
   process.stdout.write(`  campaign: ${campaign}\n`);
+  process.stdout.write(`  agent: ${agent}\n`);
   process.stdout.write(`  arm: ${arm}\n`);
   process.stdout.write(`  resolve called unprompted: ${String(resolveCalled)}\n`);
   process.stdout.write(
-    `  cost: $${String(usage?.costUsd ?? 0)}  tool calls: ${String(toolCalls.length)}\n`,
+    `  cost: ${typeof usage?.costUsd === 'number' ? `$${String(usage.costUsd)}` : 'n/a'}  tool calls: ${String(toolCalls.length)}\n`,
   );
   process.stdout.write(`  record: ${recordPath}\n`);
   process.stdout.write(`  workspace kept for inspection: ${trial.workspaceRoot}\n`);

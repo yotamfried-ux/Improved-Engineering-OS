@@ -140,7 +140,7 @@ describe('Stage 3 fresh campaign integrity', () => {
           driver: 'claude-code',
           cli_version: '2.1.999',
         }),
-      /Claude Code version/u,
+      /agent CLI version/u,
     ],
     [
       'node runtime',

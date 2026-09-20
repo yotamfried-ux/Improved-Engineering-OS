@@ -22,6 +22,7 @@ import { describe, expect, it } from 'vitest';
 const here = dirname(fileURLToPath(import.meta.url));
 const sandboxSource = readFileSync(join(here, '..', 'src', 'ns-sandbox.ts'), 'utf8');
 const driverSource = readFileSync(join(here, '..', 'src', 'drivers', 'claude-code.ts'), 'utf8');
+const codexDriverSource = readFileSync(join(here, '..', 'src', 'drivers', 'codex.ts'), 'utf8');
 const processSource = readFileSync(join(here, '..', 'src', 'trial-process.ts'), 'utf8');
 
 /** The options interface, without the comments that legitimately discuss stdin. */
@@ -68,12 +69,16 @@ describe('no rescue is structural, not promised (T6)', () => {
     }
   });
 
-  it('sends exactly one prompt, and reports how many it sent', () => {
-    // The count is reported rather than assumed, so a second `-p` -- a follow-up
-    // turn, a nudge -- would show up in the evidence instead of being invisible.
+  it('sends exactly one Claude prompt, and reports how many it sent', () => {
     expect(driverSource).toContain(
       "promptsSent: argv.filter((argument) => argument === '-p').length",
     );
     expect(driverSource.match(/^\s*'-p',$/gmu)).toHaveLength(1);
+  });
+
+  it('keeps the Codex path non-interactive with exactly one recorded prompt', () => {
+    expect(codexDriverSource).toContain('const rescue = { promptsSent: 1, interactiveStdin: false }');
+    expect(codexDriverSource).toContain('options.prompt,');
+    expect(codexDriverSource).not.toMatch(/interactiveStdin:\s*true/u);
   });
 });
