@@ -4,7 +4,7 @@
  *
  * Besides the formal T1-T9 gate, this report validates the experiment matrix
  * itself: one exact repository revision, qualification profile, Node runtime,
- * Claude Code version and resolved model across all 22 trials.
+ * agent CLI version and model assignment across all 22 trials.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -26,6 +26,12 @@ const flag = (name: string): string | undefined => {
 };
 
 const campaign = flag('--campaign');
+const agent = flag('--agent') ?? 'claude-code';
+if (agent !== 'claude-code' && agent !== 'codex') {
+  process.stderr.write('--agent must be claude-code or codex\n');
+  process.exit(64);
+}
+const expectedRequestedModel = agent === 'codex' ? 'gpt-5.6-sol' : 'claude-sonnet-5';
 if (campaign === undefined || !/^[A-Za-z0-9_]{1,12}$/u.test(campaign)) {
   process.stderr.write(
     '--campaign is required and must be 1-12 ASCII letters, digits or underscores\n',
@@ -65,7 +71,9 @@ const matrixReasons = validateStage3Campaign(records, {
   campaign,
   currentRevision,
   expectedProfile,
-  expectedRequestedModel: 'claude-sonnet-5',
+  expectedRequestedModel,
+  expectedAgentDriver: agent,
+  requireResolvedModel: agent !== 'codex',
   primaryTaskIds: primaryIds,
   hardTaskIds: hardIds,
 });
@@ -99,8 +107,9 @@ const hardSummary = summaries
       `${String(summary.eos.resolveCalls)}/${String(summary.eos.trials)}`,
       `${String(summary.native.resolveCalls)}/${String(summary.native.trials)}`,
     ].join(' → ');
+    const meanCost = (value: number | null): string => (value === null ? 'n/a' : value.toFixed(3));
     const cost =
-      `${summary.eos.meanCostUsd.toFixed(3)} → ${summary.native.meanCostUsd.toFixed(3)} ` +
+      `${meanCost(summary.eos.meanCostUsd)} → ${meanCost(summary.native.meanCostUsd)} ` +
       `(EOS vs native ${pct(summary.delta.costPercent)})`;
     const wall =
       `${summary.eos.meanWallClockSeconds.toFixed(1)} → ` +
@@ -126,7 +135,7 @@ const trialMeasurements = records
       `| ${record.task_id} | ${record.arm ?? '?'} | ${record.trial_id.slice(-2)} | ` +
       `${String(proven)}/${String(deterministic.length)} | ` +
       `${record.resolve_called_unprompted ? 'yes' : 'no'} | ` +
-      `$${(record.usage?.costUsd ?? 0).toFixed(3)} | ` +
+      `${record.usage?.costUsd == null ? 'n/a' : `${record.usage.costUsd.toFixed(3)}`} | ` +
       `${(record.usage?.wallClockSeconds ?? 0).toFixed(1)} | ` +
       `${String(record.tool_calls.length)} | ` +
       `${String(record.usage?.totalInputTokens ?? 0)} | ` +
@@ -149,14 +158,15 @@ Recorded revision(s): \`${one(records.map((record) => record.eos_revision))}\`
 Qualification profile(s): \`${one(records.map((record) => record.qualification_profile))}\`  
 Knowledge index digest(s): \`${one(records.map((record) => record.knowledge_index_digest))}\`  
 Node runtime(s): \`${one(records.map((record) => record.runtime?.node))}\`  
-Claude Code version(s): \`${one(records.map((record) => record.agent?.cli_version))}\`  
+Agent driver(s): \`${one(records.map((record) => record.agent?.driver))}\`  
+Agent CLI version(s): \`${one(records.map((record) => record.agent?.cli_version))}\`  
 Requested model(s): \`${one(records.map((record) => record.model?.requested))}\`  
 Resolved model(s): \`${one(records.map((record) => record.model?.resolved))}\`  
 Records: **${String(records.length)} / 22**
 
 ## Matrix integrity
 
-**${matrixPass ? 'PASS' : 'FAIL'}** — the campaign must contain the fixed 22-run matrix on one current revision, one qualification profile, one Node 24.x runtime, one Claude Code version and one resolved model.
+**${matrixPass ? 'PASS' : 'FAIL'}** — the campaign must contain the fixed 22-run matrix on one current revision, one qualification profile, one Node 24.x runtime, one agent CLI version and one model assignment policy.
 
 ${matrixReasons.length === 0 ? 'No matrix violations.' : matrixReasons.map((reason) => `- ${reason}`).join('\n')}
 

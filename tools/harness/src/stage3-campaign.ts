@@ -16,6 +16,10 @@ export interface Stage3CampaignValidationOptions {
   readonly currentRevision: string;
   readonly expectedProfile: 'windows-personal-v1' | 'linux-namespace-v1';
   readonly expectedRequestedModel: string;
+  /** Defaults to the historical Stage 3 primary driver. */
+  readonly expectedAgentDriver?: string;
+  /** Defaults true. Codex JSONL currently may not expose the provider-resolved model. */
+  readonly requireResolvedModel?: boolean;
   readonly primaryTaskIds: readonly string[];
   readonly hardTaskIds: readonly string[];
 }
@@ -84,21 +88,49 @@ export function validateStage3Campaign(
     );
   }
 
-  const resolvedModels = unique(records.map((record) => record.model?.resolved ?? '(missing)'));
-  if (resolvedModels.length !== 1 || resolvedModels[0] === '(missing)') {
+  const resolvedValues = records.map((record) => record.model?.resolved ?? null);
+  const resolvedModels = unique(resolvedValues.filter((value): value is string => value !== null));
+  const missingResolved = resolvedValues.filter((value) => value === null).length;
+  if (options.requireResolvedModel !== false) {
+    if (resolvedModels.length !== 1 || missingResolved > 0) {
+      reasons.push(
+        `resolved model must be reported and identical across the campaign; observed ${[
+          ...resolvedModels,
+          ...(missingResolved > 0 ? ['(missing)'] : []),
+        ].join(', ')}`,
+      );
+    }
+  } else if (resolvedModels.length > 1 || (resolvedModels.length === 1 && missingResolved > 0)) {
     reasons.push(
-      `resolved model must be reported and identical across the campaign; observed ${resolvedModels.join(', ')}`,
+      `resolved model must be uniformly unavailable or one identical reported value; observed ${[
+        ...resolvedModels,
+        ...(missingResolved > 0 ? ['(missing)'] : []),
+      ].join(', ')}`,
     );
   }
 
+  const expectedDriver = options.expectedAgentDriver ?? 'claude-code';
   const drivers = unique(records.map((record) => record.agent?.driver ?? '(missing)'));
-  if (drivers.length !== 1 || drivers[0] !== 'claude-code') {
-    reasons.push(`agent driver must be claude-code; observed ${drivers.join(', ')}`);
+  if (drivers.length !== 1 || drivers[0] !== expectedDriver) {
+    reasons.push(`agent driver must be ${expectedDriver}; observed ${drivers.join(', ')}`);
   }
   const cliVersions = unique(records.map((record) => record.agent?.cli_version ?? '(missing)'));
   if (cliVersions.length !== 1 || cliVersions[0] === '(missing)') {
     reasons.push(
-      `Claude Code version must be reported and identical across the campaign; observed ${cliVersions.join(', ')}`,
+      `agent CLI version must be reported and identical across the campaign; observed ${cliVersions.join(', ')}`,
+    );
+  }
+  if (
+    expectedDriver === 'codex' &&
+    records.some(
+      (record) =>
+        record.codex_permission_probe?.status !== 'PASS' ||
+        record.codex_permission_probe.method !== 'model-free-sandbox' ||
+        record.codex_permission_probe.profile !== 'ieos-stage3',
+    )
+  ) {
+    reasons.push(
+      'every Codex trial must record a passing model-free ieos-stage3 permission preflight',
     );
   }
 
@@ -126,6 +158,16 @@ export function validateStage3Campaign(
     if (found.some((record) => record.arm !== 'eos')) {
       reasons.push(`${taskId}: primary trials must run with the EOS installation present`);
     }
+    const expectedTrialIds = [`${taskId}-eos-t1`, `${taskId}-eos-t2`];
+    const observedTrialIds = found.map((record) => record.trial_id).sort();
+    if (
+      observedTrialIds.length !== expectedTrialIds.length ||
+      expectedTrialIds.some((trialId) => !observedTrialIds.includes(trialId))
+    ) {
+      reasons.push(
+        `${taskId}: expected exact primary trial ids ${expectedTrialIds.join(', ')}; observed ${observedTrialIds.join(', ') || '(none)'}`,
+      );
+    }
   }
 
   for (const taskId of options.hardTaskIds) {
@@ -135,6 +177,21 @@ export function validateStage3Campaign(
     if (eos.length !== 2 || native.length !== 2 || found.length !== 4) {
       reasons.push(
         `${taskId}: expected 2 eos + 2 native trials, found ${String(eos.length)} + ${String(native.length)}`,
+      );
+    }
+    const expectedTrialIds = [
+      `${taskId}-eos-t1`,
+      `${taskId}-eos-t2`,
+      `${taskId}-native-t1`,
+      `${taskId}-native-t2`,
+    ];
+    const observedTrialIds = found.map((record) => record.trial_id).sort();
+    if (
+      observedTrialIds.length !== expectedTrialIds.length ||
+      expectedTrialIds.some((trialId) => !observedTrialIds.includes(trialId))
+    ) {
+      reasons.push(
+        `${taskId}: expected exact paired trial ids ${expectedTrialIds.join(', ')}; observed ${observedTrialIds.join(', ') || '(none)'}`,
       );
     }
   }
@@ -156,7 +213,7 @@ export interface CampaignArmSummary {
   readonly trials: number;
   readonly passed: number;
   readonly resolveCalls: number;
-  readonly meanCostUsd: number;
+  readonly meanCostUsd: number | null;
   readonly meanWallClockSeconds: number;
   readonly meanToolCalls: number;
   readonly meanTotalInputTokens: number;
@@ -179,20 +236,26 @@ function mean(values: readonly number[]): number {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
+function meanKnown(values: readonly (number | null)[]): number | null {
+  const known = values.filter((value): value is number => value !== null);
+  return known.length === values.length ? mean(known) : null;
+}
+
 function armSummary(records: readonly Stage3CampaignRecord[]): CampaignArmSummary {
   return {
     trials: records.length,
     passed: records.filter(allRulesPassed).length,
     resolveCalls: records.filter((record) => record.resolve_called_unprompted).length,
-    meanCostUsd: mean(records.map((record) => record.usage?.costUsd ?? 0)),
+    meanCostUsd: meanKnown(records.map((record) => record.usage?.costUsd ?? null)),
     meanWallClockSeconds: mean(records.map((record) => record.usage?.wallClockSeconds ?? 0)),
     meanToolCalls: mean(records.map((record) => record.tool_calls.length)),
     meanTotalInputTokens: mean(records.map((record) => record.usage?.totalInputTokens ?? 0)),
   };
 }
 
-function percentDelta(value: number, baseline: number): number | null {
-  return baseline === 0 ? null : ((value - baseline) / baseline) * 100;
+function percentDelta(value: number | null, baseline: number | null): number | null {
+  if (value === null || baseline === null || baseline === 0) return null;
+  return ((value - baseline) / baseline) * 100;
 }
 
 export function summarizeStage3Campaign(

@@ -154,6 +154,39 @@ describe('Stage 3 gate rows', () => {
     expect(rowById(records, 'T7').evidence).toContain('4 event(s) left queued');
   });
 
+  it('T9 is unproven when dollar cost is unavailable', () => {
+    const records = allGood();
+    records[0] = goodTrial({
+      ...records[0],
+      usage: {
+        wallClockSeconds: 60,
+        costUsd: null,
+        inputTokens: 10,
+        outputTokens: 100,
+        turns: 4,
+      },
+    });
+    const row = rowById(records, 'T9');
+    expect(row.status).toBe('UNPROVEN');
+    expect(row.evidence).toContain('dollar-cost compliance is unproven');
+  });
+
+  it('T9 still fails a measured non-cost budget overrun', () => {
+    const records = allGood();
+    records[0] = goodTrial({
+      ...records[0],
+      budget: { state: 'over_budget' },
+      usage: {
+        wallClockSeconds: 60,
+        costUsd: null,
+        inputTokens: 10,
+        outputTokens: 100,
+        turns: 4,
+      },
+    });
+    expect(rowById(records, 'T9').status).toBe('FAIL');
+  });
+
   it('no row passes on an empty record set', () => {
     for (const row of deriveRows([])) expect(row.status).not.toBe('PASS');
   });

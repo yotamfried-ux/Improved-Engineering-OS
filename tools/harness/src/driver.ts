@@ -37,7 +37,8 @@ export interface ToolCallRecord {
  */
 export interface AgentRunUsage {
   readonly wallClockSeconds: number;
-  readonly costUsd: number;
+  /** Null when the agent transport does not report a measured dollar charge. */
+  readonly costUsd: number | null;
   readonly inputTokens: number;
   readonly outputTokens: number;
   readonly cacheReadInputTokens: number;

@@ -140,7 +140,7 @@ describe('Stage 3 fresh campaign integrity', () => {
           driver: 'claude-code',
           cli_version: '2.1.999',
         }),
-      /Claude Code version/u,
+      /agent CLI version/u,
     ],
     [
       'node runtime',
@@ -161,6 +161,28 @@ describe('Stage 3 fresh campaign integrity', () => {
         hardTaskIds: HARD,
       }).join('\n'),
     ).toMatch(expected);
+  });
+
+  it('rejects a count-correct campaign that substituted t3 for preregistered t2', () => {
+    const records = fullCampaign();
+    const target = records.find(
+      (record) =>
+        record.task_id === 'plugin-install-marketplace' && record.trial_id.endsWith('-t2'),
+    );
+    expect(target).toBeDefined();
+    target!.trial_id = target!.trial_id.replace(/-t2$/u, '-t3');
+    target!.run_id = target!.run_id.replace(/_t2$/u, '_t3');
+
+    expect(
+      validateStage3Campaign(records, {
+        campaign: 'fresh26',
+        currentRevision: HEAD,
+        expectedProfile: 'windows-personal-v1',
+        expectedRequestedModel: 'claude-sonnet-5',
+        primaryTaskIds: PRIMARY,
+        hardTaskIds: HARD,
+      }).join('\n'),
+    ).toMatch(/expected exact paired trial ids/u);
   });
 
   it('fails closed when the model did not report what actually ran', () => {
@@ -199,6 +221,24 @@ describe('Stage 3 fresh campaign integrity', () => {
     });
     expect(quality?.delta.costPercent).toBeCloseTo(50);
     expect(quality?.delta.wallClockPercent).toBeCloseTo(33.333, 2);
+  });
+
+  it('does not report a partial cost subset as an arm mean', () => {
+    const records = fullCampaign();
+    const missingCost = records.find(
+      (record) =>
+        record.task_id === 'quality-gate-cleanup' &&
+        record.arm === 'eos' &&
+        record.trial_id.endsWith('-t2'),
+    );
+    expect(missingCost?.usage).toBeDefined();
+    missingCost!.usage = { ...missingCost!.usage!, costUsd: null };
+
+    const quality = summarizeStage3Campaign(records, HARD).find(
+      (row) => row.taskId === 'quality-gate-cleanup',
+    );
+    expect(quality?.eos.meanCostUsd).toBeNull();
+    expect(quality?.delta.costPercent).toBeNull();
   });
 });
 
