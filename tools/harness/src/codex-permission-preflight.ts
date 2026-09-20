@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
 export interface CodexPermissionProbeEvidence {
@@ -22,10 +22,10 @@ export function codexPermissionOverrides(platform: NodeJS.Platform = process.pla
   return [
     'default_permissions="ieos-stage3"',
     'permissions.ieos-stage3.extends=":workspace"',
-    'permissions.ieos-stage3.filesystem.":root"="deny"',
-    'permissions.ieos-stage3.filesystem.":minimal"="read"',
-    'permissions.ieos-stage3.filesystem.":tmpdir"="deny"',
-    'permissions.ieos-stage3.filesystem.":slash_tmp"="deny"',
+    'permissions.ieos-stage3.filesystem.:root="deny"',
+    'permissions.ieos-stage3.filesystem.:minimal="read"',
+    'permissions.ieos-stage3.filesystem.:tmpdir="deny"',
+    'permissions.ieos-stage3.filesystem.:slash_tmp="deny"',
     'permissions.ieos-stage3.network.enabled=false',
     ...(platform === 'win32' ? ['windows.sandbox="elevated"'] : []),
   ];
@@ -128,12 +128,23 @@ export function assertCodexPermissionBoundary(options: {
   const outsidePath = join(privateRoot, 'must-not-read.txt');
   writeFileSync(outsidePath, 'IEOS_OUTSIDE_WORKSPACE_SECRET\\n', 'utf8');
 
+  // The permission profile intentionally denies reads from the ambient host
+  // filesystem. Execute the model-free probe with the exact current Node binary
+  // copied into the disposable workspace so the probe validates the policy
+  // rather than failing to launch its own helper from an ambient AppData/tmp path.
+  const probeNodeExecutable = join(
+    workspaceRoot,
+    process.platform === 'win32' ? 'ieos-probe-node.exe' : 'ieos-probe-node',
+  );
+  copyFileSync(process.execPath, probeNodeExecutable);
+
   try {
     const run = spawnSync(
       options.executable ?? 'codex',
       codexPermissionProbeArgs({
         workspaceRoot,
         outsidePath,
+        nodeExecutable: probeNodeExecutable,
         ...(options.platform === undefined ? {} : { platform: options.platform }),
       }),
       {
