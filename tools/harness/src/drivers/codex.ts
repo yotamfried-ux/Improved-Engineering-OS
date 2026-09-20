@@ -112,10 +112,7 @@ function isOptionalString(value: unknown): boolean {
 
 function isTokenCount(value: unknown): value is number {
   return (
-    typeof value === 'number' &&
-    Number.isFinite(value) &&
-    Number.isInteger(value) &&
-    value >= 0
+    typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value) && value >= 0
   );
 }
 
@@ -130,8 +127,7 @@ function isCodexUsage(value: unknown): value is NonNullable<CodexEvent['usage']>
     return false;
   }
   return (
-    value['reasoning_output_tokens'] === undefined ||
-    isTokenCount(value['reasoning_output_tokens'])
+    value['reasoning_output_tokens'] === undefined || isTokenCount(value['reasoning_output_tokens'])
   );
 }
 
