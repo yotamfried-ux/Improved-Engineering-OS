@@ -4,6 +4,10 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { buildTrialReport, formatTrialReport } from './collect.ts';
+import {
+  assertCodexPermissionBoundary,
+  type CodexPermissionProbeEvidence,
+} from './codex-permission-preflight.ts';
 import { ClaudeCodeDriver, bareToolName } from './drivers/claude-code.ts';
 import { CodexDriver } from './drivers/codex.ts';
 import { gradeDeterministic, gradeTrace } from './graders.ts';
@@ -115,6 +119,23 @@ if (
     'Stage 3 Codex trial refused: file-backed Codex auth.json is required before run registration so an isolated CODEX_HOME can be built without ambient user configuration\n',
   );
   process.exit(69);
+}
+
+let codexPermissionProbe: CodexPermissionProbeEvidence | null = null;
+if (agent === 'codex') {
+  try {
+    codexPermissionProbe = assertCodexPermissionBoundary({
+      eosRoot,
+      executable: agentExecutable,
+      platform: process.platform,
+    });
+    process.stdout.write('Codex model-free permission preflight: PASS\n');
+  } catch (error) {
+    process.stderr.write(
+      `Stage 3 Codex trial refused before run registration: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    process.exit(69);
+  }
 }
 
 const bashDirectory = windowsBashDirectory();
@@ -440,6 +461,9 @@ try {
       node: process.version,
       platform: process.platform,
     },
+    ...(codexPermissionProbe === null
+      ? {}
+      : { codex_permission_probe: codexPermissionProbe }),
     setting_sources: agent === 'codex' ? 'project' : (settingSources ?? 'project'),
     ranking_mode: 'recorded',
     registration: { confirmed: registration.confirmed, reason: registration.reason },

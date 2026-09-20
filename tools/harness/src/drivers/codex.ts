@@ -26,6 +26,7 @@ import {
   type QualificationProfile,
 } from '../qualification-profile.ts';
 import { buildTrialIntegrityReport, type TrialIntegrityReport } from '../trial-integrity.ts';
+import { codexPermissionConfigArgs } from '../codex-permission-preflight.ts';
 import { outboxPathFor } from '../trial-telemetry.ts';
 import {
   loadRegistry,
@@ -256,6 +257,7 @@ export function codexArgsFor(options: {
   readonly model: string;
   readonly prompt: string;
   readonly mcpServer?: CodexMcpServer;
+  readonly platform?: NodeJS.Platform;
 }): string[] {
   return [
     '--ask-for-approval',
@@ -267,20 +269,7 @@ export function codexArgsFor(options: {
     // Do not add --sandbox here. Codex permission profiles and the legacy
     // sandbox flags are mutually exclusive; a legacy flag would silently take
     // precedence and restore broad filesystem read access, including CODEX_HOME.
-    '-c',
-    'default_permissions="ieos-stage3"',
-    '-c',
-    'permissions.ieos-stage3.extends=":workspace"',
-    '-c',
-    'permissions.ieos-stage3.filesystem.":root"="deny"',
-    '-c',
-    'permissions.ieos-stage3.filesystem.":minimal"="read"',
-    '-c',
-    'permissions.ieos-stage3.filesystem.":tmpdir"="deny"',
-    '-c',
-    'permissions.ieos-stage3.filesystem.":slash_tmp"="deny"',
-    '-c',
-    'permissions.ieos-stage3.network.enabled=false',
+    ...codexPermissionConfigArgs(options.platform),
     '-c',
     'web_search="disabled"',
     '-c',

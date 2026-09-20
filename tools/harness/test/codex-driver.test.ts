@@ -260,7 +260,12 @@ describe('Codex experiment configuration', () => {
   });
 
   it('suppresses ambient config, execpolicy and hosted web search', () => {
-    const args = codexArgsFor({ model: 'gpt-5.6-sol', prompt: 'task', mcpServer: server });
+    const args = codexArgsFor({
+      model: 'gpt-5.6-sol',
+      prompt: 'task',
+      mcpServer: server,
+      platform: 'win32',
+    });
     expect(args).toContain('--ignore-user-config');
     expect(args).toContain('--ignore-rules');
     expect(args).toContain('cli_auth_credentials_store="file"');
@@ -272,6 +277,7 @@ describe('Codex experiment configuration', () => {
     expect(args).toContain('permissions.ieos-stage3.filesystem.":tmpdir"="deny"');
     expect(args).toContain('permissions.ieos-stage3.filesystem.":slash_tmp"="deny"');
     expect(args).toContain('permissions.ieos-stage3.network.enabled=false');
+    expect(args).toContain('windows.sandbox="elevated"');
     expect(args).not.toContain('--sandbox');
     expect(args).not.toContain('workspace-write');
     expect(args).toContain('--ephemeral');

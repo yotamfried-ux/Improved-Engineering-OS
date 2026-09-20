@@ -40,6 +40,11 @@ function record(task: string, arm: 'eos' | 'native', trial: 1 | 2): Stage3Campai
     model: { requested: 'gpt-5.6-sol', resolved: null },
     agent: { driver: 'codex', cli_version: 'codex-cli 0.154.0-alpha.6.2' },
     runtime: { node: 'v24.20.0', platform: 'win32' },
+    codex_permission_probe: {
+      status: 'PASS',
+      method: 'model-free-sandbox',
+      profile: 'ieos-stage3',
+    },
     tool_calls: [],
     resolve_called_unprompted: arm === 'eos',
     eos_tools_used: arm === 'eos' ? ['resolve'] : [],
@@ -90,6 +95,12 @@ describe('parallel Codex campaign integrity', () => {
     const records = fullCampaign();
     records[0]!.agent = { driver: 'claude-code', cli_version: '2.1.258' };
     expect(validateStage3Campaign(records, options).join('\n')).toMatch(/agent driver/u);
+  });
+
+  it('rejects Codex evidence that lacks the runtime permission preflight', () => {
+    const records = fullCampaign();
+    delete records[0]!.codex_permission_probe;
+    expect(validateStage3Campaign(records, options).join('\n')).toMatch(/permission preflight/u);
   });
 
   it('rejects a mixture of missing and reported resolved models', () => {

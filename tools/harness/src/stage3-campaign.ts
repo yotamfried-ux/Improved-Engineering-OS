@@ -120,6 +120,19 @@ export function validateStage3Campaign(
       `agent CLI version must be reported and identical across the campaign; observed ${cliVersions.join(', ')}`,
     );
   }
+  if (
+    expectedDriver === 'codex' &&
+    records.some(
+      (record) =>
+        record.codex_permission_probe?.status !== 'PASS' ||
+        record.codex_permission_probe.method !== 'model-free-sandbox' ||
+        record.codex_permission_probe.profile !== 'ieos-stage3',
+    )
+  ) {
+    reasons.push(
+      'every Codex trial must record a passing model-free ieos-stage3 permission preflight',
+    );
+  }
 
   const nodeVersions = unique(records.map((record) => record.runtime?.node ?? '(missing)'));
   if (

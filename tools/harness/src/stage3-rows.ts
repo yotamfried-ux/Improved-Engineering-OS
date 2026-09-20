@@ -40,6 +40,11 @@ export interface TrialRecord {
     readonly node: string;
     readonly platform: string;
   };
+  readonly codex_permission_probe?: {
+    readonly status: 'PASS';
+    readonly method: 'model-free-sandbox';
+    readonly profile: 'ieos-stage3';
+  };
   readonly tool_calls: readonly { readonly name: string }[];
   readonly resolve_called_unprompted: boolean;
   readonly eos_tools_used: readonly string[];
