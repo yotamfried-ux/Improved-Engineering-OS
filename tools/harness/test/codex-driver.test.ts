@@ -117,6 +117,15 @@ describe('Codex JSONL evidence parser', () => {
 });
 
 describe('Codex auth isolation', () => {
+  it('refuses to fall back to ambient state when file-backed auth is absent', () => {
+    const source = mkdtempSync(join(tmpdir(), 'ieos-codex-auth-missing-'));
+    try {
+      expect(() => prepareIsolatedCodexHome(source)).toThrow(/auth\.json.*refusing/iu);
+    } finally {
+      rmSync(source, { recursive: true, force: true });
+    }
+  });
+
   it('copies only auth into the disposable home and persists a refreshed auth file', () => {
     const source = mkdtempSync(join(tmpdir(), 'ieos-codex-auth-source-'));
     let isolated: string | null = null;
