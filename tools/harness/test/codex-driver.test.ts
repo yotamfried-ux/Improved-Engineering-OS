@@ -255,7 +255,7 @@ describe('Codex experiment configuration', () => {
     expect(override).toContain('enabled_tools=["resolve","inspect","expand","observe"]');
   });
 
-  it('removes every MCP server in the native arm', () => {
+  it('does not add a named MCP server in the native arm', () => {
     expect(codexMcpOverride()).toBe('mcp_servers={}');
   });
 
@@ -285,6 +285,9 @@ describe('Codex experiment configuration', () => {
     expect(args).toContain('features.multi_agent=false');
     expect(args).toContain('features.apps=false');
     expect(args).toContain('features.remote_plugin=false');
+    expect(args).toContain('features.plugins=false');
+    expect(args).toContain('skills.include_instructions=false');
+    expect(args).toContain('skills.bundled.enabled=false');
     expect(args.filter((arg) => arg === 'task')).toHaveLength(1);
   });
 });
