@@ -145,6 +145,16 @@ export function validateStage3Campaign(
     if (found.some((record) => record.arm !== 'eos')) {
       reasons.push(`${taskId}: primary trials must run with the EOS installation present`);
     }
+    const expectedTrialIds = [`${taskId}-eos-t1`, `${taskId}-eos-t2`];
+    const observedTrialIds = found.map((record) => record.trial_id).sort();
+    if (
+      observedTrialIds.length !== expectedTrialIds.length ||
+      expectedTrialIds.some((trialId) => !observedTrialIds.includes(trialId))
+    ) {
+      reasons.push(
+        `${taskId}: expected exact primary trial ids ${expectedTrialIds.join(', ')}; observed ${observedTrialIds.join(', ') || '(none)'}`,
+      );
+    }
   }
 
   for (const taskId of options.hardTaskIds) {
@@ -154,6 +164,21 @@ export function validateStage3Campaign(
     if (eos.length !== 2 || native.length !== 2 || found.length !== 4) {
       reasons.push(
         `${taskId}: expected 2 eos + 2 native trials, found ${String(eos.length)} + ${String(native.length)}`,
+      );
+    }
+    const expectedTrialIds = [
+      `${taskId}-eos-t1`,
+      `${taskId}-eos-t2`,
+      `${taskId}-native-t1`,
+      `${taskId}-native-t2`,
+    ];
+    const observedTrialIds = found.map((record) => record.trial_id).sort();
+    if (
+      observedTrialIds.length !== expectedTrialIds.length ||
+      expectedTrialIds.some((trialId) => !observedTrialIds.includes(trialId))
+    ) {
+      reasons.push(
+        `${taskId}: expected exact paired trial ids ${expectedTrialIds.join(', ')}; observed ${observedTrialIds.join(', ') || '(none)'}`,
       );
     }
   }
