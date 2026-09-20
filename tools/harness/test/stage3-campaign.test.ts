@@ -163,6 +163,27 @@ describe('Stage 3 fresh campaign integrity', () => {
     ).toMatch(expected);
   });
 
+  it('rejects a count-correct campaign that substituted t3 for preregistered t2', () => {
+    const records = fullCampaign();
+    const target = records.find(
+      (record) => record.task_id === 'plugin-install-marketplace' && record.trial_id.endsWith('-t2'),
+    );
+    expect(target).toBeDefined();
+    target!.trial_id = target!.trial_id.replace(/-t2$/u, '-t3');
+    target!.run_id = target!.run_id.replace(/_t2$/u, '_t3');
+
+    expect(
+      validateStage3Campaign(records, {
+        campaign: 'fresh26',
+        currentRevision: HEAD,
+        expectedProfile: 'windows-personal-v1',
+        expectedRequestedModel: 'claude-sonnet-5',
+        primaryTaskIds: PRIMARY,
+        hardTaskIds: HARD,
+      }).join('\n'),
+    ).toMatch(/expected exact paired trial ids/u);
+  });
+
   it('fails closed when the model did not report what actually ran', () => {
     const records = fullCampaign();
     records[0]!.model = { requested: 'claude-sonnet-5', resolved: null };
