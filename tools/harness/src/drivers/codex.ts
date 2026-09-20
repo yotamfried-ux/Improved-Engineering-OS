@@ -281,7 +281,7 @@ function terminalReasonOf(
   return null;
 }
 
-function prepareIsolatedCodexHome(sourceDir: string): string {
+export function prepareIsolatedCodexHome(sourceDir: string): string {
   const isolated = mkdtempSync(join(tmpdir(), 'ieos-codex-home-'));
   const auth = join(sourceDir, 'auth.json');
   if (!existsSync(auth)) {
@@ -292,6 +292,17 @@ function prepareIsolatedCodexHome(sourceDir: string): string {
   }
   copyFileSync(auth, join(isolated, 'auth.json'));
   return isolated;
+}
+
+/**
+ * Codex may refresh ChatGPT-managed credentials while it runs. Persist only that
+ * refreshed auth file back to the trusted host; everything else in the isolated
+ * CODEX_HOME remains disposable so ambient config can never enter a later trial.
+ */
+export function persistIsolatedCodexAuth(isolatedDir: string, sourceDir: string): void {
+  const refreshed = join(isolatedDir, 'auth.json');
+  if (!existsSync(refreshed)) return;
+  copyFileSync(refreshed, join(sourceDir, 'auth.json'));
 }
 
 function repoSha(workspaceRoot: string): string {
@@ -495,7 +506,11 @@ export class CodexDriver implements AgentDriver {
       };
       return result;
     } finally {
-      rmSync(isolatedCodexHome, { recursive: true, force: true });
+      try {
+        persistIsolatedCodexAuth(isolatedCodexHome, options.authSourceDir);
+      } finally {
+        rmSync(isolatedCodexHome, { recursive: true, force: true });
+      }
     }
   }
 }
