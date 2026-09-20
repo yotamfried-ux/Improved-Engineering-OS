@@ -180,6 +180,20 @@ export function codexToolCallsOf(events: readonly CodexEvent[]): ToolCallRecord[
   return calls;
 }
 
+export function unexpectedCodexToolCalls(
+  calls: readonly ToolCallRecord[],
+  ieosEnabled: boolean,
+): string[] {
+  const allowed = new Set([
+    'Bash',
+    'Edit',
+    ...(ieosEnabled
+      ? ['mcp__ieos__resolve', 'mcp__ieos__inspect', 'mcp__ieos__expand', 'mcp__ieos__observe']
+      : []),
+  ]);
+  return [...new Set(calls.map((call) => call.name).filter((name) => !allowed.has(name)))];
+}
+
 function tomlString(value: string): string {
   return JSON.stringify(value);
 }
@@ -417,7 +431,7 @@ export class CodexDriver implements AgentDriver {
         model,
       };
       const rescue = { promptsSent: 1, interactiveStdin: false } as const;
-      const integrity = buildTrialIntegrityReport({
+      const baseIntegrity = buildTrialIntegrityReport({
         profile,
         workspaceRoot: trial.workspaceRoot,
         artifactPath: transcriptPath,
@@ -444,6 +458,26 @@ export class CodexDriver implements AgentDriver {
           ? {}
           : { forbiddenCredentialValues: options.forbiddenCredentialValues }),
       });
+      const unexpectedTools = unexpectedCodexToolCalls(toolCalls, options.mcpServer !== undefined);
+      const observedToolFinding = {
+        check: 'observed-tool-allowlist',
+        status: unexpectedTools.length === 0 ? ('PASS' as const) : ('FAIL' as const),
+        evidence:
+          unexpectedTools.length === 0
+            ? 'every observed Codex tool call belongs to the trial arm allowlist'
+            : `unexpected observed Codex tool calls: ${unexpectedTools.join(', ')}`,
+      };
+      const integrity: TrialIntegrityReport = {
+        ...baseIntegrity,
+        qualificationEligible: baseIntegrity.qualificationEligible && unexpectedTools.length === 0,
+        findings: [...baseIntegrity.findings, observedToolFinding],
+        reasons: [
+          ...baseIntegrity.reasons,
+          ...(unexpectedTools.length === 0
+            ? []
+            : [`observed-tool-allowlist: ${observedToolFinding.evidence}`]),
+        ],
+      };
 
       this.#lastRecord = {
         result,
