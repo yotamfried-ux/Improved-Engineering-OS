@@ -18,9 +18,7 @@ export interface CodexPermissionProbeProcessResult {
 const PROBE_OK = 'IEOS_CODEX_PERMISSION_PROBE_OK';
 const OUTSIDE_READ_EXIT = 41;
 
-export function codexPermissionOverrides(
-  platform: NodeJS.Platform = process.platform,
-): string[] {
+export function codexPermissionOverrides(platform: NodeJS.Platform = process.platform): string[] {
   return [
     'default_permissions="ieos-stage3"',
     'permissions.ieos-stage3.extends=":workspace"',
@@ -33,9 +31,7 @@ export function codexPermissionOverrides(
   ];
 }
 
-export function codexPermissionConfigArgs(
-  platform: NodeJS.Platform = process.platform,
-): string[] {
+export function codexPermissionConfigArgs(platform: NodeJS.Platform = process.platform): string[] {
   return codexPermissionOverrides(platform).flatMap((value) => ['-c', value]);
 }
 

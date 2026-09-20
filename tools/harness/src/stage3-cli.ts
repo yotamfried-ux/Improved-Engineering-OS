@@ -461,9 +461,7 @@ try {
       node: process.version,
       platform: process.platform,
     },
-    ...(codexPermissionProbe === null
-      ? {}
-      : { codex_permission_probe: codexPermissionProbe }),
+    ...(codexPermissionProbe === null ? {} : { codex_permission_probe: codexPermissionProbe }),
     setting_sources: agent === 'codex' ? 'project' : (settingSources ?? 'project'),
     ranking_mode: 'recorded',
     registration: { confirmed: registration.confirmed, reason: registration.reason },
