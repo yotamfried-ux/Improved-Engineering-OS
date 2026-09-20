@@ -233,6 +233,8 @@ export function codexArgsFor(options: {
     '-c',
     'permissions.ieos-stage3.filesystem.":slash_tmp"="deny"',
     '-c',
+    'permissions.ieos-stage3.network.enabled=false',
+    '-c',
     'web_search="disabled"',
     '-c',
     'features.multi_agent=false',
