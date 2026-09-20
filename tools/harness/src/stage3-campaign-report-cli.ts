@@ -107,8 +107,7 @@ const hardSummary = summaries
       `${String(summary.eos.resolveCalls)}/${String(summary.eos.trials)}`,
       `${String(summary.native.resolveCalls)}/${String(summary.native.trials)}`,
     ].join(' → ');
-    const meanCost = (value: number | null): string =>
-      value === null ? 'n/a' : value.toFixed(3);
+    const meanCost = (value: number | null): string => (value === null ? 'n/a' : value.toFixed(3));
     const cost =
       `${meanCost(summary.eos.meanCostUsd)} → ${meanCost(summary.native.meanCostUsd)} ` +
       `(EOS vs native ${pct(summary.delta.costPercent)})`;

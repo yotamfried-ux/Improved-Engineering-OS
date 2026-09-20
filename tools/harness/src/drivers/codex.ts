@@ -1,14 +1,7 @@
 /** Codex CLI driver for the parallel Stage 3 experiment. */
 
 import { execFileSync } from 'node:child_process';
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type {
@@ -147,10 +140,7 @@ export function codexUsageOf(
   const completed = events.filter((event) => event.type === 'turn.completed' && event.usage);
   if (completed.length === 0) return null;
   const totalInput = completed.reduce((sum, event) => sum + (event.usage?.input_tokens ?? 0), 0);
-  const cached = completed.reduce(
-    (sum, event) => sum + (event.usage?.cached_input_tokens ?? 0),
-    0,
-  );
+  const cached = completed.reduce((sum, event) => sum + (event.usage?.cached_input_tokens ?? 0), 0);
   const cacheWrite = completed.reduce(
     (sum, event) => sum + (event.usage?.cache_write_input_tokens ?? 0),
     0,
@@ -434,7 +424,12 @@ export class CodexDriver implements AgentDriver {
           'Edit',
           ...(options.mcpServer === undefined
             ? []
-            : ['mcp__ieos__resolve', 'mcp__ieos__inspect', 'mcp__ieos__expand', 'mcp__ieos__observe']),
+            : [
+                'mcp__ieos__resolve',
+                'mcp__ieos__inspect',
+                'mcp__ieos__expand',
+                'mcp__ieos__observe',
+              ]),
         ],
         settingSources: ['project'],
         expectedPrompts: 1,

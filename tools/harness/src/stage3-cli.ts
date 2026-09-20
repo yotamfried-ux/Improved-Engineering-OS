@@ -150,9 +150,7 @@ const proxy = await openPlatformQualificationProxy({ config: planeConfig, runId 
 
 try {
   const inferenceHosts =
-    agent === 'codex'
-      ? ['chatgpt.com:443', 'api.openai.com:443']
-      : ['api.anthropic.com:443'];
+    agent === 'codex' ? ['chatgpt.com:443', 'api.openai.com:443'] : ['api.anthropic.com:443'];
   const grantedEnvironment = [
     ...qualificationEnvironmentNames(),
     'IEOS_RUN_ID',

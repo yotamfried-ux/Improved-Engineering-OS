@@ -77,7 +77,9 @@ describe('no rescue is structural, not promised (T6)', () => {
   });
 
   it('keeps the Codex path non-interactive with exactly one recorded prompt', () => {
-    expect(codexDriverSource).toContain('const rescue = { promptsSent: 1, interactiveStdin: false }');
+    expect(codexDriverSource).toContain(
+      'const rescue = { promptsSent: 1, interactiveStdin: false }',
+    );
     expect(codexDriverSource).toContain('options.prompt,');
     expect(codexDriverSource).not.toMatch(/interactiveStdin:\s*true/u);
   });

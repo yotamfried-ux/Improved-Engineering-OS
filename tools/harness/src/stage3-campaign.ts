@@ -89,9 +89,7 @@ export function validateStage3Campaign(
   }
 
   const resolvedValues = records.map((record) => record.model?.resolved ?? null);
-  const resolvedModels = unique(
-    resolvedValues.filter((value): value is string => value !== null),
-  );
+  const resolvedModels = unique(resolvedValues.filter((value): value is string => value !== null));
   const missingResolved = resolvedValues.filter((value) => value === null).length;
   if (options.requireResolvedModel !== false) {
     if (resolvedModels.length !== 1 || missingResolved > 0) {
@@ -102,10 +100,7 @@ export function validateStage3Campaign(
         ].join(', ')}`,
       );
     }
-  } else if (
-    resolvedModels.length > 1 ||
-    (resolvedModels.length === 1 && missingResolved > 0)
-  ) {
+  } else if (resolvedModels.length > 1 || (resolvedModels.length === 1 && missingResolved > 0)) {
     reasons.push(
       `resolved model must be uniformly unavailable or one identical reported value; observed ${[
         ...resolvedModels,
