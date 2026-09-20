@@ -91,6 +91,8 @@ export interface HookDeps {
   readonly installationId: string;
   readonly projectId: string;
   readonly env: Record<string, string | undefined>;
+  /** Agent identity stamped into telemetry. Defaults to the historical primary adapter. */
+  readonly harnessAgent?: string;
 }
 
 export async function runHook(raw: string, deps: HookDeps): Promise<HookOutcome> {
@@ -153,7 +155,7 @@ export async function runHook(raw: string, deps: HookDeps): Promise<HookOutcome>
         repo_sha: deps.repoSha,
         eos_release: deps.eosRelease,
         harness: {
-          agent: 'claude-code',
+          agent: deps.harnessAgent ?? 'claude-code',
           model: input.model ?? 'unknown',
           adapter_version: '0.1.0',
           available_capabilities_hash: 'sha256:0',

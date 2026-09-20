@@ -24,7 +24,7 @@ export interface TrialRecord {
   readonly budget: { readonly state: string };
   readonly usage: {
     readonly wallClockSeconds: number;
-    readonly costUsd: number;
+    readonly costUsd: number | null;
     readonly inputTokens: number;
     readonly outputTokens: number;
     /** Absent on the trials recorded before this field existed. */
@@ -273,10 +273,19 @@ export function deriveRows(records: readonly TrialRecord[]): readonly Row[] {
       id: 'T9',
       requirement: 'every trial within its declared budget (TD-20)',
       status: every(graded, (record) => record.budget.state === 'within') ? 'PASS' : 'FAIL',
-      evidence:
-        `states: ${[...new Set(graded.map((r) => r.budget.state))].join(', ')}; ` +
-        `total measured cost $${graded.reduce((sum, r) => sum + (r.usage?.costUsd ?? 0), 0).toFixed(2)} ` +
-        `across ${String(graded.length)} trials against $3 each`,
+      evidence: (() => {
+        const measured = graded
+          .map((record) => record.usage?.costUsd ?? null)
+          .filter((value): value is number => value !== null);
+        const cost =
+          measured.length === 0
+            ? 'dollar cost was not reported by this driver'
+            : `total measured cost ${measured.reduce((sum, value) => sum + value, 0).toFixed(2)} across ${String(measured.length)} trial(s)`;
+        return (
+          `states: ${[...new Set(graded.map((r) => r.budget.state))].join(', ')}; ` +
+          `${cost}; wall-clock and tool-call budgets remain enforced for every graded trial`
+        );
+      })(),
     },
   ];
 
