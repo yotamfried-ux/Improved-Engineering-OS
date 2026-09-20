@@ -102,13 +102,53 @@ export interface CodexRunRecord {
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || typeof value === 'string';
+}
+
+function isTokenCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value) && value >= 0;
+}
+
+function isCodexUsage(value: unknown): value is NonNullable<CodexEvent['usage']> {
+  if (!isRecord(value)) return false;
+  if (
+    !isTokenCount(value['input_tokens']) ||
+    !isTokenCount(value['cached_input_tokens']) ||
+    !isTokenCount(value['cache_write_input_tokens']) ||
+    !isTokenCount(value['output_tokens'])
+  ) {
+    return false;
+  }
+  return value['reasoning_output_tokens'] === undefined || isTokenCount(value['reasoning_output_tokens']);
+}
+
+function isCodexEvent(value: unknown): value is CodexEvent {
+  if (!isRecord(value) || typeof value['type'] !== 'string' || value['type'] === '') return false;
+  if (
+    !isOptionalString(value['timestamp']) ||
+    !isOptionalString(value['model']) ||
+    !isOptionalString(value['server_model'])
+  ) {
+    return false;
+  }
+  if (value['usage'] !== undefined && !isCodexUsage(value['usage'])) return false;
+  if (value['item'] !== undefined && !isRecord(value['item'])) return false;
+  return true;
+}
+
 export function parseCodexEvents(ndjson: string): CodexEvent[] {
   const events: CodexEvent[] = [];
   for (const line of ndjson.split('\n')) {
     const trimmed = line.trim();
     if (trimmed === '') continue;
     try {
-      events.push(JSON.parse(trimmed) as CodexEvent);
+      const parsed: unknown = JSON.parse(trimmed);
+      if (isCodexEvent(parsed)) events.push(parsed);
     } catch {
       // Diagnostics are not upgraded into structured evidence.
     }
@@ -351,7 +391,8 @@ export class CodexDriver implements AgentDriver {
     mkdirSync(options.transcriptDir, { recursive: true });
     const transcriptPath = join(options.transcriptDir, `${trial.trialId}-${task.taskId}.ndjson`);
     const isolatedCodexHome = prepareIsolatedCodexHome(options.authSourceDir);
-    const environment = { ...trial.environment, CODEX_HOME: isolatedCodexHome };
+    try {
+      const environment = { ...trial.environment, CODEX_HOME: isolatedCodexHome };
     const args = codexArgsFor({
       model: options.model,
       prompt: task.prompt,
@@ -385,8 +426,7 @@ export class CodexDriver implements AgentDriver {
       hookDeps,
     );
 
-    const startedAt = Date.now();
-    try {
+      const startedAt = Date.now();
       const run = await runQualificationProcess({
         command: [executable, ...args],
         cwd: trial.workspaceRoot,

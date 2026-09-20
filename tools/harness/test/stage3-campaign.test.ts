@@ -222,6 +222,24 @@ describe('Stage 3 fresh campaign integrity', () => {
     expect(quality?.delta.costPercent).toBeCloseTo(50);
     expect(quality?.delta.wallClockPercent).toBeCloseTo(33.333, 2);
   });
+
+  it('does not report a partial cost subset as an arm mean', () => {
+    const records = fullCampaign();
+    const missingCost = records.find(
+      (record) =>
+        record.task_id === 'quality-gate-cleanup' &&
+        record.arm === 'eos' &&
+        record.trial_id.endsWith('-t2'),
+    );
+    expect(missingCost?.usage).toBeDefined();
+    missingCost!.usage = { ...missingCost!.usage!, costUsd: null };
+
+    const quality = summarizeStage3Campaign(records, HARD).find(
+      (row) => row.taskId === 'quality-gate-cleanup',
+    );
+    expect(quality?.eos.meanCostUsd).toBeNull();
+    expect(quality?.delta.costPercent).toBeNull();
+  });
 });
 
 describe('Stage 3 trial evidence immutability', () => {

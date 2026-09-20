@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  CodexDriver,
   codexArgsFor,
   codexCompleted,
   codexMcpOverride,
@@ -49,6 +50,42 @@ describe('Codex JSONL evidence parser', () => {
     expect(events).toHaveLength(4);
     expect(codexCompleted(events, 0)).toBe(true);
     expect(codexCompleted(events, 1)).toBe(false);
+  });
+
+  it('rejects malformed structured events instead of fabricating evidence', () => {
+    const events = parseCodexEvents(
+      [
+        'null',
+        '[]',
+        '{}',
+        JSON.stringify({ type: 'turn.completed', usage: {} }),
+        JSON.stringify({
+          type: 'turn.completed',
+          usage: {
+            input_tokens: 1,
+            cached_input_tokens: 0,
+            cache_write_input_tokens: 0,
+            output_tokens: -1,
+          },
+        }),
+        JSON.stringify({
+          type: 'turn.completed',
+          usage: {
+            input_tokens: 1,
+            cached_input_tokens: 0,
+            cache_write_input_tokens: 0,
+            output_tokens: 2,
+          },
+        }),
+      ].join('\n'),
+    );
+
+    expect(events).toHaveLength(1);
+    expect(codexUsageOf(events, 1)).toMatchObject({
+      totalInputTokens: 1,
+      outputTokens: 2,
+      turns: 1,
+    });
   });
 
   it('extracts command and IEOS MCP tool calls', () => {
@@ -147,6 +184,61 @@ describe('Codex auth isolation', () => {
     } finally {
       if (isolated !== null) rmSync(isolated, { recursive: true, force: true });
       rmSync(source, { recursive: true, force: true });
+    }
+  });
+
+  it('removes the isolated home when setup fails before process execution', async () => {
+    const authSource = mkdtempSync(join(tmpdir(), 'ieos-codex-auth-cleanup-'));
+    const workspace = mkdtempSync(join(tmpdir(), 'ieos-codex-workspace-cleanup-'));
+    const transcripts = mkdtempSync(join(tmpdir(), 'ieos-codex-transcripts-cleanup-'));
+    const homesBefore = new Set(
+      readdirSync(tmpdir()).filter((name) => name.startsWith('ieos-codex-home-')),
+    );
+
+    try {
+      writeFileSync(join(authSource, 'auth.json'), '{"token":"cleanup-test"}\n', 'utf8');
+      const driver = new CodexDriver({
+        eosRoot: join(workspace, 'missing-eos-root'),
+        transcriptDir: transcripts,
+        allowedHosts: [],
+        deniedRoots: [],
+        telemetrySocketPath: join(workspace, 'missing.sock'),
+        authSourceDir: authSource,
+        executable: 'codex-do-not-run',
+        model: 'gpt-5.6-sol',
+      });
+
+      await expect(
+        driver.run(
+          {
+            trialId: 'cleanup',
+            workspaceRoot: workspace,
+            environment: {},
+            policy: {
+              filesystem: { allowedRoots: [workspace], deniedRoots: [] },
+              environment: { allowedNames: [] },
+              process: { allowedExecutables: [] },
+              network: { mode: 'deny', allowedHosts: [] },
+              requiredBoundaries: [],
+            },
+            dispose(): void {},
+          },
+          {
+            taskId: 'cleanup',
+            prompt: 'must never execute',
+            budget: { wallClockSeconds: 1, maxToolCalls: 1 },
+          },
+        ),
+      ).rejects.toThrow();
+
+      const leakedHomes = readdirSync(tmpdir()).filter(
+        (name) => name.startsWith('ieos-codex-home-') && !homesBefore.has(name),
+      );
+      expect(leakedHomes).toEqual([]);
+    } finally {
+      rmSync(authSource, { recursive: true, force: true });
+      rmSync(workspace, { recursive: true, force: true });
+      rmSync(transcripts, { recursive: true, force: true });
     }
   });
 });

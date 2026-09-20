@@ -225,7 +225,7 @@ function mean(values: readonly number[]): number {
 
 function meanKnown(values: readonly (number | null)[]): number | null {
   const known = values.filter((value): value is number => value !== null);
-  return known.length === 0 ? null : mean(known);
+  return known.length === values.length ? mean(known) : null;
 }
 
 function armSummary(records: readonly Stage3CampaignRecord[]): CampaignArmSummary {
