@@ -1,0 +1,49 @@
+name: temporary codex formatting
+
+on:
+  push:
+    branches:
+      - feat/stage3-codex-driver
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '24.20.0'
+  PNPM_VERSION: '11.25.0'
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Format Codex Stage 3 files
+        run: |
+          pnpm prettier --write \
+            tools/harness/src/drivers/codex.ts \
+            tools/harness/src/stage3-campaign.ts \
+            tools/harness/src/stage3-campaign-report-cli.ts \
+            tools/harness/src/stage3-cli.ts \
+            tools/harness/test/no-rescue-channel.test.ts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: formatted-codex-stage3
+          path: |
+            tools/harness/src/drivers/codex.ts
+            tools/harness/src/stage3-campaign.ts
+            tools/harness/src/stage3-campaign-report-cli.ts
+            tools/harness/src/stage3-cli.ts
+            tools/harness/test/no-rescue-channel.test.ts
+          if-no-files-found: error
