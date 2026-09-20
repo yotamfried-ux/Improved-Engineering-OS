@@ -1,3 +1,6 @@
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   codexArgsFor,
@@ -8,6 +11,8 @@ import {
   codexUsageOf,
   unexpectedCodexToolCalls,
   parseCodexEvents,
+  persistIsolatedCodexAuth,
+  prepareIsolatedCodexHome,
 } from '../src/drivers/codex.ts';
 
 const EVENTS = [
@@ -108,6 +113,32 @@ describe('Codex JSONL evidence parser', () => {
       requested: 'gpt-5.6-sol',
       resolved: 'gpt-5.6-sol-202609',
     });
+  });
+});
+
+describe('Codex auth isolation', () => {
+  it('copies only auth into the disposable home and persists a refreshed auth file', () => {
+    const source = mkdtempSync(join(tmpdir(), 'ieos-codex-auth-source-'));
+    let isolated: string | null = null;
+    try {
+      writeFileSync(join(source, 'auth.json'), '{"token":"original"}\n', 'utf8');
+      writeFileSync(join(source, 'config.toml'), 'mcp_servers={ ambient={} }\n', 'utf8');
+      writeFileSync(join(source, 'AGENTS.md'), 'ambient instructions\n', 'utf8');
+
+      isolated = prepareIsolatedCodexHome(source);
+      expect(readdirSync(isolated).sort()).toEqual(['auth.json']);
+      expect(readFileSync(join(isolated, 'auth.json'), 'utf8')).toContain('original');
+
+      writeFileSync(join(isolated, 'auth.json'), '{"token":"refreshed"}\n', 'utf8');
+      persistIsolatedCodexAuth(isolated, source);
+
+      expect(readFileSync(join(source, 'auth.json'), 'utf8')).toContain('refreshed');
+      expect(readFileSync(join(source, 'config.toml'), 'utf8')).toContain('ambient');
+      expect(readFileSync(join(source, 'AGENTS.md'), 'utf8')).toContain('ambient instructions');
+    } finally {
+      if (isolated !== null) rmSync(isolated, { recursive: true, force: true });
+      rmSync(source, { recursive: true, force: true });
+    }
   });
 });
 
