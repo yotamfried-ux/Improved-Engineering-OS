@@ -1,7 +1,7 @@
 /** Run one Stage 3 qualification trial and record what it produced. */
 
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { buildTrialReport, formatTrialReport } from './collect.ts';
 import { ClaudeCodeDriver, bareToolName } from './drivers/claude-code.ts';
@@ -102,6 +102,20 @@ const agentCliVersion = execFileSync(agentExecutable, ['--version'], {
   windowsHide: true,
   env: { ...process.env, DISABLE_AUTOUPDATER: '1' },
 }).trim();
+
+const hostHome = process.env['HOME'] ?? process.env['USERPROFILE'] ?? '';
+const rawCodexAuthSource =
+  process.env['CODEX_HOME'] ?? (hostHome === '' ? '' : join(hostHome, '.codex'));
+const codexAuthSource = rawCodexAuthSource === '' ? '' : resolve(rawCodexAuthSource);
+if (
+  agent === 'codex' &&
+  (codexAuthSource === '' || !existsSync(join(codexAuthSource, 'auth.json')))
+) {
+  process.stderr.write(
+    'Stage 3 Codex trial refused: file-backed Codex auth.json is required before run registration so an isolated CODEX_HOME can be built without ambient user configuration\n',
+  );
+  process.exit(69);
+}
 
 const bashDirectory = windowsBashDirectory();
 if (profile === 'windows-personal-v1' && bashDirectory === undefined) {
@@ -317,10 +331,6 @@ try {
       ? []
       : ['mcp__ieos__resolve', 'mcp__ieos__inspect', 'mcp__ieos__expand', 'mcp__ieos__observe']),
   ];
-
-  const hostHome = process.env['HOME'] ?? process.env['USERPROFILE'] ?? '';
-  const codexAuthSource =
-    process.env['CODEX_HOME'] ?? (hostHome === '' ? '' : join(hostHome, '.codex'));
 
   const driver =
     agent === 'codex'
