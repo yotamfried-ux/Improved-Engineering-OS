@@ -1,0 +1,76 @@
+{
+  "mcpServers": {
+    "github": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["--prefix", "${TEMP:-/tmp}", "-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}" }
+    },
+    "n8n": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["--prefix", "${TEMP:-/tmp}", "-y", "@leonardsellem/n8n-mcp-server@latest"],
+      "env": { "N8N_API_URL": "${N8N_API_URL}", "N8N_API_KEY": "${N8N_API_KEY}" }
+    },
+    "resend": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["--prefix", "${TEMP:-/tmp}", "-y", "resend-mcp"],
+      "env": { "RESEND_API_KEY": "${RESEND_API_KEY}" }
+    },
+    "firebase": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["--prefix", "${TEMP:-/tmp}", "-y", "firebase-tools@latest", "mcp"]
+    },
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["--prefix", "${TEMP:-/tmp}", "-y", "@playwright/mcp@latest", "--headless"]
+    },
+    "chrome-devtools": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["--prefix", "${TEMP:-/tmp}", "-y", "chrome-devtools-mcp@latest", "--headless", "--isolated"]
+    },
+    "coderabbit": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["--prefix", "${TEMP:-/tmp}", "-y", "coderabbitai-mcp@latest"],
+      "env": { "GITHUB_PAT": "${GITHUB_PAT}" }
+    },
+    "meshy": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["--prefix", "${TEMP:-/tmp}", "-y", "@meshy-ai/meshy-mcp-server"],
+      "env": { "MESHY_API_KEY": "${MESHY_API_KEY}" }
+    },
+    "tripo": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["--prefix", "${TEMP:-/tmp}", "-y", "tripo-ai-mcp-server"],
+      "env": { "TRIPO_API_SECRET": "${TRIPO_API_SECRET}" }
+    },
+    "worldlabs": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "uv", "tool", "run", "--from", "git+https://github.com/sandraschi/worldlabs-mcp", "worldlabs-mcp"],
+      "env": { "WORLDLABS_API_KEY": "${WORLDLABS_API_KEY}" }
+    },
+    "uilint": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["--prefix", "${TEMP:-/tmp}", "-y", "uilint-mcp"]
+    },
+    "whatsapp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["--prefix", "${TEMP:-/tmp}", "-y", "whatsapp-business-mcp-server"],
+      "env": {
+        "WHATSAPP_ACCESS_TOKEN": "${WHATSAPP_ACCESS_TOKEN}",
+        "META_APP_ID": "${META_APP_ID}",
+        "META_SYSTEM_USER_ID": "${META_SYSTEM_USER_ID}"
+      }
+    }
+  }
+}
